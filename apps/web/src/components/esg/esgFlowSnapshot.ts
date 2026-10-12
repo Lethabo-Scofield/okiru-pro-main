@@ -38,6 +38,8 @@ export interface EsgSnapshotWork {
   parserCase: EsgParserCaseLike | null;
   /** Library ids of the persisted uploads — filed under the company on create. */
   documentIds?: string[];
+  /** The same ids by upload name — the restored review previews each document from its library copy. */
+  documentIdsByName?: Record<string, string>;
   excel: null;
 }
 

@@ -737,7 +737,18 @@ export function evaluateEsgRules(
         rule.trigger === "submit" && mode === "submit" ||
         rule.trigger === "touched" && isTouched(touched, rule.sectionId, rule.fieldRef);
 
-      const pending = !shouldRun && mode === "live";
+      // A rule waits for input only while it would fail. One the workbook
+      // already meets — a name a document filled in, never typed, so never
+      // "touched" — is met, not "Pending input" beside the very value it asks for.
+      let metUntouched = false;
+      if (!shouldRun && mode === "live") {
+        try {
+          metUntouched = rule.evaluate(workbook, touched, ctx);
+        } catch {
+          metUntouched = false;
+        }
+      }
+      const pending = !shouldRun && mode === "live" && !metUntouched;
       const pass = shouldRun ? rule.evaluate(workbook, touched, ctx) : true;
 
       // Severity is the rule's own. It used to be promoted to "error" for any

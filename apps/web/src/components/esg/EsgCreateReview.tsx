@@ -20,32 +20,36 @@ import EsgFlowSteps from "./EsgFlowSteps";
 import { primaryButton } from "@/components/upload/flow/buttonStyles";
 import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
-import { esgCaseFileNames, type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
+import { type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
+import { esgCaseUploadNames } from "./esgCaseUploads";
 import { useState } from "react";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
 
-/** The per-document review, folded away — for a run restored straight to this step. */
-function ReviewAgain({ injection, parserCase }: { injection: EsgInjectionResult; parserCase: EsgParserCaseLike }) {
-  const [open, setOpen] = useState(false);
+/**
+ * The per-document review, folded away — for a run restored straight to this
+ * step. Each document previews from its library copy: the upload itself is
+ * gone by now, but its library id came through with the read.
+ */
+function ReviewAgain({
+  injection,
+  parserCase,
+  documentIdFor,
+  open,
+}: {
+  injection: EsgInjectionResult;
+  parserCase: EsgParserCaseLike;
+  documentIdFor: (filename: string) => string | null;
+  open: boolean;
+}) {
+  if (!open) return null;
+  const uploadNames = esgCaseUploadNames(parserCase);
   return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] underline-offset-2 hover:text-white hover:underline"
-        data-testid="esg-review-documents-toggle"
-      >
-        {open ? "Hide the document review" : "Review each document"}
-      </button>
-      {open && (
-        <DocumentReview
-          documents={buildEsgDocumentReview({ parserCase, injection, uploadNames: [] })}
-          fileFor={() => null}
-          documentIdFor={() => null}
-        />
-      )}
-    </div>
+    <DocumentReview
+      documents={buildEsgDocumentReview({ parserCase, injection, uploadNames })}
+      fileFor={() => null}
+      documentIdFor={documentIdFor}
+    />
   );
 }
 
@@ -68,6 +72,8 @@ export interface EsgCreateReviewProps {
   parserCase?: EsgParserCaseLike | null;
   /** Excel route — the preview produced by the SAME parser the server uses. */
   excel?: { fileName: string; preview: EsgImportPreview } | null;
+  /** Documents route — the library id of each upload, so the review previews it. */
+  documentIdFor?: (filename: string) => string | null;
   creating?: boolean;
   onBack: () => void;
   onConfirm: () => void;
@@ -96,6 +102,7 @@ export function EsgCreateReview({
   injection,
   parserCase,
   excel,
+  documentIdFor = () => null,
   creating = false,
   onBack,
   onConfirm,
@@ -103,9 +110,13 @@ export function EsgCreateReview({
   const trimmed = entityName.trim();
   const excelSections = Object.entries(excel?.preview.sections ?? {});
   const excelCells = excelSections.reduce((sum, [, section]) => sum + cellCount(section.cells), 0);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   return (
-    <div className="mx-auto w-full max-w-2xl has-[[data-wide-review]]:max-w-none" data-testid="esg-create-review">
+    // The form keeps its column; only the review, when opened, takes the width
+    // (a three-pane review needs it, a name field and two buttons do not).
+    <div className="w-full" data-testid="esg-create-review">
+    <div className="mx-auto w-full max-w-2xl">
       <EsgFlowSteps current={3} className="mb-6" />
 
       {/* Left-aligned at document scale, like every other step in the flow. */}
@@ -156,11 +167,22 @@ export function EsgCreateReview({
           <p className="text-[13px] leading-5 text-[color:var(--body)]" data-testid="esg-review-documents-summary">
             {(() => {
               const figures = injection.figuresPlaced ?? injection.placed.length;
-              const documents = esgCaseFileNames(parserCase ?? null).length;
+              // Per upload: a workbook's sheets are one document, not one each.
+              const documents = esgCaseUploadNames(parserCase ?? null).length;
               return `${figures} figure${figures === 1 ? "" : "s"} from ${documents} document${documents === 1 ? "" : "s"}`;
             })()}
           </p>
-          {parserCase ? <ReviewAgain injection={injection} parserCase={parserCase} /> : null}
+          {parserCase ? (
+            <button
+              type="button"
+              onClick={() => setReviewOpen((v) => !v)}
+              aria-expanded={reviewOpen}
+              className="mt-3 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] underline-offset-2 hover:text-white hover:underline"
+              data-testid="esg-review-documents-toggle"
+            >
+              {reviewOpen ? "Hide the document review" : "Review each document"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -241,6 +263,12 @@ export function EsgCreateReview({
           Back
         </button>
       </div>
+    </div>
+      {route === "documents" && injection && parserCase ? (
+        <div className="mt-6" data-testid="esg-create-review-documents">
+          <ReviewAgain injection={injection} parserCase={parserCase} documentIdFor={documentIdFor} open={reviewOpen} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -121,9 +121,13 @@ export interface AiValuesSectionProps {
   /** Bring the place a value was read from into the preview. */
   onShow?: (value: ParserAiValue) => void;
   disabled?: boolean;
+  /** A field's name — the ESG rule ("Electricity kWh") on an ESG document. */
+  labelOf?: (field: string) => string;
+  /** How a value reads ("14 820", "31 Jul 2025"); the editor still starts from the stored value. */
+  displayOf?: (value: unknown, field: string) => string;
 }
 
-export function AiValuesSection({ values, corrections, onSave, onShow, disabled = false }: AiValuesSectionProps) {
+export function AiValuesSection({ values, corrections, onSave, onShow, disabled = false, labelOf = fieldLabel, displayOf }: AiValuesSectionProps) {
   return (
     <div data-testid="ai-values" role="group" aria-label="Values read by AI">
       {values.map((value) => {
@@ -137,7 +141,7 @@ export function AiValuesSection({ values, corrections, onSave, onShow, disabled 
             className="grid gap-1 border-b border-[color:var(--rule)] py-3.5 last:border-b-0 sm:grid-cols-[180px_1fr] sm:gap-3"
             data-testid={`ai-value-row-${value.key}`}
           >
-            <div className="min-w-0 text-[12px] text-[color:var(--body)]">{fieldLabel(value.field)}</div>
+            <div className="min-w-0 text-[12px] text-[color:var(--body)]">{labelOf(value.field)}</div>
             <div className="min-w-0">
               {isRows && !fix ? (
                 <RowsPreview rows={value.value as unknown[]} rowCount={value.rowCount} testId={`ai-value-${value.key}-rows`} />
@@ -145,7 +149,8 @@ export function AiValuesSection({ values, corrections, onSave, onShow, disabled 
                 <div className="text-[13px] text-white">
                   <EditableValue
                     value={formatParserValue(fix ? fix.value : value.value)}
-                    label={fieldLabel(value.field)}
+                    display={displayOf ? displayOf(fix ? fix.value : value.value, value.field) : undefined}
+                    label={labelOf(value.field)}
                     onSave={(next) => onSave(value.key, next)}
                     testId={`field-${value.key}`}
                     disabled={disabled}

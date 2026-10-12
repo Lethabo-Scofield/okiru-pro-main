@@ -141,6 +141,12 @@ export interface EsgWorkbookMappingResult {
    */
   sourceOutcomes: Record<string, Record<string, EsgFieldOutcome>>;
   conflicts: EsgCellConflict[];
+  /**
+   * `section!cell` → the files whose readings put that value there, for every
+   * settled cell that was written. A monthly grid is one reading behind many
+   * cells; this is what lets each of those cells name its document.
+   */
+  cellSources?: Record<string, string[]>;
 }
 
 /* ------------------------------------------------------------------ *
@@ -601,9 +607,12 @@ export function mapEsgCalculatorToWorkbook(
     return true;
   };
 
+  const cellSources: Record<string, string[]> = {};
   for (const [, proposal] of settled.cells) {
     const written = addCell(proposal.sectionId, proposal.cellRef, proposal.value);
     if (written) {
+      const files = proposal.sources.filter(Boolean);
+      if (files.length > 0) cellSources[`${proposal.sectionId}!${proposal.cellRef}`] = files;
       const outcome = outcomes[proposal.field];
       if (outcome?.status === "placed") {
         outcome.cells.push({
@@ -639,7 +648,7 @@ export function mapEsgCalculatorToWorkbook(
   const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
   const sourceOutcomes = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
 
-  return { patches, outcomes, sourceOutcomes, conflicts };
+  return { patches, outcomes, sourceOutcomes, conflicts, cellSources };
 }
 
 /* ------------------------------------------------------------------ *

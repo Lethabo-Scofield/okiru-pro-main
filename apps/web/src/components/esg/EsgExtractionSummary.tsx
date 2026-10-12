@@ -26,6 +26,9 @@
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, FileWarning, HelpCircle } from "lucide-react";
 import { esgSectionById } from "@/lib/esg/esgSections";
+import { esgElementLabel, esgFieldLabel, formatEsgScalar } from "@/lib/esg/esgFormat";
+import { esgConflictLabel } from "@/lib/esg/esgCellLabel";
+import { esgUploadOf } from "./esgCaseUploads";
 import { Disclosure } from "@/components/upload/flow/Disclosure";
 import {
   esgCaseFileNames,
@@ -49,65 +52,45 @@ interface Props {
   action?: ReactNode;
   /** One line that belongs with the summary (documents that couldn't be read). */
   notice?: ReactNode;
+  /**
+   * How many documents the review below marks "Needs a look". Given, the
+   * summary counts documents too — so it and the review say the same thing in
+   * the same words, instead of "2 need a look" (figures) above "3 need a look"
+   * (documents).
+   */
+  documentsToCheck?: number;
+  /**
+   * New documents are waiting to be read: the summary of the earlier read
+   * folds to its one line, so the read bar above is the only thing asking for
+   * a decision.
+   */
+  folded?: boolean;
 }
 
-/** Element code → the wording a practitioner would recognise. */
-const ELEMENT_LABELS: Record<string, string> = {
-  GHG_ENERGY: "Energy & emissions",
-  FLEET: "Fleet",
-  WASTE: "Waste",
-  WATER: "Water",
-  ISO_ENVIRONMENTAL: "Environmental management",
-  EMPLOYMENT_EQUITY: "Employment equity",
-  HEALTH_SAFETY: "Health & safety",
-  TRAINING: "Skills & training",
-  COMMUNITY_CSI: "Community & CSI",
-  SUPPLIER_ESG: "Supplier ESG",
-  BOARD_GOVERNANCE: "Board & governance",
-  ETHICS_COMPLIANCE: "Ethics & compliance",
-  RISK_ASSURANCE: "Risk & assurance",
-  FINANCIAL: "Financials",
-};
+/** Element code → the wording a practitioner would recognise; an unknown code in words, never raw. */
+const elementLabel = esgElementLabel;
 
-function elementLabel(code: string): string {
-  return ELEMENT_LABELS[code] ?? (code || "Unclassified");
-}
-
-/** `electricity_kwh` → `Electricity kWh`. Names, never invented values. */
-function humanizeField(field: string): string {
-  return field
-    .replace(/[._]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\bKwh\b/g, "kWh")
-    .replace(/\bKl\b/g, "kl")
-    .replace(/\bKg\b/g, "kg")
-    .replace(/\bKm\b/g, "km")
-    .replace(/\bTco2e\b/gi, "tCO2e")
-    .replace(/\bIso\b/g, "ISO")
-    .replace(/\bLtifr\b/g, "LTIFR")
-    .replace(/\bEsg\b/g, "ESG")
-    .trim();
-}
+/** `electricity_kwh` → `Electricity kWh`. The one ESG field-name rule (`esgFormat`). */
+const humanizeField = esgFieldLabel;
 
 /** A register row rendered the way a person reads it, not as a JSON blob. */
 function describeRow(row: Record<string, unknown>): string {
   return Object.entries(row)
     .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "")
     .slice(0, 4)
-    .map(([k, v]) => `${humanizeField(k)}: ${String(v)}`)
+    .map(([k, v]) => `${humanizeField(k)}: ${formatEsgScalar(v, { field: k }) ?? String(v)}`)
     .join(" · ");
 }
 
 /**
- * A scalar rendered as itself.
+ * A scalar rendered as itself, in the one ESG number rule ("14 820", "8.6").
  *
  * Anything with internal structure is handled by the caller, which can open it
  * — returning the word "structured data" here was a placeholder standing where
  * the user expected their number.
  */
-function formatScalar(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  return String(value);
+function formatScalar(value: unknown, field?: string): string {
+  return formatEsgScalar(value, { field }) ?? String(value);
 }
 
 function isRowArray(value: unknown): value is Array<Record<string, unknown>> {
@@ -132,7 +115,7 @@ function ValueRow({ entry }: { entry: EsgUnplacedValue }) {
             ? `${rows.length} row${rows.length === 1 ? "" : "s"}`
             : plainObject
               ? describeRow(plainObject)
-              : formatScalar(value)}
+              : formatScalar(value, entry.field)}
         </span>
         {entry.sourceFile && (
           <span className="ml-auto shrink-0 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
@@ -224,7 +207,7 @@ function elementOfPlaced(parserCase: EsgParserCaseLike | null): (placed: { docum
   return (placed) => byDocAndFile.get(`${placed.documentId}\u0000${placed.sourceFile}`) ?? byDoc.get(placed.documentId) ?? "";
 }
 
-export function EsgExtractionSummary({ injection, parserCase, compact = false, action, notice }: Props) {
+export function EsgExtractionSummary({ injection, parserCase, compact = false, action, notice, documentsToCheck, folded = false }: Props) {
   const { placed, unplaced, conflicts, valuesRead } = injection;
   // What needs a person: figures to place, values to check, disagreements.
   // Evidence no cell needs is not outstanding — it is kept, and said so.
@@ -262,12 +245,16 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
   // Documents the parser could not read anything useful out of. A document we
   // recognised but got nothing from is not evidence, and saying so is the
   // difference between "your score is low" and "add this one file".
+  // Counted per UPLOAD: a workbook's sheets arrive as "File.xlsx › Sheet", and
+  // one empty sheet in a workbook that was read is not a document we read nothing from.
   const productive = new Set(
     (parserCase?.ai_entities?.extractions ?? [])
       .filter((e) => (e.values?.length ?? 0) > 0)
-      .map((e) => String(e.sourceFile ?? "")),
+      .map((e) => esgUploadOf(e.sourceFile)),
   );
-  const readNothing = esgCaseFileNames(parserCase).filter((name) => !productive.has(name));
+  const readNothing = Array.from(new Set(esgCaseFileNames(parserCase).map((name) => esgUploadOf(name)))).filter(
+    (name) => name && !productive.has(name),
+  );
 
   // Notes the extraction itself raised — a total the rows do not sum to, the
   // same workbook uploaded twice. Advisory, and specific enough to act on.
@@ -280,12 +267,49 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
 
   // One sentence: how many figures are ready, and what needs a person.
   const headline = `${figures} figure${figures === 1 ? "" : "s"} ready for your workbook`;
+  // Documents when the review's count is known — the same unit, and the same
+  // words, as the list below; figures only where there is no list to match.
   const status =
     valuesRead === 0
       ? "nothing could be read"
-      : outstanding === 0
-        ? "nothing needs a look"
-        : `${outstanding} need${outstanding === 1 ? "s" : ""} a look`;
+      : documentsToCheck !== undefined
+        ? documentsToCheck === 0
+          ? "nothing needs a look"
+          : `${documentsToCheck} document${documentsToCheck === 1 ? " needs" : "s need"} a look`
+        : outstanding === 0
+          ? "nothing needs a look"
+          : `${outstanding} need${outstanding === 1 ? "s" : ""} a look`;
+  const needsLook = valuesRead === 0 || (documentsToCheck !== undefined ? documentsToCheck > 0 : outstanding > 0);
+
+  /**
+   * Figures the documents disagree on: left blank, never guessed. Each one
+   * names the cell as a person knows it and every value with the files that
+   * gave it, one per line.
+   */
+  const conflictList =
+    conflicts.length > 0 ? (
+      <div className="mt-2 space-y-2">
+        {conflicts.map((conflict) => (
+          <div
+            key={`${conflict.sectionId}.${conflict.cellRef}`}
+            className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+            data-testid="esg-value-conflict"
+          >
+            <p className="text-[12px] font-medium text-[color:var(--hi)]">{esgConflictLabel(conflict, injection.axes)}</p>
+            <ul className="mt-1 space-y-0.5">
+              {conflict.candidates.map((candidate, i) => (
+                <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-5">
+                  <span className="tabular-nums text-white">{formatScalar(candidate.value)}</span>
+                  <span className="text-[11px] text-[color:var(--body)]">
+                    {candidate.sources.filter(Boolean).join(", ") || "unknown source"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    ) : null;
 
   const kindsLine =
     kinds.toPlace > 0 || kinds.evidence > 0 ? (
@@ -344,17 +368,39 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
     return (
       <div className="rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3" data-testid="esg-extraction-summary">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="min-w-0 text-[14px] leading-6 text-[color:var(--body)]">
+          <p className="min-w-0 text-[14px] leading-6 text-[color:var(--body)]" data-testid="esg-summary-headline">
             <span className="font-semibold text-white">{headline}</span>
             {" · "}
-            <span className={valuesRead === 0 || outstanding > 0 ? "text-amber-200" : ""}>{status}</span>
+            <span className={needsLook ? "text-amber-200" : ""}>{status}</span>
           </p>
           {action}
         </div>
+        {folded ? null : (
+        <>
         <div className="mt-2 space-y-2 empty:hidden">
           {notice}
           {outsideFocus}
           {zero}
+          {/* The one thing on this screen a person must decide: which of two
+              figures is right. One line, folded; the cells are left blank and
+              marked in the workbook until someone picks. */}
+          {conflicts.length > 0 && (
+            <div data-testid="esg-value-conflicts">
+              <Disclosure
+                summary={
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
+                    Your documents disagree on {conflicts.length} figure{conflicts.length === 1 ? "" : "s"}
+                  </span>
+                }
+                meta="left blank, marked in the workbook"
+                summaryClassName="text-[12px] font-medium"
+                testId="esg-value-conflicts-fold"
+              >
+                {conflictList}
+              </Disclosure>
+            </div>
+          )}
           {covered}
         </div>
         {(kindsLine || valuesRead > 0) && (
@@ -367,6 +413,8 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
               {kindsLine}
             </div>
           </Disclosure>
+        )}
+        </>
         )}
       </div>
     );
@@ -401,21 +449,7 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
             Your documents disagree on {conflicts.length} figure{conflicts.length === 1 ? "" : "s"}
           </p>
           <p className="mt-1 text-[11.5px] text-[color:var(--body)]">We left them blank. Pick the right one in the workbook.</p>
-          <div className="mt-2 space-y-2">
-            {conflicts.map((conflict) => (
-              <div key={`${conflict.sectionId}.${conflict.cellRef}`} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-                <p className="text-[12px] font-medium text-[color:var(--hi)]">{conflict.label}</p>
-                <ul className="mt-1 space-y-0.5">
-                  {conflict.candidates.map((candidate, i) => (
-                    <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-5">
-                      <span className="tabular-nums text-white">{formatScalar(candidate.value)}</span>
-                      <span className="text-[11px] text-[color:var(--muted)]">{candidate.sources.join(", ") || "unknown source"}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          {conflictList}
         </div>
       )}
 

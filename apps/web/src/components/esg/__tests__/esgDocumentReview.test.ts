@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEsgDocumentReview } from "../esgDocumentReview";
+import { formatEsgNumber } from "@/lib/esg/esgFormat";
 import type { EsgInjectionResult, EsgParserCaseLike } from "../esgParserInjection";
 
 const parserCase: EsgParserCaseLike = {
@@ -54,7 +55,8 @@ const injection: EsgInjectionResult = {
   valuesRead: 4,
 };
 
-const n = (value: number) => value.toLocaleString("en-ZA");
+/** The one ESG number rule: "5 922" (a no-break space between thousands). */
+const n = (value: number) => formatEsgNumber(value);
 
 describe("buildEsgDocumentReview", () => {
   const docs = buildEsgDocumentReview({
@@ -79,16 +81,17 @@ describe("buildEsgDocumentReview", () => {
     const diesel = byName["DIESEL REPORT - Mar 2026.xlsx"];
     expect(diesel.state).toBe("needs-look");
     expect(diesel.problems[0].headline).toBe("Your documents disagree on DBN diesel (Mar 2026).");
-    expect(diesel.problems[0].detail).toBe("This one says 4100; DBN fuel card.pdf says 4300.");
+    expect(diesel.problems[0].detail).toBe(`This one says ${n(4100)}; DBN fuel card.pdf says ${n(4300)}.`);
   });
 
   it("explains a document read but not placed, with the reason for each value", () => {
     const bill = byName["city-power-oct.pdf"];
     expect(bill.state).toBe("needs-look");
     expect(bill.problems[0].headline).toBe("We read 1 value from this document but could place none of them in the workbook.");
-    expect(bill.unplaced).toEqual([{ label: "Electricity kwh", value: n(35332), source: "The bill names no billing month." }]);
+    // The one ESG field-name and number rule: kWh, and a space between thousands.
+    expect(bill.unplaced).toEqual([{ label: "Electricity kWh", value: n(35332), source: "The bill names no billing month." }]);
     expect(bill.problems.some((p) => /one day outside the reporting period/.test(p.detail ?? ""))).toBe(true);
-    expect(bill.notFound).toEqual(["Max demand kva"]);
+    expect(bill.notFound).toEqual(["Max demand kVA"]);
   });
 
   it("explains an unreadable file in plain words, worst first", () => {
@@ -122,7 +125,7 @@ describe("buildEsgDocumentReview — broken cells and lists", () => {
   const [water, months] = docs[0].values;
 
   it("marks a workbook error code as a broken cell, not a figure", () => {
-    expect(water).toMatchObject({ label: "Water kl", cellError: "#DIV/0!" });
+    expect(water).toMatchObject({ label: "Water kL", cellError: "#DIV/0!" });
   });
 
   it("says what a list holds and keeps its entries to open", () => {

@@ -5,6 +5,7 @@ import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { useAuth } from '@toolkit/lib/auth';
 import { isBareRoute, buildCrumbs } from './shellNav';
+import { useShellCompanyName } from './shellCompanyName';
 import '@/styles/okiru-app.css';
 
 /**
@@ -27,10 +28,12 @@ import '@/styles/okiru-app.css';
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useAuth();
+  // A page that has loaded its company names it, so the trail never shows a raw id.
+  const companyName = useShellCompanyName(location);
 
   if (!user || isBareRoute(location)) return <>{children}</>;
 
-  const crumbs = buildCrumbs(location);
+  const crumbs = buildCrumbs(location, companyName);
   const onHub = crumbs.length === 1;
 
   return (

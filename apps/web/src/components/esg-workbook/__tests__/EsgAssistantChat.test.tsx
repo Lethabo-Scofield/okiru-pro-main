@@ -81,4 +81,15 @@ describe("EsgAssistantChat", () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(body.messages[0].content).toMatch(/missing before I can submit/i);
   });
+
+  it("sits above the Feedback button, never over it, with its whole label", () => {
+    render(<EsgAssistantChat companyId="C-1" activeSectionId="e-data" />);
+    const open = screen.getByTestId("esg-assistant-open");
+    // Feedback is the fixed pill at bottom-5; the dock stacks above it, as the toolkit's Ask Okiru does.
+    expect(open.className).toContain("bottom-[4.75rem]");
+    expect(open.className).not.toContain("bottom-5");
+    expect(open.className).toContain("whitespace-nowrap");
+    openPanel();
+    expect(screen.getByTestId("esg-assistant-panel").className).toContain("bottom-[4.75rem]");
+  });
 });

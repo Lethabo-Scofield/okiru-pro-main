@@ -1,4 +1,5 @@
 import { ESG_INPUT, ESG_PANEL, ESG_SELECT } from "./esgEditorChrome";
+import { EsgCellMark } from "./EsgCellSourceMark";
 
 export type EsgFieldDef = {
   cell: string;
@@ -22,8 +23,9 @@ export function EsgScalarForm({ fields, values, onChange, onTouch, readOnly }: P
     <div className={`${ESG_PANEL} p-5 grid gap-4 sm:grid-cols-2`}>
       {fields.map((f) => (
         <label key={f.cell} className="block" data-testid={`esg-field-${f.cell}`}>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--esg-text3)]">
+          <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--esg-text3)]">
             {f.label}
+            <EsgCellMark cellRef={f.cell} value={values[f.cell]} />
           </span>
           {f.helpText ? (
             <p className="text-[11px] text-[var(--esg-text2)] mt-0.5 leading-snug">{f.helpText}</p>

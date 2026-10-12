@@ -77,6 +77,8 @@ interface PendingWork {
   parserCase: EsgParserCaseLike | null;
   /** Library ids of the persisted uploads — filed under the company on create. */
   documentIds?: string[];
+  /** The same ids by upload name, so step 3's review can preview each document. */
+  documentIdsByName?: Record<string, string>;
   excel: { fileName: string; preview: EsgImportPreview } | null;
 }
 
@@ -215,10 +217,12 @@ export function EsgCreateFlow() {
     injection,
     parserCase,
     documentIds,
+    documentIdsByName,
   }: {
     injection: EsgInjectionResult;
     parserCase: EsgParserCaseLike | null;
     documentIds?: string[];
+    documentIdsByName?: Record<string, string>;
   }) => {
     const proposed = esgProposedEntityName(parserCase, injection.patches);
     const nextWork: EsgSnapshotWork = {
@@ -227,6 +231,7 @@ export function EsgCreateFlow() {
       injection,
       parserCase,
       documentIds,
+      documentIdsByName,
       excel: null,
     };
     setWork(nextWork);
@@ -320,7 +325,7 @@ export function EsgCreateFlow() {
       let written = 0;
       try {
         // The document placements travel too, so each cell keeps its source (E4).
-        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? []);
+        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? [], work.injection);
         written = esgPatchCellCount(work.patches);
       } catch (err) {
         toast({
@@ -393,6 +398,8 @@ export function EsgCreateFlow() {
               onBack={backToChoose}
               onComplete={handleParsedDocuments}
               initialFiles={excelHandover ?? undefined}
+              // Back from step 3: the read is shown again, never an empty drop zone.
+              resume={work.parserCase ? { parserCase: work.parserCase, documentIdsByName: work.documentIdsByName } : null}
             />
           </div>
         ) : null}
@@ -493,6 +500,7 @@ export function EsgCreateFlow() {
             injection={work.injection}
             parserCase={work.parserCase}
             excel={work.excel}
+            documentIdFor={(name) => work.documentIdsByName?.[name] ?? null}
             creating={creating}
             onBack={() => (work.route === "excel" ? backToChoose() : setStep("provide"))}
             onConfirm={() => void confirmAndCreate()}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, FileText } from "lucide-react";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { formatEsgNumber } from "@/lib/esg/esgFormat";
 import {
   computeEsgCoreValues,
   type EsgCoreValue,
@@ -99,7 +100,7 @@ function Chain({ value: v }: { value: EsgCoreValue }) {
                     {i.value == null || i.value === ""
                       ? "—"
                       : typeof i.value === "number"
-                        ? i.value.toLocaleString("en-ZA", { maximumFractionDigits: 2 })
+                        ? formatEsgNumber(i.value)
                         : String(i.value)}
                   </td>
                 </tr>

@@ -29,4 +29,33 @@ describe("EsgInformationRequest (input layer)", () => {
     expect(PAGE).toMatch(/EsgSectionMissingPanel/);
     expect(PAGE).toMatch(/EsgValidationPanel/);
   });
+
+  it("draws one trail and no raw id: the bar above names the company", () => {
+    expect(PAGE).not.toMatch(/data-testid="esg-breadcrumb"/);
+    expect(PAGE).not.toMatch(/font-mono truncate">\{companyId\}/);
+    expect(PAGE).toMatch(/setShellCompanyName\(companyId, companyName\)/);
+  });
+
+  it("folds Template, Import and Export into More", () => {
+    const more = PAGE.slice(PAGE.indexOf("<EsgWorkbookMoreMenu"), PAGE.indexOf("</EsgWorkbookMoreMenu>"));
+    expect(more).toMatch(/data-testid="button-esg-import-xlsx"/);
+    expect(more).toMatch(/data-testid="button-esg-export"/);
+    expect(more).toMatch(/testId="button-esg-download-template"/);
+  });
+
+  it("toolbar Add documents goes straight to the reader, not the three ways in", () => {
+    const button = PAGE.slice(PAGE.indexOf("<button", PAGE.indexOf("evidence pack should not have to leave")), PAGE.indexOf('data-testid="button-esg-add-documents"'));
+    expect(button).toMatch(/addDocumentsToWorkbook/);
+    expect(button).not.toMatch(/setStage\("choose"\)/);
+  });
+
+  it("adding to a workbook has no stepper, says where Back goes, and asks before writing", () => {
+    expect(PAGE).toMatch(/uploadFrom === "choose" \? <EsgFlowSteps/);
+    expect(PAGE).toMatch(/`Back to \$\{uploadFocus\.title\}`/);
+    expect(PAGE).toMatch(/"Back to the workbook"/);
+    expect(PAGE).toMatch(/<EsgDocumentWriteConfirm/);
+    expect(PAGE).toMatch(/if \(totalCapturedCells > 0 && esgPatchCellCount\(injection\.patches\) > 0\)/);
+    // A read that changes nothing writes without asking.
+    expect(PAGE).toMatch(/if \(counts\.adds \+ counts\.replaces \+ counts\.rows > 0\)/);
+  });
 });
