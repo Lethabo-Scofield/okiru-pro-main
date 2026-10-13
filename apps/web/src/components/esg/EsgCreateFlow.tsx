@@ -46,7 +46,7 @@ import {
   rememberEsgStartChosen,
   setEsgActiveCompany,
 } from "@/lib/esgRoutes";
-import { parseEsgWorkbookXlsx, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import { esgImportHandover, parseEsgWorkbookXlsx, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgCreateStartChoice from "./EsgCreateStartChoice";
 import EsgDocumentUploadStart from "./EsgDocumentUploadStart";
 import EsgCreateReview, { type EsgCreateRoute, type EsgNameSource } from "./EsgCreateReview";
@@ -173,18 +173,13 @@ export function EsgCreateFlow() {
     setImporting(true);
     try {
       const preview = parseEsgWorkbookXlsx(await file.arrayBuffer());
-      if (Object.keys(preview.sections).length === 0) {
+      const handoverNote = esgImportHandover(preview);
+      if (handoverNote) {
         // Not our template. That used to end the road; it is now simply the
         // other reader's job — the parser maps a register by its COLUMNS, so a
         // client's own fleet list works even though its tab is not called
         // "Fleet_Register". Tokens are quoted there before anything is read.
-        toast({
-          title: "That is not the Okiru template",
-          description:
-            preview.unmatchedSheets.length > 0
-              ? `Reading it as evidence instead — none of its sheets (${preview.unmatchedSheets.slice(0, 3).join(", ")}) match a workbook section. You will see the token cost before anything is read.`
-              : "Reading it as evidence instead. You will see the token cost before anything is read.",
-        });
+        toast({ title: "That is not the Okiru template", description: handoverNote });
         setExcelHandover([file]);
         setWork({ ...EMPTY_WORK, route: "documents" });
         setStep("provide");
@@ -324,7 +319,8 @@ export function EsgCreateFlow() {
 
       let written = 0;
       try {
-        await persistEsgSectionPatches(companyId, patches);
+        // The document placements travel too, so each cell keeps its source (E4).
+        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? []);
         written = esgPatchCellCount(work.patches);
       } catch (err) {
         toast({

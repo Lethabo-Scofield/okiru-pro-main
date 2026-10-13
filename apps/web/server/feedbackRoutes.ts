@@ -2,7 +2,12 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { v4 as uuid } from "uuid";
 import mongoose from "mongoose";
 import { FeedbackModel } from "../shared/schema";
+import { FEEDBACK_PILLAR_OPTIONS } from "../src/lib/feedbackPillars";
+import { deliverFeedbackNotification, notifyUnstoredFeedback } from "./feedbackNotifier";
+import { feedbackLimiter } from "./rateLimit";
 import { createLogger } from "./logger";
+import { isPlatformAdmin, type RoleCarrier } from "./roles";
+import { getFeedbackRecipients } from "./email";
 
 const logger = createLogger("FeedbackRoutes");
 
@@ -20,24 +25,18 @@ interface FeedbackRecord {
   userAgent: string | null;
   createdAt: string;
   updatedAt: string;
+  /** When it was emailed to the feedback list; null while still owed. */
+  notifiedAt?: string | null;
 }
 
 const memoryStore: FeedbackRecord[] = [];
+/** Only used while the database is down; bounded so a flood cannot grow it forever. */
+const MEMORY_STORE_LIMIT = 500;
 
 const VALID_CATEGORIES = new Set(['bug', 'feature', 'general', 'compliance']);
 const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
-const VALID_PILLARS = new Set([
-  '',
-  'company',
-  'financial',
-  'ownership',
-  'management',
-  'employmentEquity',
-  'skills',
-  'procurement',
-  'supplierDevelopment',
-  'sed',
-]);
+// The widget's own list — a server copy drifted and dropped "AFS Additions".
+const VALID_PILLARS = new Set<string>(FEEDBACK_PILLAR_OPTIONS.map((p) => p.value));
 
 function normalizePillar(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -66,7 +65,45 @@ function toRecord(doc: any): FeedbackRecord {
     userAgent: obj.userAgent ?? null,
     createdAt: obj.createdAt instanceof Date ? obj.createdAt.toISOString() : String(obj.createdAt),
     updatedAt: obj.updatedAt instanceof Date ? obj.updatedAt.toISOString() : String(obj.updatedAt),
+    notifiedAt: obj.notifiedAt instanceof Date ? obj.notifiedAt.toISOString() : (obj.notifiedAt ?? null),
   };
+}
+
+/**
+ * Who reads and manages feedback: the Okiru team, and nobody else. A report
+ * carries the name and email address of the client who sent it, so "anyone
+ * with the /devmode link" (the June decision, made when only the team used the
+ * widget) and "any signed-in user may change or delete any report" both had
+ * to go.
+ *
+ * The team is platform staff, any verified @okiru.co.za account, the
+ * addresses feedback is already emailed to, and FEEDBACK_ADMIN_EMAILS — the
+ * team's other sign-ins. Platform admin alone is not enough: production has no
+ * such account, and leaning on it would have locked the team out of its own
+ * feedback.
+ */
+export function isFeedbackTeam(user: (RoleCarrier & { email?: string | null }) | null | undefined): boolean {
+  if (!user) return false;
+  if (isPlatformAdmin(user)) return true;
+  const email = String(user.email ?? "").trim().toLowerCase();
+  if (!email) return false;
+  if (email.endsWith("@okiru.co.za")) return true;
+  const listed = (process.env.FEEDBACK_ADMIN_EMAILS || "")
+    .split(/[,;\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return listed.includes(email) || getFeedbackRecipients().includes(email);
+}
+
+/** Feedback reads and changes: signed in, and on the team. */
+function feedbackTeamOnly(requireAuth: (req: Request, res: Response, next: NextFunction) => void | Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) =>
+    requireAuth(req, res, () => {
+      if (!isFeedbackTeam((req as any).user)) {
+        return res.status(403).json({ message: "Feedback is for the Okiru team — it holds clients' names and email addresses." });
+      }
+      next();
+    });
 }
 
 function feedbackIdFilter(id: string) {
@@ -89,7 +126,7 @@ export function registerFeedbackRoutes(
   app: Express,
   requireAuth: (req: Request, res: Response, next: NextFunction) => void | Promise<void>,
 ) {
-  app.post("/api/feedback", async (req: Request, res: Response) => {
+  app.post("/api/feedback", feedbackLimiter, async (req: Request, res: Response) => {
     try {
       const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
       if (!message) return res.status(400).json({ message: 'Feedback message is required' });
@@ -118,7 +155,13 @@ export function registerFeedbackRoutes(
           userId, organizationId, status: 'open', userAgent,
           createdAt: now, updatedAt: now,
         });
-        return res.status(201).json({ feedback: toRecord(created) });
+        res.status(201).json({ feedback: toRecord(created) });
+        // After the response: the person is not kept waiting on mail, and a
+        // failed send is retried by the notifier's sweep.
+        void deliverFeedbackNotification(feedbackId).catch((err) =>
+          logger.error('Feedback notification failed', err, { feedbackId }),
+        );
+        return;
       }
 
       const record: FeedbackRecord = {
@@ -127,15 +170,21 @@ export function registerFeedbackRoutes(
         createdAt: now.toISOString(), updatedAt: now.toISOString(),
       };
       memoryStore.unshift(record);
-      return res.status(201).json({ feedback: record });
+      if (memoryStore.length > MEMORY_STORE_LIMIT) memoryStore.length = MEMORY_STORE_LIMIT;
+      res.status(201).json({ feedback: record });
+      void notifyUnstoredFeedback(record).catch((err) =>
+        logger.error('Feedback notification failed', err, { feedbackId }),
+      );
+      return;
     } catch (err) {
       return respondFeedbackWriteError(res, err);
     }
   });
 
-  // Public read: anyone with the /devmode route can view feedback (no login
-  // required). Mutations (PATCH/DELETE below) remain auth-gated.
-  app.get("/api/feedback", async (req: Request, res: Response) => {
+  const teamOnly = feedbackTeamOnly(requireAuth);
+
+  // The team's read — see isFeedbackTeam. Sending feedback stays open to all.
+  app.get("/api/feedback", teamOnly, async (req: Request, res: Response) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
@@ -169,8 +218,7 @@ export function registerFeedbackRoutes(
     }
   });
 
-  // Public read: feedback stats viewable without login (see GET '/api/feedback').
-  app.get("/api/feedback/stats", async (req: Request, res: Response) => {
+  app.get("/api/feedback/stats", teamOnly, async (req: Request, res: Response) => {
     try {
       const dbOnly = req.query.dbOnly === '1' || req.query.dbOnly === 'true';
       if (isMongoConnected()) {
@@ -213,7 +261,7 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.patch("/api/feedback/:id", requireAuth, async (req: Request, res: Response) => {
+  app.patch("/api/feedback/:id", teamOnly, async (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       const status = typeof req.body?.status === 'string' ? req.body.status : undefined;
@@ -242,7 +290,7 @@ export function registerFeedbackRoutes(
     }
   });
 
-  app.delete("/api/feedback/:id", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/feedback/:id", teamOnly, async (req: Request, res: Response) => {
     try {
       const id = req.params.id;
       if (isMongoConnected()) {

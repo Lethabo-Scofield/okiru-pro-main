@@ -147,7 +147,11 @@ function proxyRequest(req: Request, res: Response): void {
   // Pricing a big evidence pack inspects every file; give it the long budget too
   // so it can't be cut off at the 120s default mid-scan.
   const isParserQuote = /^\/api\/parser\/(esg\/)?quote-files/.test(upstreamPath);
-  const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || upstreamPath.startsWith("/api/import");
+  // A paid fresh read of one library document (and its pricing) runs the full
+  // extraction chain through apps/api — cut off at 120s, the user is charged
+  // for a read whose result never reaches them.
+  const isPaidReread = /^\/api\/parser-documents\/[^/]+\/reread(\/quote)?$/.test(upstreamPath);
+  const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || isPaidReread || upstreamPath.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,

@@ -173,6 +173,22 @@ function containsTokenRun(haystack: string[], needle: string[]): boolean {
 }
 
 /**
+ * Is the header a run of WHOLE WORDS inside the alias? "Course" is in "Course
+ * Cost"; "Age" is not in "Wages".
+ *
+ * For the containment-based header→key resolvers (workbookExcelNormalizer,
+ * workbookGridParse), which still matched letter runs in this direction. "Age"
+ * matched Salary Cost's alias "Wages", so every learner's age was read as their
+ * salary cost and the real salary column fell through to Total Cost: Skills
+ * dropped 2–5 points on 13 of the 16 reference workbooks from 18 Sep 2026
+ * (f4f2871f made header claims exclusive, so the stray match started winning).
+ * The same rule `aliasSimilarity` applies, as a yes/no.
+ */
+export function headerIsWordsOfAlias(header: string, alias: string): boolean {
+  return containsTokenRun(tokens(alias), tokens(header));
+}
+
+/**
  * Similarity between a COLUMN NAME and a field alias.
  *
  * Deliberately not `headerSimilarity`, which `selectOptionMatch` uses to match

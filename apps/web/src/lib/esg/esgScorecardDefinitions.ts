@@ -439,3 +439,48 @@ export const ESG_SCORECARD_PILLAR_MAX: Record<EsgScorecardPillar, number> = {
   social: esgPillarMaxPoints("social"),
   governance: esgPillarMaxPoints("governance"),
 };
+
+/**
+ * How an indicator is SHOWN — generic wording for every company.
+ *
+ * `indicator` is the reference workbook's own column-A text, kept verbatim for
+ * the export and the parity tests. It names one client's depots, systems and
+ * targets — "(all 5 depots)", "(Cority)", "IMS-T-149", "vs 60% target" — which
+ * are nobody else's: ESG targets are the company's own (expert ruling, 14 Sep
+ * 2026), and its sites and systems are in its workbook. A few also misstate the
+ * rule ("King V: Score ≥70%" is scaled, with no 70% threshold; "Incident
+ * investigation rate 100%" is not a rate). Anything not listed reads the same.
+ */
+const DISPLAY_LABELS: Partial<Record<EsgScorecardPillar, Record<string, string>>> = {
+  environmental: {
+    d6: "GHG: Scope 1 + 2 reduction vs baseline",
+    d11: "Energy: electricity tracked monthly at every site",
+    d13: "Energy: renewable share of electricity vs target",
+    d15: "Fleet: fuel use (L/100 km) within each vehicle's norm",
+    d17: "Fleet: electric vehicles as a share of the fleet vs target",
+    d19: "Waste: diversion rate vs target",
+    d20: "Waste: monthly recycling tracked",
+    d23: "Water: monthly consumption tracked at every site",
+  },
+  social: {
+    d5: "EE: % Black employees (all levels) vs target",
+    d6: "EE: % Black women in top and senior management vs target",
+    d8: "EE: % persons with disabilities vs target",
+    d14: "WSP: training hours per employee vs target",
+    d15: "WSP: mandatory grant recovery",
+    d17: "H&S: LTIFR at or below the company's ceiling",
+    d20: "H&S: incident investigation in place",
+    d22: "Community: CSI/SED spend as a share of NPAT vs target",
+    d23: "Community: social initiatives in the year",
+    d24: "Community: local procurement vs target",
+    d26: "Supplier: suppliers' H&S compliance vs target",
+  },
+  governance: {
+    d5: "King V: principles applied and explained",
+  },
+};
+
+/** The indicator's display label: generic, the company's own targets implied. */
+export function esgIndicatorLabel(pillar: EsgScorecardPillar, key: string): string {
+  return DISPLAY_LABELS[pillar]?.[key] ?? esgIndicator(pillar, key)?.indicator ?? key;
+}

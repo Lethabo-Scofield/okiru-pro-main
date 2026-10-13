@@ -14,6 +14,7 @@ import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
 import { scoreSocial } from "../social";
+import { scoreEnvironmental } from "../environmental";
 import { readTargetBasis, resolveTarget } from "../esgTargets";
 
 const OWN = "Company's own targets";
@@ -128,5 +129,105 @@ describe("scoring the Social pillar", () => {
     expect(s.excluded).toHaveLength(0);
     expect(s.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR);
     expect(s.rows.d5).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * D5 — the same ruling for Environmental: "For E the company needs to
+ * determine their own targets." The scorer used to fall back to a 10% annual
+ * cut, 20% renewable, 5% EV and 75% diversion whenever the company had set
+ * nothing.
+ */
+describe("Environmental targets follow the declared basis (D5)", () => {
+  /** Data that would score under every E target: a reduction, solar, EVs, diversion. */
+  const E_DATA = {
+    "e-data": { B90: 1000, B92: 500_000, L46: 400_000, L50: 100_000, L80: 400_000, L81: 100_000 },
+    fleet: { B28: 10, H28: 2 },
+    waste: { B16: 0.8 },
+  };
+  const ewb = (assumptions: Record<string, unknown>): EsgWorkbookData =>
+    ({
+      companyId: "e",
+      sections: {
+        assumptions: { cells: { B9: 0.5, ...assumptions } },
+        ...Object.fromEntries(Object.entries(E_DATA).map(([k, cells]) => [k, { cells }])),
+      },
+      updatedAt: "2026-10-07T00:00:00.000Z",
+    }) as unknown as EsgWorkbookData;
+  const TARGET_KEYS = ["d6", "d7", "d12", "d13", "d17", "d19"];
+  const excludedKeys = (assumptions: Record<string, unknown>) =>
+    scoreEnvironmental(ewb(assumptions)).excluded.map((x) => x.key);
+
+  it("excludes every target-based indicator until the company declares a basis — and says why", () => {
+    const e = scoreEnvironmental(ewb({}));
+    for (const key of TARGET_KEYS) {
+      const x = e.excluded.find((y) => y.key === key);
+      expect(x?.reason, key).toContain("has not declared how its targets are set");
+      expect(e.rows[key as keyof typeof e.rows], key).toBe(0);
+    }
+  });
+
+  it("scores against the company's own stated target, and only that", () => {
+    const e = scoreEnvironmental(ewb({ _targetBasis: OWN, B43: 0.05, B48: 0.75 }));
+    // B43 drives the emissions AND the energy reduction; B48 the diversion.
+    expect(e.excluded.map((x) => x.key)).not.toContain("d12");
+    expect(e.rows.d12).toBeGreaterThan(0);
+    expect(e.rows.d19).toBeGreaterThan(0);
+    // B44 (renewables) and B46 (EVs) were not set, so those leave the total —
+    // the sector's 20% and 5% are never put in their place.
+    for (const key of ["d7", "d13", "d17"]) {
+      expect(e.excluded.find((x) => x.key === key)?.reason, key).toContain("has not set one for");
+    }
+  });
+
+  it("reads a B-BBEE election as 'own' for E — B-BBEE sets no environmental targets", () => {
+    const stated = scoreEnvironmental(ewb({ _targetBasis: BBBEE, B48: 0.9 }));
+    // 0.8 against the company's 0.9 earns part of the 5, not the full 5 the sector's 0.75 would give.
+    expect(stated.rows.d19).toBeGreaterThan(0);
+    expect(stated.rows.d19).toBeLessThan(5);
+    const unset = scoreEnvironmental(ewb({ _targetBasis: BBBEE })).excluded.find((x) => x.key === "d19");
+    expect(unset?.reason).toContain("B-BBEE sets no environmental targets");
+    // ...and the company can resolve it, so the breakdown offers to.
+    expect(unset?.reason).toMatch(/has not set one for/);
+  });
+
+  it("reports but does not score a company that tracks the trend", () => {
+    expect(excludedKeys({ _targetBasis: TREND, B43: 0.05, B48: 0.75 })).toEqual(expect.arrayContaining(TARGET_KEYS));
+  });
+
+  it("takes the excluded points out of the denominator too, and leaves parity mode alone", () => {
+    const e = scoreEnvironmental(ewb({}));
+    const removed = e.excluded.reduce((a, x) => a + x.maxPoints, 0);
+    expect(removed).toBeGreaterThan(0);
+    const parity = scoreEnvironmental(ewb({}), { mode: "workbook-parity" });
+    expect(parity.excluded).toHaveLength(0);
+    expect(parity.rows.d19).toBeGreaterThan(0); // the workbook's own 0.75
+  });
+});
+
+describe("community initiatives follow the declared basis too", () => {
+  const raw = (assumptions: Record<string, unknown>) =>
+    ({
+      companyId: "c",
+      sections: {
+        assumptions: { cells: { B9: 0.5, ...assumptions } },
+        "s-data": { cells: { _initiatives_count: 4 } },
+      },
+      updatedAt: "",
+    }) as unknown as EsgWorkbookData;
+
+  it("leaves d23 out until the company sets its own number — the template's 6 is nobody's target", () => {
+    expect(scoreSocial(raw({})).excluded.find((x) => x.key === "d23")?.reason).toContain("has not declared");
+    expect(scoreSocial(raw({ _targetBasis: OWN })).excluded.find((x) => x.key === "d23")?.reason).toContain("has not set one for community initiatives");
+    // B-BBEE counts community investment as spend, so electing it supplies no count.
+    expect(scoreSocial(raw({ _targetBasis: BBBEE })).excluded.find((x) => x.key === "d23")?.reason).toContain("spend, not as a count");
+  });
+
+  it("scores against the company's own figure once it is set", () => {
+    const s = scoreSocial(raw({ _targetBasis: OWN, _csiInitiativesTarget: 4 }));
+    expect(s.excluded.map((x) => x.key)).not.toContain("d23");
+    expect(s.rows.d23).toBe(5);
+    // Parity keeps the workbook's 6: 4 of 6 is above the 0.5 floor, so part of the 5.
+    expect(scoreSocial(raw({}), { mode: "workbook-parity" }).rows.d23).toBeCloseTo((4 / 6) * 5, 6);
   });
 });

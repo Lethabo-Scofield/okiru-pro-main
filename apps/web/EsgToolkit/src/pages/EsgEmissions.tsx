@@ -1,4 +1,6 @@
 import { computeGhgInventory } from "../lib/calculators/ghgInventory";
+import { computeFleetEmissions } from "../lib/calculators/fleetEmissions";
+import { EsgFleetEmissions } from "../components/EsgFleetEmissions";
 import { useEsgStore } from "../lib/esgStore";
 
 /**
@@ -19,6 +21,7 @@ const whole = (n: number) => new Intl.NumberFormat("en-ZA", { maximumFractionDig
 export default function EsgEmissions() {
   const workbook = useEsgStore((s) => s.workbook);
   const ghg = workbook ? computeGhgInventory(workbook) : null;
+  const fleet = workbook ? computeFleetEmissions(workbook) : null;
   const period = workbook?.sections?.["company-reporting-setup"]?.cells?.period as string | undefined;
   const entity = workbook?.sections?.["company-reporting-setup"]?.cells?.entity as string | undefined;
 
@@ -119,6 +122,8 @@ export default function EsgEmissions() {
           </div>
         </>
       )}
+
+      {fleet?.hasData ? <EsgFleetEmissions fleet={fleet} /> : null}
     </div>
   );
 }

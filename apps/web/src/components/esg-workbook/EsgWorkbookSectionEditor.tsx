@@ -14,7 +14,9 @@ import { hydrateEsgSectionCells } from "@/lib/esg/esgSheetStructure";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { EsgScalarForm } from "./EsgScalarForm";
 import { EsgMonthlyGrid } from "./EsgMonthlyGrid";
-import { eDataDepotRows, E_DATA_SCOPE_FIELDS } from "./esgSectionConfigs";
+import { eDataDepotRows } from "./esgSectionConfigs";
+import { EsgReportingAxesForm } from "./EsgReportingAxesForm";
+import { esgWorkbookAxes } from "./esgDefaults";
 import { EsgHeadcountGrid } from "./EsgHeadcountGrid";
 import { EsgMaturityGrid } from "./EsgMaturityGrid";
 import { EsgSubtabContainer } from "./EsgSubtabContainer";
@@ -254,8 +256,10 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
       );
     } else if (sectionId === "e-data") {
       const activeSub = (draft._activeSubtab as string) || subTab || initialSubtab || "scope-1a";
-      // Company-wide reporting collapses each per-depot grid to a single consolidated row.
-      const eCompanyWide = String(draft.eScope) === "Company wide";
+      // The workbook's own sites and months lay out every monthly grid; company-wide
+      // reporting collapses each per-site grid to a single consolidated row.
+      const eAxes = esgWorkbookAxes(draft);
+      const eCompanyWide = eAxes.companyWide === true;
       const eTab = (id: string, content: ReactNode) => {
         const def = E_DATA_SUBTABS.find((t) => t.id === id);
         return { id, label: def?.label ?? id, content };
@@ -264,7 +268,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "scope-1a",
           <EsgMonthlyGrid
-            rows={eDataDepotRows(eCompanyWide)}
+            rows={eDataDepotRows(eCompanyWide, eAxes.depots)}
+            months={eAxes.months}
             cellPrefix="s1a"
             emissionFactor={Number(draft.B4 ?? ef.diesel)}
             unitLabel="L diesel"
@@ -276,7 +281,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "scope-1b",
           <EsgMonthlyGrid
-            rows={eDataGeneratorRows(eCompanyWide)}
+            rows={eDataGeneratorRows(eCompanyWide, eAxes.depots)}
+            months={eAxes.months}
             cellPrefix="s1b"
             emissionFactor={Number(draft.B4 ?? ef.diesel)}
             unitLabel="L diesel"
@@ -289,6 +295,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           "scope-1c",
           <EsgMonthlyGrid
             rows={eDataLpgRows()}
+            months={eAxes.months}
             cellPrefix="s1c"
             emissionFactor={Number(draft.B6 ?? ef.lpg)}
             unitLabel="kg"
@@ -301,6 +308,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           "scope-1d",
           <EsgMonthlyGrid
             rows={eDataBusinessCarRows()}
+            months={eAxes.months}
             cellPrefix="s1d"
             emissionFactor={Number(draft.B5 ?? ef.petrol)}
             unitLabel="L petrol"
@@ -316,7 +324,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           // never been able to score because no baseline was ever collected.
           <div className="space-y-4">
             <EsgMonthlyGrid
-              rows={eDataDepotRows(eCompanyWide)}
+              rows={eDataDepotRows(eCompanyWide, eAxes.depots)}
+            months={eAxes.months}
               cellPrefix="s2"
               emissionFactor={Number(draft.B7 ?? ef.electricity)}
               unitLabel="kWh"
@@ -335,7 +344,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "solar",
           <EsgMonthlyGrid
-            rows={eDataSolarRows(eCompanyWide)}
+            rows={eDataSolarRows(eCompanyWide, eAxes.depots)}
+            months={eAxes.months}
             cellPrefix="solar"
             emissionFactor={Number(draft.B8 ?? ef.solar)}
             unitLabel="kWh"
@@ -350,7 +360,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           // literal zero and no formula because the flag was never collected anywhere.
           <div className="space-y-4">
             <EsgMonthlyGrid
-              rows={eDataWaterRows(eCompanyWide)}
+              rows={eDataWaterRows(eCompanyWide, eAxes.depots)}
+              months={eAxes.months}
               cellPrefix="water"
               emissionFactor={Number(draft.B9 ?? ef.waterPerKl) * 1000}
               unitLabel="kL"
@@ -371,6 +382,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           <div className="space-y-4">
             <EsgMonthlyGrid
               rows={eDataWasteRows()}
+              months={eAxes.months}
               cellPrefix="waste"
               emissionFactor={0}
               unitLabel="%"
@@ -422,17 +434,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         : allTabs;
       body = (
         <div className="space-y-3">
-          <EsgScalarForm
-            fields={E_DATA_SCOPE_FIELDS}
-            values={draft}
-            onChange={updateDraft}
-            readOnly={locked}
-          />
-          {eCompanyWide && (
-            <p className="text-[12px] text-[var(--esg-text3)]">
-              Company-wide: enter one consolidated figure per source for the whole company instead of per depot.
-            </p>
-          )}
+          <EsgReportingAxesForm values={draft} onChange={updateDraft} readOnly={locked} />
           <EsgSubtabContainer
             activeTab={tabs.some((t) => t.id === activeSub) ? activeSub : tabs[0]?.id ?? activeSub}
             onTabChange={(id) => {

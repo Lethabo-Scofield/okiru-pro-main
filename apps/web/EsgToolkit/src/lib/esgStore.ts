@@ -52,7 +52,6 @@ type EsgStoreState = {
   isTouched: (sectionId: string, fieldRef: string) => boolean;
   setSubmitAttempted: (v: boolean) => void;
   setValidationExpanded: (v: boolean) => void;
-  seedDemo: (companyId: string) => Promise<void>;
 };
 
 const LOAD_GUARD_MS = 60_000;
@@ -235,19 +234,5 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
 
   setValidationExpanded(v) {
     set({ validationExpanded: v });
-  },
-
-  async seedDemo(companyId) {
-    // confirm:true is required server-side — seeding replaces every section.
-    const res = await fetch(`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/seed-demo`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true }),
-    });
-    if (!res.ok) {
-      const detail = await res.json().catch(() => null);
-      throw new Error(detail?.error || "Could not load sample data");
-    }
   },
 }));

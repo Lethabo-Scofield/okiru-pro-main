@@ -8,10 +8,11 @@ export type EsgAccessUser = {
 };
 
 /**
- * Sample-data seeding replaces an entire workbook, so the affordance is
- * admin-only in the UI — mirrored by the server gate on /seed-demo.
+ * Reopening a submitted workbook is admin-only in the UI — mirrored by the
+ * server gate on /unlock. (This once also gated "Load sample data", which
+ * replaced a whole workbook with another client's figures; that is gone.)
  */
-export function canSeedEsgSampleData(user: EsgAccessUser | null | undefined): boolean {
+export function isEsgWorkbookAdmin(user: EsgAccessUser | null | undefined): boolean {
   return user?.role === "admin" || user?.role === "super_admin";
 }
 

@@ -13,6 +13,7 @@ export {
 } from "../esgConfig/consumer-goods";
 
 import { STANCE_FLOOR, type EsgStanceKey } from "../esgConfig/consumer-goods";
+import type { EsgTraceRecorder } from "./esgTrace";
 
 /**
  * Which calculation a scorer runs.
@@ -38,6 +39,8 @@ export const ESG_DEFAULT_SCORING_MODE: EsgScoringMode = "corrected";
 
 export type EsgScoringOptions = {
   mode?: EsgScoringMode;
+  /** Collects how each indicator was scored (E2). Observes only; changes no score. */
+  trace?: EsgTraceRecorder;
 };
 
 export function scoringMode(options?: EsgScoringOptions): EsgScoringMode {

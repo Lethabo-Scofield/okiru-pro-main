@@ -303,9 +303,13 @@ type MonthlyBlock = {
   values: number[];
 };
 
-/** Read `${prefix}_{C..K}{row}` monthly cells, grouped by row in ascending row order. */
+/**
+ * Read `${prefix}_{C..}{row}` monthly cells, grouped by row in ascending row order.
+ * One column per month of the workbook's own reporting year: C…K for the
+ * reference workbook's nine, up to C…Z.
+ */
 function readMonthlyBlock(cells: Cells, prefix: string): MonthlyBlock {
-  const re = new RegExp(`^${prefix}_([C-K])(\\d+)$`);
+  const re = new RegExp(`^${prefix}_([C-Z])(\\d+)$`);
   const byRow = new Map<number, number>();
   const values: number[] = [];
   let cellCount = 0;

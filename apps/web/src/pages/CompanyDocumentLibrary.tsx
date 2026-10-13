@@ -14,6 +14,7 @@ import {
   type ParserDocumentSummary,
   type ParserStatus,
 } from "@/lib/parserDocuments";
+import { esgCreateHref } from "@/lib/esg/esgRoutes";
 
 /**
  * One company's evidence.
@@ -59,6 +60,9 @@ export function CompanyDocumentLibrary({
 
   const accent = product === "esg" ? "var(--esg)" : "var(--bbbee)";
   const sectionHref = product === "esg" ? "/esg" : "/bbbee";
+  // The company's own workbook: an ESG company's is the ESG one.
+  const workbookHref =
+    product === "esg" ? esgCreateHref(companyId) : `/create-scorecard/${encodeURIComponent(companyId)}`;
 
   useEffect(() => {
     void (async () => {
@@ -164,7 +168,7 @@ export function CompanyDocumentLibrary({
               at a page that does not exist yet. */}
           <button
             type="button"
-            onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}`)}
+            onClick={() => navigate(workbookHref)}
             className="ok-btn-primary"
             data-testid="company-docs-upload"
           >
@@ -286,7 +290,7 @@ export function CompanyDocumentLibrary({
           ) : (
             <button
               type="button"
-              onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}`)}
+              onClick={() => navigate(workbookHref)}
               className="ok-btn-primary mt-5"
               data-testid="company-docs-empty-upload"
             >

@@ -25,8 +25,10 @@
  */
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, FileWarning, HelpCircle } from "lucide-react";
+import { esgSectionById } from "@/lib/esg/esgSections";
 import {
   esgCaseFileNames,
+  esgUnplacedKinds,
   type EsgInjectionResult,
   type EsgParserCaseLike,
   type EsgUnplacedValue,
@@ -35,6 +37,13 @@ import {
 interface Props {
   injection: EsgInjectionResult;
   parserCase: EsgParserCaseLike | null;
+  /**
+   * Headline only — counts, the nothing-read warning and element coverage.
+   * The lists (disagreements, unplaced values, exceptions, unread files) are
+   * shown per document in the side-by-side review instead, beside the
+   * document they are about.
+   */
+  compact?: boolean;
 }
 
 /** Element code → the wording a practitioner would recognise. */
@@ -191,8 +200,12 @@ function ElementGroup({
   );
 }
 
-export function EsgExtractionSummary({ injection, parserCase }: Props) {
+export function EsgExtractionSummary({ injection, parserCase, compact = false }: Props) {
   const { placed, unplaced, conflicts, valuesRead } = injection;
+  // What needs a person: figures to place, values to check, disagreements.
+  // Evidence no cell needs is not outstanding — it is kept, and said so.
+  const kinds = esgUnplacedKinds(unplaced);
+  const outstanding = kinds.toPlace + kinds.toCheck + conflicts.length;
 
   // Which elements the evidence actually covered, and how many values each
   // contributed. Counted from the extraction itself — never from a wish list.
@@ -255,16 +268,35 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
             <AlertTriangle className="h-3.5 w-3.5" /> Nothing extracted
           </span>
-        ) : unplaced.length === 0 && conflicts.length === 0 ? (
+        ) : outstanding === 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#30d158]/[0.12] px-3 py-1.5 text-[12px] font-medium text-[#30d158]">
             <CheckCircle2 className="h-3.5 w-3.5" /> Nothing outstanding
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5" /> {unplaced.length + conflicts.length} to review
+            <AlertTriangle className="h-3.5 w-3.5" /> {outstanding} to review
           </span>
         )}
       </div>
+      {(kinds.toPlace > 0 || kinds.evidence > 0) && (
+        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-unplaced-kinds">
+          {[
+            kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
+            kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? " is" : "s are"} kept as evidence — no cell in the workbook needs ${kinds.evidence === 1 ? "it" : "them"}` : "",
+          ].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      {/* Added from inside a section (C1): what was read for another part of the
+          workbook was not written, and says where it belongs. */}
+      {(injection.outsideFocus?.length ?? 0) > 0 && (
+        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-outside-focus">
+          Not written from here:{" "}
+          {injection.outsideFocus!
+            .map(({ sectionId, figures }) => `${figures} figure${figures === 1 ? "" : "s"} for ${esgSectionById(sectionId)?.title ?? sectionId}`)
+            .join(", ")}
+          {" "}— add these documents there, or to the whole workbook, to place them.
+        </p>
+      )}
 
       {/* ZERO EXTRACTION. The documents were read and produced nothing we can
           use — say it, and say what to do, rather than showing an empty panel
@@ -309,7 +341,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* FIGURES THE DOCUMENTS DISAGREE ON. Left blank rather than guessed.
           One candidate per line: `a (src) vs b (src)` on one wrapping line was
           unreadable at exactly the moment the user had to choose between them. */}
-      {conflicts.length > 0 && (
+      {!compact && conflicts.length > 0 && (
         <div className="mt-4" data-testid="esg-value-conflicts">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
@@ -346,7 +378,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* THE VALUES THEMSELVES, grouped by element and collapsible. Forty
           readings in one flat list is a wall; the same forty behind four
           element headings is a summary someone will actually open. */}
-      {unplaced.length > 0 && (
+      {!compact && unplaced.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <FileWarning className="h-4 w-4 text-amber-300" />
@@ -374,7 +406,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           the rows do not sum to is exactly the thing an assurance provider will
           ask about, and the person who can answer is standing here with the
           documents open. */}
-      {exceptions.length > 0 && (
+      {!compact && exceptions.length > 0 && (
         <div className="mt-4" data-testid="esg-extraction-exceptions">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
@@ -403,7 +435,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* Documents that produced nothing. Named one per line, so the user can
           replace the specific file rather than re-uploading everything — a
           comma-joined run of filenames truncated exactly where it mattered. */}
-      {readNothing.length > 0 && (
+      {!compact && readNothing.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <HelpCircle className="h-4 w-4 text-amber-300" />
@@ -429,8 +461,9 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       )}
 
       <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-        Everything above is editable in the workbook. A value we could not place is left blank
-        rather than guessed — a wrong entry would score as nothing without telling you.
+        {compact
+          ? "Each document is reviewed below — what we took from it, what we couldn't place, and why anything wasn't read."
+          : "Everything above is editable in the workbook. A value we could not place is left blank rather than guessed — a wrong entry would score as nothing without telling you."}
       </p>
     </div>
   );

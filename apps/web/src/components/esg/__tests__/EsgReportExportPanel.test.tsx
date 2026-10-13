@@ -9,7 +9,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { buildGoldenSections } from "../../../../server/esgGoldenFixture";
+import { buildGoldenSections } from "../../../lib/esg/__fixtures__/esgSampleSections";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { EsgReportExportPanel } from "../EsgReportExportPanel";
 

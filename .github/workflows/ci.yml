@@ -100,6 +100,13 @@ jobs:
       # High and critical advisories fail the build. Moderate and low are
       # reported so they are visible without blocking every merge on a
       # transitive development dependency.
+      #
+      # One advisory is ignored, in package.json's pnpm.auditConfig:
+      # GHSA-vfj7-8cjw-p6xm (braces). No fixed version of braces exists, and
+      # its only path is @vercel/node -> ts-morph -> fast-glob -> micromatch,
+      # a devDependency imported for types alone - the images install with
+      # --prod, so it never ships, and nothing feeds it untrusted patterns.
+      # Remove the ignore when a fixed braces is published.
       - name: Audit (high and critical)
         run: pnpm audit --audit-level=high
 
@@ -126,8 +133,10 @@ jobs:
       - name: Build image
         run: docker build -f apps/${{ matrix.service }}/Dockerfile -t okiru-${{ matrix.service }}:ci .
 
+      # Pinned to a commit, not a tag: this action's tags have been rewritten
+      # before - "0.28.0" stopped resolving and failed the job at setup.
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: okiru-${{ matrix.service }}:ci
           format: sarif

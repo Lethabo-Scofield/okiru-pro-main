@@ -21,7 +21,7 @@ import {
   type EsgWorkbookSectionEditorHandle,
 } from "@/components/esg-workbook/EsgWorkbookSectionEditor";
 import { useAuth } from "@toolkit/lib/auth";
-import { canSeedEsgSampleData } from "@/lib/esg/esgAccess";
+import { isEsgWorkbookAdmin } from "@/lib/esg/esgAccess";
 import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
 import { EsgReportScopePanel } from "../../EsgToolkit/src/components/EsgReportScopePanel";
 import { API_BASE } from "@toolkit/lib/config";
@@ -33,17 +33,20 @@ import {
   rememberEsgStartChosen,
   setEsgActiveCompany,
 } from "@/lib/esgRoutes";
-import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
+import { ESG_INPUT_SECTIONS, esgSectionById } from "@/lib/esgSections";
 import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
-import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import { EsgTemplateMenu } from "@/components/esg-workbook/EsgTemplateMenu";
+import { esgImportHandover, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgCreateStartChoice from "@/components/esg/EsgCreateStartChoice";
 import EsgDocumentUploadStart from "@/components/esg/EsgDocumentUploadStart";
+import { esgWorkbookAxisState } from "@/lib/esg/esgCaseAxes";
 import EsgFlowSteps from "@/components/esg/EsgFlowSteps";
 import {
   esgPatchCellCount,
   persistEsgSectionPatches,
   type EsgInjectionResult,
 } from "@/components/esg/esgParserInjection";
+import { esgUploadFocus, type EsgUploadFocus } from "@/lib/esg/esgSectionElements";
 import "@/styles/esg-glass.css";
 
 const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "company-reporting-setup";
@@ -69,7 +72,7 @@ export default function EsgInformationRequest() {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const isEsgAdmin = canSeedEsgSampleData(user);
+  const isEsgAdmin = isEsgWorkbookAdmin(user);
   const load = useEsgStore((s) => s.load);
   const setCompanyName = useEsgStore((s) => s.setCompanyName);
   const companyName = useEsgStore((s) => s.companyName);
@@ -77,7 +80,6 @@ export default function EsgInformationRequest() {
   const loading = useEsgStore((s) => s.loading);
   const saving = useEsgStore((s) => s.saving);
   const submittedAt = useEsgStore((s) => s.submittedAt);
-  const seedDemo = useEsgStore((s) => s.seedDemo);
   const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
   const setSubmitAttempted = useEsgStore((s) => s.setSubmitAttempted);
   const touched = useEsgStore((s) => s.touched);
@@ -86,6 +88,14 @@ export default function EsgInformationRequest() {
   const [reopening, setReopening] = useState(false);
   const [importPreview, setImportPreview] = useState<EsgImportPreview | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  /** A spreadsheet the template import could not place, handed to the document reader. */
+  const [handover, setHandover] = useState<File[] | null>(null);
+  /**
+   * The section documents are being added from (C1): the reader looks for its
+   * pillar and writes only there. Null is the whole workbook — the toolbar's
+   * "Add documents" and the entry choice.
+   */
+  const [uploadFocus, setUploadFocus] = useState<EsgUploadFocus | null>(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
@@ -96,8 +106,12 @@ export default function EsgInformationRequest() {
    * there is nothing in the workbook to go back to (see `stage` below).
    */
   const startRouteRequested = location.endsWith("/start");
+  // `/start?with=documents` — the toolkit's upload hub sending someone
+  // straight to the document reader rather than the chooser in front of it.
+  const startWithDocuments =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("with") === "documents";
   const [stage, setStage] = useState<EsgStartStage>(
-    startRouteRequested ? "choose" : "deciding",
+    startRouteRequested ? (startWithDocuments ? "upload" : "choose") : "deciding",
   );
   /** True while the parsed sections are being written into the workbook. */
   const [injecting, setInjecting] = useState(false);
@@ -146,6 +160,15 @@ export default function EsgInformationRequest() {
       cancelled = true;
     };
   }, [companyId, load, navigate, setCompanyName]);
+
+  /**
+   * The sites and reporting months this workbook places figures on. Its own
+   * when it states them; kept as they are once it holds monthly figures.
+   */
+  const workbookAxes = useMemo(
+    () => esgWorkbookAxisState(workbook?.sections?.["e-data"]?.cells as Record<string, unknown> | undefined),
+    [workbook],
+  );
 
   /** Every captured cell across every section — the "is this workbook empty" test. */
   const totalCapturedCells = useMemo(
@@ -220,30 +243,28 @@ export default function EsgInformationRequest() {
     [activeSection.title, activeSectionId, sectionBusy, toast, touched, workbook],
   );
 
+  /** "Add documents" from inside the open section (C1): save it, then read for its pillar. */
+  const addDocumentsToSection = async () => {
+    const ok = (await editorRef.current?.flush()) ?? true;
+    if (!ok) {
+      toast({
+        title: "Save failed",
+        description: "Could not save this section before adding documents.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setHandover(null);
+    setUploadFocus(esgUploadFocus(activeSection.id, activeSection.title));
+    setStage("upload");
+  };
+
   const cellCount = useCallback(
     (sectionId: string) => Object.keys(workbook?.sections?.[sectionId]?.cells ?? {}).length,
     [workbook],
   );
 
   const sectionStatus = (sectionId: string) => (cellCount(sectionId) > 0 ? "filled" : "empty");
-
-  const loadSampleData = async () => {
-    const ok = window.confirm(
-      "Load sample data?\n\nThis REPLACES every section of this workbook with sample figures. Anything already captured for this company will be lost.",
-    );
-    if (!ok) return;
-    try {
-      await seedDemo(companyId);
-      await load(companyId, companyName, { force: true });
-      toast({ title: "Sample data loaded", description: "Every section was replaced with sample figures." });
-    } catch (err) {
-      toast({
-        title: "Could not load sample data",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleImportFile = async (file: File) => {
     // `importing` also drives the entry choice's spinner: parsing a 20-tab
@@ -277,6 +298,17 @@ export default function EsgInformationRequest() {
         return;
       }
       const preview = (await res.json()) as EsgImportPreview;
+      // Not our template: placing nothing and then saying "Import complete" is
+      // what this did. The document reader maps a register by its columns —
+      // the same handover a new company's Excel route makes.
+      const handoverNote = esgImportHandover(preview);
+      if (handoverNote) {
+        toast({ title: "That is not the Okiru template", description: handoverNote });
+        setHandover([file]);
+        setUploadFocus(null);
+        setStage("upload");
+        return;
+      }
       setImportPreview(preview);
       setImportOpen(true);
     } catch (err) {
@@ -292,7 +324,7 @@ export default function EsgInformationRequest() {
     }
   };
 
-  const confirmImport = async () => {
+  const confirmImport = async (replace: string[] = []) => {
     if (!importPreview) return;
     setImporting(true);
     try {
@@ -302,7 +334,7 @@ export default function EsgInformationRequest() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirm: true, sections: importPreview.sections }),
+          body: JSON.stringify({ confirm: true, sections: importPreview.sections, replace }),
         },
       );
       if (!res.ok) throw new Error("confirm failed");
@@ -334,21 +366,32 @@ export default function EsgInformationRequest() {
     setInjecting(true);
     try {
       const cells = esgPatchCellCount(injection.patches);
+      // Added from inside a section (C1): what belonged elsewhere was held back, and saying
+      // so is the difference between "kept to this section" and "lost".
+      const heldBack = (injection.outsideFocus ?? []).reduce((sum, held) => sum + held.figures, 0);
+      const heldBackNote =
+        heldBack > 0
+          ? ` ${heldBack} figure${heldBack === 1 ? "" : "s"} for other sections (${(injection.outsideFocus ?? [])
+              .map((held) => esgSectionById(held.sectionId)?.title ?? held.sectionId)
+              .join(", ")}) ${heldBack === 1 ? "was" : "were"} kept with the documents, not written.`
+          : "";
       if (cells > 0) {
-        await persistEsgSectionPatches(companyId, injection.patches);
+        // The placements travel too, so each cell keeps the document it came from (E4).
+        await persistEsgSectionPatches(companyId, injection.patches, injection.placed);
         await load(companyId, companyName, { force: true });
         toast({
-          title: "Values added to your workbook",
-          description: `${cells} field${cells === 1 ? "" : "s"} filled in from your documents — review them before you submit.`,
+          title: uploadFocus ? `Values added to ${uploadFocus.title}` : "Values added to your workbook",
+          description: `${cells} field${cells === 1 ? "" : "s"} filled in from your documents — review them before you submit.${heldBackNote}`,
         });
       } else {
         toast({
           title: "Documents read — workbook not filled in",
-          description: injection.valuesRead > 0
+          description: (injection.valuesRead > 0
             ? `${injection.valuesRead} value${injection.valuesRead === 1 ? "" : "s"} were read and saved to your document library, but none could be placed into workbook cells yet.`
-            : "No values could be extracted, so nothing was written. Complete the workbook below.",
+            : "No values could be extracted, so nothing was written. Complete the workbook below.") + heldBackNote,
         });
       }
+      setUploadFocus(null);
       goToWorkbook();
     } catch (err) {
       toast({
@@ -474,7 +517,10 @@ export default function EsgInformationRequest() {
                 evidence pack should not have to leave and come back. */}
             <button
               type="button"
-              onClick={() => setStage("choose")}
+              onClick={() => {
+                setUploadFocus(null);
+                setStage("choose");
+              }}
               disabled={Boolean(submittedAt) || loading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
               data-testid="button-esg-add-documents"
@@ -490,18 +536,6 @@ export default function EsgInformationRequest() {
             >
               <Save className="h-3.5 w-3.5" /> Save
             </button>
-            {isEsgAdmin ? (
-              <button
-                type="button"
-                onClick={() => void loadSampleData()}
-                disabled={Boolean(submittedAt) || loading}
-                title="Replaces every section with sample figures"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-                data-testid="button-esg-load-demo"
-              >
-                Load sample data
-              </button>
-            ) : null}
             <input
               ref={fileInputRef}
               type="file"
@@ -513,13 +547,10 @@ export default function EsgInformationRequest() {
                 e.target.value = "";
               }}
             />
-            <a
-              href={`${API_BASE}/api/esg/workbook/template`}
+            <EsgTemplateMenu
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-              data-testid="button-esg-download-template"
-            >
-              <Download className="h-3.5 w-3.5" /> Download template
-            </a>
+              testId="button-esg-download-template"
+            />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -560,7 +591,7 @@ export default function EsgInformationRequest() {
             setImportOpen(false);
             setImportPreview(null);
           }}
-          onConfirm={() => void confirmImport()}
+          onConfirm={(replace) => void confirmImport(replace)}
           confirming={importing}
           // The workbook being imported INTO — what turns "812 cells" into
           // "300 of these replace figures you already captured".
@@ -578,7 +609,10 @@ export default function EsgInformationRequest() {
           <EsgCreateStartChoice
             companyName={companyName}
             importing={importing}
-            onChooseUpload={() => setStage("upload")}
+            onChooseUpload={() => {
+              setUploadFocus(null);
+              setStage("upload");
+            }}
             onChooseExcel={(file) => void handleImportFile(file)}
             onChooseManual={goToWorkbook}
           />
@@ -589,8 +623,16 @@ export default function EsgInformationRequest() {
               companyId={companyId}
               companyName={companyName}
               busy={injecting}
-              onBack={() => setStage("choose")}
+              onBack={() => {
+                setHandover(null);
+                // From inside a section, Back is that section — not the three ways in.
+                setStage(uploadFocus ? "workbook" : "choose");
+                setUploadFocus(null);
+              }}
               onComplete={handleParsedDocuments}
+              workbookAxes={workbookAxes}
+              initialFiles={handover ?? undefined}
+              focus={uploadFocus}
             />
           </div>
         ) : (
@@ -720,6 +762,21 @@ export default function EsgInformationRequest() {
                 ) : null}
                 {activeSection.note ? (
                   <p className="text-[12px] text-[var(--esg-text3)] mb-4">{activeSection.note}</p>
+                ) : null}
+                {!submittedAt ? (
+                  // Documents for this part of the workbook (C1): the reader is told which
+                  // pillar to look for, and only this section's pillar is written.
+                  <div className="mb-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void addDocumentsToSection()}
+                      disabled={loading || sectionBusy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+                      data-testid="button-esg-section-add-documents"
+                    >
+                      <Upload className="h-3.5 w-3.5" /> Add documents to this section
+                    </button>
+                  </div>
                 ) : null}
                 <EsgWorkbookSectionEditor
                   key={activeSection.id}

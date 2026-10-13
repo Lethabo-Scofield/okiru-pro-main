@@ -20,8 +20,10 @@ type ThemeProviderState = {
   setTheme: (theme: Theme) => void
 }
 
+// Dark is the signed-in app's default (Brian, 7 October 2026); light is for
+// the public pages (`lightOnlyPaths`) and for whoever saved it.
 const initialState: ThemeProviderState = {
-  theme: "light",
+  theme: "dark",
   setTheme: () => null,
 }
 
@@ -71,7 +73,7 @@ const darkCssVars: Record<string, string> = {
 
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "dark",
   storageKey = "vite-ui-theme",
   lightOnlyPaths,
   ...props

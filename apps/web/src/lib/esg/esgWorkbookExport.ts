@@ -6,6 +6,8 @@ import { computeEsgScorecard } from "../../../EsgToolkit/src/lib/calculators";
 import { ESG_SECTION_IDS } from "./esgSections";
 import { countKing5Principles } from "./esgGridRows";
 import type { EsgWorkbookData } from "./esgWorkbookStorage";
+import { coverSheetRefsFromCells, eDataSheetRefsFromCells, headcountSheetRefsFromCells } from "./esgSheetStructure";
+import { esgWorkbookAxes } from "@/components/esg-workbook/esgDefaults";
 
 /** All sheets from workbook_inventory.json v1.7. */
 export const ESG_V17_SHEET_NAMES = [
@@ -229,6 +231,12 @@ export function buildEsgWorkbookXlsx(wb: EsgWorkbookData): Buffer {
     const cells = wb.sections?.[sectionId]?.cells ?? {};
     writeSectionCells(ensureSheet(book, sheetName), cells);
   }
+  writeEDataMonthlyFigures(book, wb.sections?.["e-data"]?.cells ?? {});
+  // Two inputs the app keeps under names, not sheet addresses, written where
+  // the import reads them back: the company setup, and the EEA2 headcount
+  // matrix (after the section's own cells, so the grid the person sees wins).
+  writeSectionCells(ensureSheet(book, "Cover"), coverSheetRefsFromCells(wb.sections?.["company-reporting-setup"]?.cells ?? {}));
+  writeSectionCells(ensureSheet(book, "S_Data"), headcountSheetRefsFromCells(wb.sections?.["s-data"]?.cells ?? {}));
 
   const scorecard = computeEsgScorecard(wb);
   if (scorecard) {
@@ -264,4 +272,58 @@ export function buildEsgWorkbookXlsx(wb: EsgWorkbookData): Buffer {
   }
 
   return XLSX.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
+/** The E_Data monthly blocks, in sheet order, as the Monthly_Figures sheet titles them. */
+const MONTHLY_BLOCKS: ReadonlyArray<{ prefix: string; title: string; perSite: boolean }> = [
+  { prefix: "s1a", title: "Scope 1A - road-freight fleet diesel (litres)", perSite: true },
+  { prefix: "s1b", title: "Scope 1B - generator diesel (litres)", perSite: true },
+  { prefix: "s1c", title: "Scope 1C - LPG forklifts (kg)", perSite: false },
+  { prefix: "s1d", title: "Scope 1D - business cars (litres)", perSite: false },
+  { prefix: "s2", title: "Scope 2 - grid electricity (kWh)", perSite: true },
+  { prefix: "solar", title: "Solar generation (kWh)", perSite: true },
+  { prefix: "water", title: "Scope 3 - municipal water (kL)", perSite: true },
+  { prefix: "waste", title: "% waste recycled (all sites)", perSite: false },
+];
+
+/**
+ * E_Data's monthly figures. A grid cell (`s1a_C14`) is not a sheet address, so
+ * until now no figure entered in the app reached the downloaded workbook. They
+ * go to their v1.7 E_Data cells, which re-import reads back, and every figure
+ * is also listed on Monthly_Figures by the workbook's OWN sites and months —
+ * including those the five-site, nine-month reference layout has no cell for.
+ */
+function writeEDataMonthlyFigures(book: XLSX.WorkBook, cells: Record<string, unknown>): void {
+  const { sheet: placed } = eDataSheetRefsFromCells(cells);
+  writeSectionCells(ensureSheet(book, "E_Data"), placed);
+
+  const axes = esgWorkbookAxes(cells);
+  const table: unknown[][] = [];
+  for (const block of MONTHLY_BLOCKS) {
+    const pattern = new RegExp(`^${block.prefix}_([C-Z])(\\d+)$`);
+    const rows = new Map<number, Map<string, unknown>>();
+    for (const [ref, value] of Object.entries(cells)) {
+      const m = pattern.exec(ref);
+      if (!m || value === "" || value === null || value === undefined) continue;
+      const rowIndex = Number(m[2]) - 14;
+      const row = rows.get(rowIndex) ?? new Map<string, unknown>();
+      row.set(m[1], value);
+      rows.set(rowIndex, row);
+    }
+    if (rows.size === 0) continue;
+    const columns = Math.max(
+      axes.months.length,
+      ...Array.from(rows.values()).flatMap((row) => Array.from(row.keys()).map((col) => col.charCodeAt(0) - 66)),
+    );
+    table.push([block.title]);
+    table.push(["Site", ...Array.from({ length: columns }, (_, j) => axes.months[j] ?? `Month ${j + 1}`)]);
+    for (const [rowIndex, row] of Array.from(rows.entries()).sort((a, b) => a[0] - b[0])) {
+      const site = !block.perSite || axes.companyWide ? "Company" : axes.depots[rowIndex] ?? `Site ${rowIndex + 1}`;
+      table.push([site, ...Array.from({ length: columns }, (_, j) => row.get(String.fromCharCode(67 + j)) ?? "")]);
+    }
+    table.push([]);
+  }
+  if (table.length === 0) return;
+  book.SheetNames.push("Monthly_Figures");
+  book.Sheets["Monthly_Figures"] = XLSX.utils.aoa_to_sheet(table);
 }

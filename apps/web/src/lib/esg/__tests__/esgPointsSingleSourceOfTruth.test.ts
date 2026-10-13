@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import {
   ESG_SCORECARD_PILLAR_MAX,
@@ -69,9 +69,18 @@ function readWorkbookColumnB(pillar: EsgScorecardPillar): Map<number, { a: strin
   return out;
 }
 
+/**
+ * The workbook comparison reads the extracted client workbook, which is
+ * gitignored (client data), so it runs only where that extract exists — never
+ * in CI, where it used to fail the whole file at collection. The totals and
+ * the nav reconciliation below need no extract and run everywhere.
+ */
+const HAS_EXTRACT = PILLARS.every((pillar) => existsSync(resolve(EXTRACTED, `${SHEET[pillar]}.json`)));
+const workbookSuite = HAS_EXTRACT ? describe : describe.skip;
+
 describe("ESG points allocation — single source of truth", () => {
-  describe.each(PILLARS)("%s definitions vs workbook", (pillar) => {
-    const workbook = readWorkbookColumnB(pillar);
+  workbookSuite.each(PILLARS)("%s definitions vs workbook", (pillar) => {
+    const workbook = HAS_EXTRACT ? readWorkbookColumnB(pillar) : new Map<number, { a: string; b: number }>();
     const defs = SCORECARD_INDICATORS[pillar];
 
     it(`covers exactly the scored rows of ${SHEET[pillar]} — no extra, none missing`, () => {

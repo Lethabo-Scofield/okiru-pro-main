@@ -61,6 +61,37 @@ describe('mapEsgEntitiesToCalculatorWithSemantics', () => {
     expect(result.unmapped.some((u) => u.field === 'mystery_reading')).toBe(true);
   });
 
+  it('keeps a field inside its own kind of document — a fuel supplier is not a supplier being rated', async () => {
+    // Replayed from a real diesel report: the semantic pass put "Engen" into the
+    // supplier-assessment register because every ESG key was on offer.
+    const asked: string[] = [];
+    const record = (args: unknown[]) => asked.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join('\n'));
+    const model: ExtractionModel = {
+      name: 'test',
+      async complete(...args: unknown[]) { record(args); return JSON.stringify({ fuel_supplier_name: 'supplier.name' }); },
+      async completeHard(...args: unknown[]) { record(args); return JSON.stringify({ fuel_supplier_name: 'supplier.name' }); },
+    } as unknown as ExtractionModel;
+    const result = await mapEsgEntitiesToCalculatorWithSemantics(
+      entities({ fuel_supplier_name: 'Engen' }),
+      new Map([['fuel_supplier_name', new Set(['FLEET' as const])]]),
+      model,
+    );
+    expect(result.payload['supplier.name']).toBeUndefined();
+    expect(result.unmapped.some((u) => u.field === 'fuel_supplier_name')).toBe(true);
+    // It was never even offered: the question names fleet keys, not supplier ones.
+    expect(asked.join('\n')).not.toContain('supplier.name');
+    expect(asked.join('\n')).toContain('fleet.fuel_card_provider');
+  });
+
+  it('still places a field onto a key of its own kind of document', async () => {
+    const result = await mapEsgEntitiesToCalculatorWithSemantics(
+      entities({ fuel_supplier_name: 'Engen' }),
+      new Map([['fuel_supplier_name', new Set(['FLEET' as const])]]),
+      modelProposing({ fuel_supplier_name: 'fleet.fuel_card_provider' }),
+    );
+    expect(result.payload['fleet.fuel_card_provider']).toBe('Engen');
+  });
+
   it('is exactly the declared mapping when no model is available', async () => {
     const result = await mapEsgEntitiesToCalculatorWithSemantics(
       entities({ unheard_of_field: '5' }),

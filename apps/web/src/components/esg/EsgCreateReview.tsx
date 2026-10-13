@@ -21,6 +21,33 @@ import EsgFlowSteps from "./EsgFlowSteps";
 import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
 import type { EsgInjectionResult, EsgParserCaseLike } from "./esgParserInjection";
+import { useState } from "react";
+import { DocumentReview } from "@/components/review/DocumentReview";
+import { buildEsgDocumentReview } from "./esgDocumentReview";
+
+/** The per-document review, folded away — for a run restored straight to this step. */
+function ReviewAgain({ injection, parserCase }: { injection: EsgInjectionResult; parserCase: EsgParserCaseLike }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] underline-offset-2 hover:text-white hover:underline"
+        data-testid="esg-review-documents-toggle"
+      >
+        {open ? "Hide the document review" : "Review each document"}
+      </button>
+      {open && (
+        <DocumentReview
+          documents={buildEsgDocumentReview({ parserCase, injection, uploadNames: [] })}
+          fileFor={() => null}
+          documentIdFor={() => null}
+        />
+      )}
+    </div>
+  );
+}
 
 /** Which way in produced what is being reviewed. */
 export type EsgCreateRoute = "documents" | "excel" | "manual";
@@ -126,7 +153,11 @@ export function EsgCreateReview({
 
       {route === "documents" && injection ? (
         <div className="mt-4">
-          <EsgExtractionSummary injection={injection} parserCase={parserCase ?? null} />
+          {/* The headline — the per-document review is the step before. A
+              restored run arrives here without passing it, so the review is
+              one click away rather than repeated in full. */}
+          <EsgExtractionSummary injection={injection} parserCase={parserCase ?? null} compact />
+          {parserCase ? <ReviewAgain injection={injection} parserCase={parserCase} /> : null}
         </div>
       ) : null}
 

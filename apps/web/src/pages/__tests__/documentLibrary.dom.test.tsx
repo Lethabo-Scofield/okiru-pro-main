@@ -167,4 +167,16 @@ describe("one company's library", () => {
     expect(await screen.findByText(/No documents match those filters/)).toBeInTheDocument();
     expect(screen.getByText("Clear filters")).toBeInTheDocument();
   });
+
+  it("opens the company's own workbook — the ESG one for an ESG company", async () => {
+    routeCompanyLibrary(0);
+    render(<CompanyDocumentLibrary companyId="C-1" product="esg" />);
+    await userEvent.click(await screen.findByTestId("company-docs-empty-upload"));
+    expect(window.location.pathname).toBe("/esg/create/C-1");
+
+    cleanup();
+    render(<CompanyDocumentLibrary companyId="C-1" product="bbbee" />);
+    await userEvent.click(await screen.findByTestId("company-docs-empty-upload"));
+    expect(window.location.pathname).toBe("/create-scorecard/C-1");
+  });
 });

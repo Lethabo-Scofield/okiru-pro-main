@@ -1,7 +1,6 @@
-import { EsgAppLink } from "@/components/EsgAppLink";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Award, ChevronRight, FileText, Leaf, Loader2, ScanLine, Sparkles } from "lucide-react";
+import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
@@ -232,25 +231,9 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
           {provisional ? <FileText className="w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
           {provisional ? "Open workbook to refine" : "View Scorecard"}
         </button>
-        {/* Same company, other scorecard. ESG lives in its own micro-app with
-            its own router, so these are native anchors (EsgAppLink) rather
-            than wouter links. */}
-        <EsgAppLink
-          href={`/esg/create/${encodeURIComponent(companyId)}`}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[color:var(--body)] hover:text-white hover:bg-white/[0.08]"
-          data-testid="link-esg-workbook"
-        >
-          <Leaf className="w-4 h-4" />
-          ESG workbook
-        </EsgAppLink>
-        <EsgAppLink
-          href={`/esg/toolkit/${encodeURIComponent(companyId)}`}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[color:var(--body)] hover:text-white hover:bg-white/[0.08]"
-          data-testid="link-esg-toolkit"
-        >
-          <Leaf className="w-4 h-4" />
-          ESG toolkit
-        </EsgAppLink>
+        {/* No ESG links here: this is a B-BBEE result, and the two products
+            are separate (clients.product). ESG is reached from its own
+            section, never offered as a next step on a B-BBEE score. */}
       </div>
 
       {/* Provisional framing — the score is real (same calculator) but not the
@@ -382,13 +365,16 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                   Missing a pillar? Add the documents that cover it — you’re quoted for the new files only, never for
                   anything we’ve already read.
                 </p>
+                {/* To THIS company's workbook with "Add documents" open. It used
+                    to go to /create-scorecard — a fresh flow for a NEW company,
+                    the opposite of what the line above promises. */}
                 <button
                   type="button"
-                  onClick={() => navigate("/create-scorecard")}
+                  onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}?addDocuments=1`)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#e5e5ea] text-black text-[13px] font-semibold shrink-0"
                   data-testid="button-add-documents-requote"
                 >
-                  Add documents &amp; requote
+                  Add documents
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>

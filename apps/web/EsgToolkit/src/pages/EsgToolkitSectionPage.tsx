@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useRoute } from "wouter";
 import {
   SCORECARD_INDICATORS,
+  esgIndicatorLabel,
   type EsgScorecardIndicator,
 } from "@/lib/esg/esgScorecardDefinitions";
 import {
@@ -92,7 +93,9 @@ export default function EsgToolkitSectionPage() {
             <tbody>
               {indicators.map((ind) => (
                 <tr key={ind.key} className="border-b border-[var(--esg-glass-border)]/50">
-                  <td className="py-2 px-3 text-[var(--esg-text2)]">{ind.indicator}</td>
+                  <td className="py-2 px-3 text-[var(--esg-text2)]">
+                    {page?.scoreGroup ? esgIndicatorLabel(page.scoreGroup.pillar, ind.key) : ind.indicator}
+                  </td>
                   <td className="py-2 px-2 tabular-nums text-right font-medium">
                     {(rows[ind.key] ?? 0).toFixed(1)}
                   </td>

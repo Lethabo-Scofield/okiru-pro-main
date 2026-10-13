@@ -16,9 +16,34 @@ import {
   collectEsgExtractedValues,
   esgCaseFileNames,
   esgPatchCellCount,
+  esgUploadNameForSource,
+  mergeEsgCalculators,
   persistEsgSectionPatches,
   type EsgParserCaseLike,
 } from "../esgParserInjection";
+
+describe("esgUploadNameForSource — which upload a parser source came from", () => {
+  const uploads = ["DIESEL REPORT - Mar 2026.xlsx", "city-power-oct.pdf"];
+
+  it("matches a file to itself", () => {
+    expect(esgUploadNameForSource("city-power-oct.pdf", uploads)).toBe("city-power-oct.pdf");
+  });
+
+  it("matches a split sheet to the workbook it came from", () => {
+    expect(esgUploadNameForSource("DIESEL REPORT - Mar 2026.xlsx › NPN70541", uploads)).toBe(
+      "DIESEL REPORT - Mar 2026.xlsx",
+    );
+    expect(esgUploadNameForSource("DIESEL REPORT - Mar 2026.xlsx›Summary", uploads)).toBe(
+      "DIESEL REPORT - Mar 2026.xlsx",
+    );
+  });
+
+  it("matches nothing it cannot account for", () => {
+    expect(esgUploadNameForSource("someone-else.xlsx › Sheet1", uploads)).toBeNull();
+    expect(esgUploadNameForSource("", uploads)).toBeNull();
+    expect(esgUploadNameForSource(undefined, uploads)).toBeNull();
+  });
+});
 
 /** The ESG parser's own result shape — `documents`, not `documents_detected`. */
 const CASE: EsgParserCaseLike = {
@@ -317,5 +342,59 @@ describe("persistEsgSectionPatches", () => {
     await expect(
       persistEsgSectionPatches("company-1", { "e-data": { cells: { B14: 1 } } }),
     ).rejects.toThrow(/locked/i);
+  });
+});
+
+describe("mergeEsgCalculators — a second round keeps the first round's figures", () => {
+  const row = (file: string, site: string, value: number) => ({
+    grid: "esg_monthly_rows",
+    cells: { "monthly.measure": "fleet.diesel_litres", "monthly.site": site, "monthly.period_end": "2025-07-31", "monthly.value": value },
+    sourceFiles: [file],
+  });
+  const entry = (key: string, value: unknown, file: string) => ({ key, value, sourceField: key, sourceFiles: [file] });
+
+  it("keeps earlier rows and entries beside the new ones", () => {
+    const merged = mergeEsgCalculators(
+      { rows: [row("a.xlsx › fuel", "BLOEM", 100)], entries: [entry("board.size", 7, "board.pdf")] },
+      { rows: [row("b.xlsx › fuel", "DBN", 200)], entries: [entry("hs.lti_count", 4, "she.xlsx")] },
+      new Set(["b.xlsx › fuel", "she.xlsx"]),
+    );
+    expect(merged?.rows?.map((r) => r.sourceFiles?.[0])).toEqual(["a.xlsx › fuel", "b.xlsx › fuel"]);
+    expect(merged?.entries?.map((e) => e.key)).toEqual(["board.size", "hs.lti_count"]);
+    expect(merged?.payload).toEqual({ "board.size": 7, "hs.lti_count": 4 });
+  });
+
+  it("lets a re-read file's fresh read replace its earlier one, and the newer round win a shared key", () => {
+    const merged = mergeEsgCalculators(
+      { rows: [row("a.xlsx › fuel", "BLOEM", 100)], entries: [entry("board.size", 7, "board.pdf")] },
+      { rows: [row("a.xlsx › fuel", "BLOEM", 110)], entries: [entry("board.size", 8, "board-2026.pdf")] },
+      new Set(["a.xlsx › fuel", "board-2026.pdf"]),
+    );
+    expect(merged?.rows?.map((r) => r.cells["monthly.value"])).toEqual([110]);
+    expect(merged?.payload).toEqual({ "board.size": 8 });
+  });
+
+  it("returns whichever side exists when the other has no calculator", () => {
+    const only = { rows: [row("a.xlsx › fuel", "BLOEM", 100)] };
+    expect(mergeEsgCalculators(null, only, new Set())).toBe(only);
+    expect(mergeEsgCalculators(only, undefined, new Set())).toBe(only);
+  });
+});
+
+describe("persistEsgSectionPatches — provenance (E4)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("records which document placed each value, in the same request as the values", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    await persistEsgSectionPatches("company-1", { "e-data": { cells: { B14: 35332 } } }, [
+      { sectionId: "e-data", cellRef: "B14", field: "diesel_litres", value: 35332, sourceFile: "DIESEL.xlsx", documentId: "doc-1" },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.sections["e-data"]).toEqual({ cells: { B14: 35332 } });
+    expect(JSON.parse(body.sections.provenance.cells["e-data!B14"])).toMatchObject({ f: "DIESEL.xlsx", d: "doc-1", v: 35332 });
   });
 });

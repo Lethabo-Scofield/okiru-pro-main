@@ -150,3 +150,28 @@ describe("EsgExtractionSummary", () => {
     expect(screen.getByTestId("esg-extraction-summary")).not.toHaveTextContent("not built yet");
   });
 });
+
+describe("what is outstanding", () => {
+  it("counts what needs a person — not evidence no cell needs", () => {
+    const choice = { id: "bill|energy.electricity_kwh|2025-06-26|35751.88", kind: "monthly" as const, prefix: "s2", measure: "Electricity", value: 35751.88, unit: "kWh", needs: ["site" as const] };
+    const values = [
+      unplaced({ field: "electricity_kwh", value: 35751.88, choice }),
+      // Its site, read twice with the same figure: one question, not three.
+      unplaced({ field: "site_name", value: "43 RADNOR STREET", partOf: choice.id }),
+      unplaced({ field: "electricity_kwh", value: 35751.88, choice }),
+      unplaced({ field: "utility_account_number", value: "231342442", rejection: "no_workbook_home" }),
+      unplaced({ field: "tariff", value: "Business 2", rejection: "no_workbook_home" }),
+    ];
+    render(<EsgExtractionSummary injection={injection({ unplaced: values, valuesRead: 5 })} parserCase={null} compact />);
+    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("1 to review");
+    expect(screen.getByTestId("esg-unplaced-kinds")).toHaveTextContent(
+      "1 figure needs you to say where it goes · 2 values are kept as evidence — no cell in the workbook needs them",
+    );
+  });
+
+  it("has nothing outstanding when all that is left is evidence", () => {
+    const values = [unplaced({ field: "utility_account_number", value: "231342442", rejection: "no_workbook_home" })];
+    render(<EsgExtractionSummary injection={injection({ unplaced: values, valuesRead: 1 })} parserCase={null} compact />);
+    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("Nothing outstanding");
+  });
+});

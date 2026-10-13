@@ -847,6 +847,42 @@ tokenOrderSchema.set("toJSON", {
   },
 });
 
+/**
+ * How each paid run was settled once its outcome was known — refunded in full,
+ * in part, or not at all. One per quote: the unique quote id is what lets the
+ * upload screen and the background sweep both settle a run without either
+ * refunding it twice, and it is how the sweep knows which runs it no longer
+ * needs to ask the parser about. The refund itself is a ledger entry; this is
+ * the record of the decision, including the decisions to refund nothing.
+ */
+const extractionSettlementSchema = new Schema(
+  {
+    quoteId: { type: String, required: true, unique: true },
+    organizationId: { type: String, required: true, index: true },
+    chargedTokens: { type: Number, required: true },
+    refundedTokens: { type: Number, required: true },
+    /** Plain English, shown to the person who ran it. */
+    reason: { type: String, default: "" },
+    /** The documents that produced nothing, when that is what was refunded. */
+    emptyFiles: { type: [String], default: [] },
+    /** How the parser said the run ended: resolved, failed, error — or null when it never said. */
+    outcomeStatus: { type: String, default: null },
+    settledAt: { type: Date, default: Date.now, index: true },
+  },
+  { collection: "extractionSettlements", id: false }
+);
+
+extractionSettlementSchema.set("toJSON", {
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const ExtractionSettlementModel =
+  mongoose.models.ExtractionSettlement || mongoose.model("ExtractionSettlement", extractionSettlementSchema);
+
 export const TokenLedgerModel =
   mongoose.models.TokenLedger || mongoose.model("TokenLedger", tokenLedgerSchema);
 export const TokenOrderModel =
@@ -879,6 +915,15 @@ const feedbackSchema = new Schema({
   userAgent: { type: String, default: null },
   createdAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now },
+  /** Email delivery to the feedback list (server/feedbackNotifier.ts). Null until sent. */
+  notifiedAt: { type: Date, default: null },
+  notifiedTo: { type: [String], default: undefined },
+  /** Set while one web replica is sending, so the other does not send it too. */
+  notifyClaimedAt: { type: Date, default: null },
+  notifyAttempts: { type: Number, default: 0 },
+  notifyError: { type: String, default: null },
+  /** After a failed send: not before this. */
+  notifyNextAttemptAt: { type: Date, default: null },
 }, { collection: "feedback", id: false });
 
 feedbackSchema.set("toJSON", {

@@ -111,7 +111,8 @@ export type GhgInventoryResult = {
  */
 function blockTotal(workbook: EsgWorkbookData, prefix: string): number {
   const cells = workbook.sections?.["e-data"]?.cells ?? {};
-  const re = new RegExp(`^${prefix}_[C-K]\\d+$`);
+  // One column per month of the workbook's own reporting year: C onwards.
+  const re = new RegExp(`^${prefix}_[C-Z]\\d+$`);
   let total = 0;
   for (const [ref, raw] of Object.entries(cells)) {
     if (!re.test(ref)) continue;

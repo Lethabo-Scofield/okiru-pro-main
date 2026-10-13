@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
-import { SCORECARD_INDICATORS } from "@/lib/esg/esgScorecardDefinitions";
+import { SCORECARD_INDICATORS, esgIndicatorLabel } from "@/lib/esg/esgScorecardDefinitions";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { buildSgConsumerGoldenWorkbook } from "../../fixtures/esg-consumer-golden";
 import { computeEsgDashboard } from "../dashboard";
@@ -23,8 +23,10 @@ describe("computeEsgDashboard pillar rows derive from esgScorecardDefinitions", 
     expect(
       dash.pillarRows[pillar].map((r) => ({ indicator: r.indicator, maxPoints: r.maxPoints })),
     ).toEqual(
+      // Shown by their generic display label (the workbook's verbatim wording
+      // names one client's depots, systems and targets).
       SCORECARD_INDICATORS[pillar].map((d) => ({
-        indicator: d.indicator,
+        indicator: esgIndicatorLabel(pillar, d.key),
         maxPoints: d.maxPoints,
       })),
     );
@@ -54,13 +56,14 @@ describe("computeEsgDashboard pillar rows derive from esgScorecardDefinitions", 
   /**
    * The corrected baseline (`docs/esg/ESG_SCORING_DELTA.md`). Was 36 / 33 /
    * 64.8529411765 while `S d18` and `G d25` still handed out points nobody had
-   * earned; the maxima projection itself is unchanged.
+   * earned, and Social 25 while `S d23` was banded against the template's 6
+   * initiatives — nobody's target (D5); the maxima projection is unchanged.
    */
-  it("earned points match the corrected baseline (E=36, S=25, G=59.8529411765)", () => {
+  it("earned points match the corrected baseline (E=36, S=20, G=59.8529411765)", () => {
     const earned = (pillar: (typeof PILLARS)[number]) =>
       dash.pillarRows[pillar].reduce((a, r) => a + r.score, 0);
     expect(earned("environmental")).toBeCloseTo(36, 6);
-    expect(earned("social")).toBeCloseTo(25, 6);
+    expect(earned("social")).toBeCloseTo(20, 6);
     expect(earned("governance")).toBeCloseTo(59.8529411765, 6);
   });
 });

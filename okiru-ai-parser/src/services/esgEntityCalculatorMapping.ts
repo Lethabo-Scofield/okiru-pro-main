@@ -48,7 +48,7 @@ import {
 } from '../../schemas/esg_calculator_allowlist.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { findEsgDocumentById } from '../../schemas/esg_document_matrix.js';
-import type { CaseEntities } from './entityResolution.js';
+import { ROW_HIDDEN_KEY, ROW_PERIOD_KEY, ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
 import type { ExtractionModel } from './aiExtraction.js';
 import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 
@@ -109,6 +109,15 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
   { field: 'generator_diesel_litres', calculatorKey: 'energy.generator_diesel_litres', elements: ['GHG_ENERGY'], coerce: 'number' },
   { field: 'generator_run_hours', calculatorKey: 'energy.generator_run_hours', elements: ['GHG_ENERGY'], coerce: 'number' },
   { field: 'lpg_kg', calculatorKey: 'energy.lpg_kg', elements: ['GHG_ENERGY'], coerce: 'number' },
+  // One site × month figure from a dashboard table (esgMonthlyTables.ts).
+  { field: 'monthly_measure', calculatorKey: 'monthly.measure', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_site', calculatorKey: 'monthly.site', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_period_end', calculatorKey: 'monthly.period_end', elements: ['GHG_ENERGY'], coerce: 'iso_date' },
+  { field: 'monthly_value', calculatorKey: 'monthly.value', elements: ['GHG_ENERGY'], coerce: 'number' },
+  { field: 'monthly_unit', calculatorKey: 'monthly.unit', elements: ['GHG_ENERGY'], coerce: 'text' },
+  // A bill turned into a row (esgBillFacts.ts) names the field it was read as.
+  { field: 'monthly_field', calculatorKey: 'monthly.field', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_context', calculatorKey: 'monthly.context', elements: ['GHG_ENERGY'], coerce: 'text' },
 
   // ── Emissions and carbon tax ───────────────────────────────────────────
   { field: 'carbon_tax_licence_number', calculatorKey: 'emissions.carbon_tax_licence_number', elements: ['GHG_ENERGY'], coerce: 'text' },
@@ -494,6 +503,8 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
  * the scalar mappings carry one.
  */
 const GRID_ELEMENTS: Record<string, EsgElement> = {
+  // Site × month figures read from dashboard tables (esgMonthlyTables.ts).
+  esg_monthly_rows: 'GHG_ENERGY',
   energy_site_rows: 'GHG_ENERGY',
   fleet_fuel_transaction_rows: 'FLEET',
   fleet_vehicle_rows: 'FLEET',
@@ -511,6 +522,12 @@ const GRID_ELEMENTS: Record<string, EsgElement> = {
   risk_register_rows: 'RISK_ASSURANCE',
   risk_ifrs_requirement_rows: 'RISK_ASSURANCE',
 };
+
+/**
+ * Every register field: their rows add up across documents (resolveCaseEntities
+ * `additiveFields`) instead of competing as one value.
+ */
+export const ESG_REGISTER_FIELDS: ReadonlySet<string> = new Set(Object.keys(GRID_ELEMENTS));
 
 const MONTHS: Record<string, string> = {
   jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
@@ -539,6 +556,12 @@ function toNumber(value: unknown): number | null {
 
 /** "15 March 2026", "2026-03-14", "14/03/2027" → ISO. Null if unparseable. */
 function toIsoDate(value: unknown): string | null {
+  // A date-formatted cell reaches the parser as Excel's day number (46090 is
+  // 9 March 2026). In a field that IS a date, a day number between 2000 and
+  // 2099 can only be one — a fuel log lost a third of its fill dates without this.
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 36526 && value <= 73050) {
+    return new Date(Math.round((value - 25569) * 86_400_000)).toISOString().slice(0, 10);
+  }
   if (typeof value !== 'string') return null;
   const text = value.trim();
 
@@ -652,6 +675,10 @@ export interface EsgCalculatorRow {
   sourceFiles: string[];
   /** Row keys that had no mapping or would not coerce. */
   droppedFields: string[];
+  /** Read from a hidden sheet: it may add to what is known, not to what exists. */
+  hidden?: boolean;
+  /** The month ("YYYY-MM") the row's figures are for, when it states one month's figures. */
+  period?: string;
 }
 
 export interface EsgCalculatorMappingResult {
@@ -671,6 +698,46 @@ export interface EsgCalculatorMappingResult {
 /** Every allowlisted ESG key, as candidates for the semantic pass. */
 function esgMappableKeys(): MappableKey[] {
   return ESG_CALCULATOR_KEY_ALLOWLIST.map((spec) => ({ key: spec.key, description: spec.description }));
+}
+
+let keyHomes: Map<string, Set<EsgElement> | null> | null = null;
+
+/**
+ * The kinds of document each key is declared for, from the mapping table.
+ * `null` = a key some mapping fills from any document; absent = no declared
+ * mapping at all. Built on first use, after the table exists.
+ */
+function keyHomeElements(): Map<string, Set<EsgElement> | null> {
+  if (keyHomes) return keyHomes;
+  const homes = new Map<string, Set<EsgElement> | null>();
+  for (const mapping of FIELD_MAPPINGS) {
+    if (!mapping.elements) {
+      homes.set(mapping.calculatorKey, null);
+      continue;
+    }
+    const known = homes.get(mapping.calculatorKey);
+    if (known === null) continue;
+    const set = known ?? new Set<EsgElement>();
+    mapping.elements.forEach((element) => set.add(element));
+    homes.set(mapping.calculatorKey, set);
+  }
+  keyHomes = homes;
+  return homes;
+}
+
+/**
+ * May a field read from these kinds of document land on this key? A key
+ * declared for other kinds of document may not: the semantic pass once put a
+ * fleet fuel report's supplier ("Engen") into the supplier-assessment register
+ * as a supplier being rated. A field of unknown origin, or a key no mapping
+ * scopes, stays open — the allowlist still decides.
+ */
+function keyFitsElements(key: string, elements: ReadonlySet<EsgElement> | undefined): boolean {
+  if (!elements || elements.size === 0) return true;
+  const home = keyHomeElements().get(key);
+  if (home === undefined || home === null) return true;
+  for (const element of elements) if (home.has(element)) return true;
+  return false;
 }
 
 /**
@@ -707,9 +774,29 @@ export async function mapEsgEntitiesToCalculatorWithSemantics(
   const orphans = base.unmapped.filter((u) => u.reason === 'no_mapping').map((u) => u.field);
   if (orphans.length === 0 || !model) return base;
 
-  const proposals = await proposeFieldMappings(model, orphans, esgMappableKeys(), {
-    context: 'an ESG evidence pack — environmental, social and governance disclosures, utility bills, registers',
-  });
+  // Each orphan is offered only the keys of its own kind of document, so the
+  // model chooses among places that field could belong — one question per
+  // group of documents of the same kind.
+  const groups = new Map<string, { elements: Set<EsgElement> | undefined; fields: string[] }>();
+  for (const field of orphans) {
+    const elements = fieldElements.get(field);
+    const signature = elements && elements.size > 0 ? Array.from(elements).sort().join('|') : '*';
+    const group = groups.get(signature) ?? { elements, fields: [] };
+    group.fields.push(field);
+    groups.set(signature, group);
+  }
+  const allKeys = esgMappableKeys();
+  const proposals: Record<string, string> = {};
+  for (const group of groups.values()) {
+    const keys = allKeys.filter((candidate) => keyFitsElements(candidate.key, group.elements));
+    if (keys.length === 0) continue;
+    Object.assign(
+      proposals,
+      await proposeFieldMappings(model, group.fields, keys, {
+        context: 'an ESG evidence pack — environmental, social and governance disclosures, utility bills, registers',
+      }),
+    );
+  }
   if (Object.keys(proposals).length === 0) return base;
 
   const payload = { ...base.payload };
@@ -717,7 +804,10 @@ export async function mapEsgEntitiesToCalculatorWithSemantics(
   const unmapped: EsgCalculatorMappingResult['unmapped'] = [];
 
   for (const orphan of base.unmapped) {
-    const key = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    const proposed = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    // Belt and braces: a cached answer from before the grouping is still
+    // refused if it points outside the field's own kind of document.
+    const key = proposed && keyFitsElements(proposed, fieldElements.get(orphan.field)) ? proposed : undefined;
     const resolved = key ? entities.fields[orphan.field] : undefined;
     if (!key || !resolved) {
       unmapped.push(orphan);
@@ -791,8 +881,17 @@ function expandRows(
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
     const cells: Record<string, unknown> = {};
     const droppedFields: string[] = [];
+    // A register merged across documents names each row's own file, which is
+    // what lets the workbook total within one document and see a conflict only
+    // between two.
+    const stated = (raw as Record<string, unknown>)[ROW_SOURCE_KEY];
+    const rowSources = typeof stated === 'string' && stated ? [stated] : sourceFiles;
 
+    const hidden = (raw as Record<string, unknown>)[ROW_HIDDEN_KEY] === true;
+    const stamped = (raw as Record<string, unknown>)[ROW_PERIOD_KEY];
+    const period = typeof stamped === 'string' && /^\d{4}-\d{2}$/.test(stamped) ? stamped : undefined;
     for (const [field, cellValue] of Object.entries(raw as Record<string, unknown>)) {
+      if (field === ROW_SOURCE_KEY || field === ROW_HIDDEN_KEY || field === ROW_PERIOD_KEY) continue;
       if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') continue;
       const mapping = mappingFor(field, elements);
       if (!mapping) {
@@ -813,7 +912,15 @@ function expandRows(
     }
 
     if (Object.keys(cells).length === 0) return;
-    rows.push({ grid: gridField, index, cells, sourceFiles, droppedFields });
+    rows.push({
+      grid: gridField,
+      index,
+      cells,
+      sourceFiles: rowSources,
+      droppedFields,
+      ...(hidden ? { hidden: true } : {}),
+      ...(period ? { period } : {}),
+    });
   });
 
   return rows;

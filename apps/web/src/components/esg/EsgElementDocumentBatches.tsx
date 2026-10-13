@@ -20,10 +20,10 @@
  * layout is duplicated; the behaviour that matters (classification, placement,
  * pricing) is not — that all lives upstream and is shared.
  *
- * NOTHING ABOUT PROCESSING CHANGES. The classifier still decides what every
- * document actually is. The batch a file was filed under is presentation: it
- * tells the user where their work went, shown alongside — never instead of —
- * what we actually read.
+ * THE CLASSIFIER STILL DECIDES. The batch a file was filed under travels to the
+ * reader as a hint (C1, `esgFocusElements`): used where the classifier is
+ * unsure, never over a confident classification. It also tells the user where
+ * their work went, shown alongside — never instead of — what we actually read.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -181,6 +181,25 @@ const HOLISTIC_BATCH = {
 
 const READABLE_ACCEPT =
   ".pdf,.txt,.csv,.doc,.docx,.xlsx,.xlsm,.xls,.pptx,.png,.jpg,.jpeg,.tiff,.tif,.webp";
+
+/**
+ * The element each file was filed under, for the reader (C1).
+ *
+ * The batch used to be presentation only. It now travels with the upload as a
+ * hint the parser uses where its own classifier is unsure. Only real element
+ * batches count: "Packs & whole folders" says the opposite of a single element.
+ */
+export function esgFocusElements(
+  fileNames: readonly string[],
+  filedBatchByFile: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of fileNames) {
+    const batch = filedBatchByFile[name];
+    if (batch && batch !== HOLISTIC_BATCH.id && ELEMENT_INDEX.has(batch)) out[name] = batch;
+  }
+  return out;
+}
 
 /** Batch id → display name, for anywhere outside this component. */
 export function esgBatchLabel(batchId: string): string {

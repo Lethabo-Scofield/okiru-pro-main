@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { randomInt } from "crypto";
 import { createLogger } from "./logger";
 
@@ -6,7 +6,9 @@ const logger = createLogger("Email");
 
 const ADMIN_EMAIL = "cmyezwa@okiru.co.za";
 
-let transporter: nodemailer.Transporter | null = null;
+// A named type import: nodemailer 10 ships its own types, and its default
+// export is a value, not a namespace to reach the Transporter type through.
+let transporter: Transporter | null = null;
 
 /**
  * The SMTP password only ever comes from the environment (a local, git-ignored
@@ -419,6 +421,186 @@ export function isSmtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && getSmtpPassword());
 }
 
+/**
+ * Who hears about feedback from the in-app widget. It used to be saved and
+ * nothing else — the team only saw it if someone happened to open DevMode, and
+ * a client's two reports sat unread for days. FEEDBACK_NOTIFY_EMAILS (comma or
+ * semicolon separated) replaces the list.
+ *
+ * The project manager's address is webparam.ORG — the account on okiru.pro.
+ * webparam.co.za has no mail server (no MX, no A record), so the first sends
+ * hard-bounced with 550 5.4.310 "domain does not exist" while the relay
+ * reported success.
+ */
+export const DEFAULT_FEEDBACK_RECIPIENTS = [
+  "contact@okiru.co.za",
+  "lawubrian15@gmail.com",
+  "pm@webparam.org",
+];
+
+/**
+ * Deliberately narrower than RFC 5322: no `?`, `&`, `%`, `=` or quotes, so an
+ * address can go into a mailto: link or a header without carrying anything else
+ * along (`a@b.co?bcc=…` is not an address here).
+ */
+const STRICT_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+/** Single-line fields stay single-line, so a typed name cannot forge lines below it. */
+function oneLine(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function getFeedbackRecipients(): string[] {
+  const configured = (process.env.FEEDBACK_NOTIFY_EMAILS || "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => STRICT_EMAIL.test(s));
+  return configured.length ? Array.from(new Set(configured)) : [...DEFAULT_FEEDBACK_RECIPIENTS];
+}
+
+export interface FeedbackEmailContext {
+  feedbackId: string;
+  message: string;
+  category: string;
+  /** Display label of the area it was filed under, e.g. "Procurement". */
+  areaLabel: string;
+  pageUrl: string | null;
+  /** What the person typed into the widget — not verified. */
+  userName: string | null;
+  userEmail: string | null;
+  /** The signed-in account, when there was one. Verified. */
+  accountEmail: string | null;
+  organizationName: string | null;
+  createdAt: Date | string;
+}
+
+const FEEDBACK_CATEGORY_LABELS: Record<string, string> = {
+  bug: "Bug",
+  feature: "Idea",
+  compliance: "Compliance",
+  general: "Other",
+};
+
+function appBaseUrl(): string {
+  return (process.env.APP_BASE_URL || process.env.APP_URL || "https://okiru.pro").replace(/\/+$/, "");
+}
+
+export function buildFeedbackEmail(ctx: FeedbackEmailContext): {
+  subject: string;
+  html: string;
+  text: string;
+  replyTo: string | null;
+} {
+  const base = appBaseUrl();
+  const kind = FEEDBACK_CATEGORY_LABELS[ctx.category] || "Other";
+  const area = oneLine(ctx.areaLabel) || "General";
+  const accountEmail = ctx.accountEmail && STRICT_EMAIL.test(ctx.accountEmail) ? ctx.accountEmail : null;
+  const typedEmail = oneLine(ctx.userEmail) || null;
+  // Only the signed-in account's own address is trusted to receive a reply.
+  // What an anonymous visitor typed is shown, labelled unverified, never wired
+  // into Reply-To or a mailto link.
+  const replyTo = accountEmail;
+  const organization = oneLine(ctx.organizationName) || null;
+  const who = oneLine(ctx.userName) || accountEmail || typedEmail || "Someone who was not signed in";
+  const firstLine = oneLine(ctx.message.split(/\r?\n/).find((l) => l.trim()) || ctx.message);
+  const gist = firstLine.length > 70 ? `${firstLine.slice(0, 67).trimEnd()}…` : firstLine;
+  const subject = `[Okiru feedback] ${kind} · ${area} — ${gist}`;
+
+  const pagePath = oneLine(ctx.pageUrl);
+  const pageLink = pagePath ? `${base}${pagePath.startsWith("/") ? "" : "/"}${pagePath}` : null;
+  const received = new Date(ctx.createdAt).toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const identity = accountEmail
+    ? `Signed in as ${accountEmail}`
+    : "Not signed in — any email below was typed into the form and is unverified";
+
+  const rows: Array<[string, string]> = [
+    ["Type", escapeHtml(kind)],
+    ["Area", escapeHtml(area)],
+    ["From", escapeHtml(who)],
+    ["Account", escapeHtml(identity)],
+  ];
+  if (typedEmail && typedEmail !== accountEmail) rows.push(["Email given", `${escapeHtml(typedEmail)} (unverified)`]);
+  if (organization) rows.push(["Organisation", escapeHtml(organization)]);
+  if (pageLink) {
+    rows.push(["Page", `<a href="${escapeHtml(pageLink)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(pagePath)}</a>`]);
+  }
+  rows.push(["Received", escapeHtml(received)]);
+  rows.push(["Reference", `<span style="font-family:'SF Mono',Monaco,monospace;font-size:12px;">${escapeHtml(ctx.feedbackId)}</span>`]);
+
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937;">
+      <p style="margin:0 0 6px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(kind)} · ${escapeHtml(area)}</p>
+      <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;line-height:1.35;">New feedback from ${escapeHtml(who)}</h1>
+      <div style="border-left:3px solid #4f46e5;background:#f9fafb;padding:14px 16px;margin:0 0 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(ctx.message)}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 20px;">
+        ${rows
+          .map(
+            ([k, v]) =>
+              `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;vertical-align:top;width:110px;">${k}</td><td style="padding:6px 0;color:#111827;">${v}</td></tr>`,
+          )
+          .join("")}
+      </table>
+      <div style="margin:0 0 20px;">
+        ${replyTo ? `<a href="mailto:${escapeHtml(replyTo)}?subject=${encodeURIComponent(`Re: your Okiru feedback`)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;">Reply to ${escapeHtml(who)}</a>` : ""}
+        <a href="${escapeHtml(`${base}/devmode`)}" style="display:inline-block;border:1px solid #d1d5db;color:#374151;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;">Open in DevMode</a>
+      </div>
+      <p style="margin:0;font-size:11px;color:#9ca3af;">Sent by okiru.pro to the feedback list. ${replyTo ? "Replying to this email answers the signed-in account that sent it." : "The sender was not signed in, so replying goes only to the list."}</p>
+    </div>
+  `;
+
+  const text = [
+    `New feedback from ${who}`,
+    `${kind} · ${area}`,
+    "",
+    ctx.message,
+    "",
+    identity,
+    ...(typedEmail && typedEmail !== accountEmail ? [`Email given (unverified): ${typedEmail}`] : []),
+    ...(organization ? [`Organisation: ${organization}`] : []),
+    ...(pageLink ? [`Page: ${pageLink}`] : []),
+    `Received: ${received}`,
+    `Reference: ${ctx.feedbackId}`,
+    "",
+    `Triage: ${base}/devmode`,
+  ].join("\n");
+
+  return { subject, html, text, replyTo };
+}
+
+/**
+ * Email the feedback list — or the part of it that has not had this report yet.
+ * Never throws; the caller records the outcome.
+ */
+export async function sendFeedbackNotification(
+  ctx: FeedbackEmailContext,
+  recipients: string[] = getFeedbackRecipients(),
+): Promise<{ sent: boolean; recipients: string[]; error?: string }> {
+  const t = getTransporter();
+  if (!t) {
+    return { sent: false, recipients, error: "No mail transport configured (SMTP_HOST/SMTP_USER/SMTP_PASS)" };
+  }
+  const { subject, html, text, replyTo } = buildFeedbackEmail(ctx);
+  try {
+    await t.sendMail({
+      from: { name: "Okiru Feedback", address: process.env.SMTP_FROM || process.env.SMTP_USER! },
+      to: recipients,
+      replyTo: replyTo || undefined,
+      subject,
+      html,
+      text,
+    });
+    logger.info("Feedback notification sent", { feedbackId: ctx.feedbackId, recipients: recipients.length });
+    return { sent: true, recipients };
+  } catch (err: any) {
+    logger.error("Failed to send feedback notification", err, { feedbackId: ctx.feedbackId });
+    return { sent: false, recipients, error: String(err?.message || err).slice(0, 500) };
+  }
+}
+
 /** Extra, non-sensitive context for a login notification. Never pass tokens, cookies or credentials here. */
 export interface LoginNotificationContext {
   timestamp?: Date;
@@ -501,79 +683,78 @@ export async function sendLoginNotification(
   }
 }
 
-export async function sendDemoRequestEmail(params: {
+/** A "Book a demo" request, as the website's form sends it. */
+export interface DemoRequest {
   name: string;
   company: string;
   email: string;
   phone?: string;
   message?: string;
-}): Promise<boolean> {
-  const t = getTransporter();
-  const to = ADMIN_EMAIL;
-  const now = new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "full", timeStyle: "short" });
+}
 
-  if (!t) {
-    logger.warn("SMTP not configured — logging demo request to console", params);
-    console.log("\n=== DEMO REQUEST ===", params, "\n");
-    return false;
-  }
+/** The team's copy of a demo request — every field escaped. Pure, so it is tested as written. */
+export function demoRequestEmail(params: DemoRequest, now = new Date()): { subject: string; replyTo: string; html: string } {
+  const submitted = now.toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "full", timeStyle: "short" });
+  const line = (value: string) => value.replace(/[\r\n]+/g, " ").trim();
+  const name = escapeHtml(line(params.name));
+  const company = escapeHtml(line(params.company));
+  const email = escapeHtml(line(params.email));
+  const phone = params.phone ? escapeHtml(line(params.phone)) : "";
+  const message = params.message ? escapeHtml(params.message.trim()).replace(/\r?\n/g, "<br/>") : "";
+  // Encoded, so an address like "a@b.co?bcc=…" cannot add headers to the reply.
+  const mailto = `mailto:${encodeURIComponent(line(params.email)).replace(/%40/g, "@")}`;
 
-  try {
-    await t.sendMail({
-      from: `"Okiru Website" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to,
-      replyTo: params.email,
-      subject: `Demo request from ${params.name} · ${params.company}`,
-      html: `
+  return {
+    replyTo: line(params.email),
+    subject: `Demo request from ${line(params.name)} · ${line(params.company)}`,
+    html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;">
           <div style="background:#0b0f1a;border-radius:12px;padding:32px;color:#ffffff;border:1px solid rgba(255,255,255,0.08);">
             <h2 style="margin:0 0 4px;font-size:18px;color:#818cf8;">New Demo Request</h2>
-            <p style="margin:0 0 24px;font-size:12px;color:#6b7280;">Submitted ${now}</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#6b7280;">Submitted ${submitted}</p>
             <table style="width:100%;border-collapse:collapse;">
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;width:90px;">Name</td><td style="padding:8px 0;color:#fff;font-size:14px;font-weight:600;">${params.name}</td></tr>
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Company</td><td style="padding:8px 0;color:#fff;font-size:14px;">${params.company}</td></tr>
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Email</td><td style="padding:8px 0;"><a href="mailto:${params.email}" style="color:#818cf8;">${params.email}</a></td></tr>
-              ${params.phone ? `<tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Phone</td><td style="padding:8px 0;color:#fff;font-size:14px;">${params.phone}</td></tr>` : ""}
-              ${params.message ? `<tr><td style="padding:8px 12px 8px 0;color:#9ca3af;font-size:12px;vertical-align:top;">Message</td><td style="padding:8px 0;color:#d1d5db;font-size:13px;line-height:1.6;">${params.message.replace(/\n/g, "<br/>")}</td></tr>` : ""}
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;width:90px;">Name</td><td style="padding:8px 0;color:#fff;font-size:14px;font-weight:600;">${name}</td></tr>
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Company</td><td style="padding:8px 0;color:#fff;font-size:14px;">${company}</td></tr>
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Email</td><td style="padding:8px 0;"><a href="${mailto}" style="color:#818cf8;">${email}</a></td></tr>
+              ${phone ? `<tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Phone</td><td style="padding:8px 0;color:#fff;font-size:14px;">${phone}</td></tr>` : ""}
+              ${message ? `<tr><td style="padding:8px 12px 8px 0;color:#9ca3af;font-size:12px;vertical-align:top;">Message</td><td style="padding:8px 0;color:#d1d5db;font-size:13px;line-height:1.6;">${message}</td></tr>` : ""}
             </table>
             <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-              <a href="mailto:${params.email}?subject=Re: Demo request" style="display:inline-block;background:#e8724a;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:13px;font-weight:600;">Reply to ${params.name}</a>
+              <a href="${mailto}?subject=Re%3A%20Demo%20request" style="display:inline-block;background:#e8724a;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:13px;font-weight:600;">Reply to ${name}</a>
             </div>
           </div>
         </div>`,
-    });
+  };
+}
 
-    // Send confirmation to the requester
+/**
+ * The website's "Book a demo" form, to the team.
+ *
+ * Everything in it was typed by an anonymous visitor, so every field is
+ * escaped before it reaches the HTML, and the single-line ones lose their line
+ * breaks. There is deliberately NO confirmation to the address typed in: that
+ * mailed Okiru-branded HTML, with the visitor's own text in it, to any address
+ * at all — an open relay for anyone's phishing. The team replies instead.
+ */
+export async function sendDemoRequestEmail(params: DemoRequest): Promise<boolean> {
+  const t = getTransporter();
+  const company = params.company.replace(/[\r\n]+/g, " ").trim();
+  if (!t) {
+    logger.warn("SMTP not configured — a demo request could not be sent", { company });
+    return false;
+  }
+  try {
     await t.sendMail({
-      from: `"Okiru" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to: params.email,
-      subject: "We've received your demo request · Okiru",
-      html: `
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-          <div style="background:#0b0f1a;border-radius:12px;padding:32px;color:#ffffff;border:1px solid rgba(255,255,255,0.08);">
-            <h2 style="margin:0 0 16px;font-size:20px;color:#ffffff;">Thanks, ${params.name}.</h2>
-            <p style="margin:0 0 16px;font-size:14px;color:#9ca3af;line-height:1.7;">We've received your demo request and will be in touch within one business day to schedule your 45-minute session.</p>
-            <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.7;">In the meantime, feel free to reply to this email if you have any questions.</p>
-            <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:16px;margin-bottom:24px;">
-              <p style="margin:0 0 8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">What to expect</p>
-              <ul style="margin:0;padding:0 0 0 18px;color:#d1d5db;font-size:13px;line-height:2;">
-                <li>Your transformation reporting today (10 min)</li>
-                <li>Live walkthrough of the Okiru Toolkit (15 min)</li>
-                <li>Net-Zero Roadmap using your own data (10 min)</li>
-                <li>Engagement model &amp; next steps (10 min)</li>
-              </ul>
-            </div>
-            <div style="margin-top:8px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-              <p style="margin:0;font-size:12px;color:#6b7280;">Okiru · Braamfontein, Johannesburg · <a href="https://okiru.co.za" style="color:#818cf8;">okiru.co.za</a></p>
-            </div>
-          </div>
-        </div>`,
+      from: `"Okiru Website" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: ADMIN_EMAIL,
+      ...demoRequestEmail(params),
     });
-
-    logger.info("Demo request emails sent", { to: params.email });
+    logger.info("Demo request sent to the team", { company });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send demo request email", toSafeError(err), params);
+    // Lethabo's safe error (SMTP failures classified, no secrets) with H3's minimal
+    // context: the company only — never the requester's name, email or phone.
+    logger.error("Failed to send demo request email", toSafeError(err), { company });
     return false;
   }
 }

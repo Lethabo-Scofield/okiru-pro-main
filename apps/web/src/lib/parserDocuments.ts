@@ -18,6 +18,9 @@ export interface ParserDocumentSummary {
   lowConfidenceFields: string[];
   latestRunId: string | null;
   lastRunAt: string | null;
+  /** When a teammate signed off this document's read — it has left "Needs review". */
+  reviewedAt?: string | null;
+  reviewedByUserId?: string | null;
 }
 
 export interface ParserRunDetail {

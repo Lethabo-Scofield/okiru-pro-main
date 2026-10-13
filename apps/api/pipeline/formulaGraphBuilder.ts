@@ -14,6 +14,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import { boundWorkbookSheets } from './sheetBounds.js';
 import { toFractionOrZero } from './units/percentage.js';
 
 // ---------------------------------------------------------------------------
@@ -514,6 +515,8 @@ export function buildFormulaGraph(buffer: Buffer, filename: string, opts?: Graph
 
   // --- Pass 1: fast read WITHOUT formulas to classify sheets ----------------
   const wbFast = XLSX.read(buffer, { type: 'buffer', cellFormula: false, cellStyles: false });
+  // A file's declared sheet size is checked against its cells before anything walks it.
+  boundWorkbookSheets(wbFast);
   const sheetNames = wbFast.SheetNames;
   const defaultSheet = sheetNames[0] || 'Sheet1';
 
@@ -546,6 +549,7 @@ export function buildFormulaGraph(buffer: Buffer, filename: string, opts?: Graph
     cellStyles: false,
     sheets: sheetsToProcess,
   });
+  boundWorkbookSheets(wbFormula);
 
   const cells: Record<string, CellNode> = {};
   const edgeSet = new Set<string>();
@@ -950,6 +954,7 @@ function extractFromScorecardSheet(
   _sectorCode: string,
 ): Map<string, ExtractedPillar> {
   const wb = XLSX.read(buffer, { type: 'buffer', cellFormula: true, sheets: [sheetName] });
+  boundWorkbookSheets(wb);
   const ws = wb.Sheets[sheetName];
   if (!ws) return new Map();
 

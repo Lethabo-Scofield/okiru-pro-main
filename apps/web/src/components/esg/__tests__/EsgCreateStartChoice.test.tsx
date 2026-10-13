@@ -98,8 +98,23 @@ describe("EsgInformationRequest wiring", () => {
     expect(PAGE).not.toMatch(/updateSectionCells\(/);
   });
 
+  it("hands a spreadsheet that is not our template to the document reader, never \"Import complete\" over nothing", () => {
+    expect(PAGE).toContain("esgImportHandover(preview)");
+    expect(PAGE).toContain("setHandover([file])");
+    expect(PAGE).toContain("initialFiles={handover ?? undefined}");
+  });
+
   it("still lands the user on the summary the same way", () => {
     expect(PAGE).toMatch(/handleContinueToSummary/);
     expect(PAGE).toMatch(/esgSummaryHref\(companyId\)/);
+  });
+
+  it("lets each section add documents for its own pillar, and the toolbar for the whole workbook (C1)", () => {
+    expect(PAGE).toContain('data-testid="button-esg-section-add-documents"');
+    expect(PAGE).toContain("setUploadFocus(esgUploadFocus(activeSection.id, activeSection.title))");
+    expect(PAGE).toContain("focus={uploadFocus}");
+    // The toolbar, the entry choice, a handed-over spreadsheet, Back and the landing
+    // all leave the focus behind — none of them is "this section".
+    expect(PAGE.match(/setUploadFocus\(null\)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
   });
 });

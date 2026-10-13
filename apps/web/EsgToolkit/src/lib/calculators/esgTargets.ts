@@ -65,6 +65,29 @@ export function targetNotSetReason(label: string): string {
 }
 
 /**
+ * The basis an ENVIRONMENTAL target resolves under.
+ *
+ * "For E the company needs to determine their own targets" (same ruling). The
+ * B-BBEE / EE targets a company may elect are workforce targets — B-BBEE sets
+ * no environmental ones — so electing them for Social says nothing about E:
+ * an environmental target is then the company's own or it is not set.
+ */
+export function environmentalTargetBasis(basis: EsgTargetBasis): EsgTargetBasis {
+  return basis === "bbbee" ? "own" : basis;
+}
+
+/** Why an environmental indicator could not be scored, in words a report can print. */
+export function environmentalTargetReason(basis: EsgTargetBasis, label: string): string {
+  if (basis === "trend" || basis === "undeclared") return TARGET_BASIS_REASON[basis];
+  if (basis === "bbbee") {
+    // "has not set one for" is what marks an exclusion the company can resolve
+    // (FIXABLE_EXCLUSION in esgIndicatorCoverage.ts) — keep the wording.
+    return `B-BBEE sets no environmental targets, and the company has not set one for ${label}, so there is nothing to score against. The figure is still reported.`;
+  }
+  return targetNotSetReason(label);
+}
+
+/**
  * Resolve the target for one indicator, or `null` when it cannot be scored.
  *
  * `bbbeeDefault` is only ever reached when the company has ELECTED the B-BBEE

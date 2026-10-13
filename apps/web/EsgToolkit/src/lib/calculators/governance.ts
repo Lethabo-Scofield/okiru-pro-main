@@ -24,6 +24,7 @@ import {
   readDeclaredExclusions,
   type EsgPillarResult,
 } from "./esgApplicability";
+import { cell as traceCell, presentRule, ratingRule } from "./esgTrace";
 
 export type GovernanceScoreResult = EsgPillarResult;
 
@@ -121,6 +122,93 @@ export function scoreGovernance(
       : penalties === 0
         ? 5
         : 0;
+
+  /* ----------------------- How each row was made (E2) ---------------------- */
+  // Observes the values above; computes nothing the score depends on.
+  const trace = options?.trace;
+  if (trace) {
+    const parity = mode === "workbook-parity";
+    const G = "G_Data";
+    const record = trace.record.bind(trace);
+    /** A Yes / Partial / No answer and the 0–5 maturity derived from it. */
+    const maturity = (key: string, row: number, max: number, label: string) => {
+      const rating = fCell(workbook, `F${row}`);
+      record({
+        key,
+        measured: { value: rating, unit: "rating", label: `${label} (maturity 0–5)` },
+        target: null,
+        inputs: [
+          traceCell(G, `B${row}`, label, workbook.sections?.["g-data"]?.cells?.[`B${row}`]),
+          traceCell(G, `F${row}`, "Maturity, derived from the answer (0–5)", rating),
+        ],
+        rule: ratingRule(max, label),
+      });
+    };
+
+    record({
+      key: "d5",
+      measured: king5Max > 0 ? { value: king5 / king5Max, unit: "ratio", label: "King V principles applied, share of the maximum" } : null,
+      target: null,
+      inputs: [traceCell("King5_Scorecard", "E21", "King V score across the 17 principles", king5), traceCell("King5_Scorecard", "max", "Highest score available", king5Max)],
+      rule: "25 points × the King V score as a share of the highest score the 17 principles allow.",
+    });
+    maturity("d6", 13, 5, "Social & Ethics committee active");
+    maturity("d7", 14, 5, "ESG linked to executive remuneration");
+    const ifrsScore = readEsgCell(workbook, "ifrs", parity ? "_yes_count" : "E29") ?? 0;
+    const ifrsMax = parity
+      ? Math.max(1, readEsgCell(workbook, "ifrs", "_total") ?? 1)
+      : readEsgCell(workbook, "ifrs", "_max_score") ?? IFRS_MAX_SCORE;
+    record({
+      key: "d9",
+      measured: ifrsMax > 0 ? { value: ifrsScore / ifrsMax, unit: "ratio", label: "IFRS S1 / S2 readiness, share of the maximum" } : null,
+      target: null,
+      inputs: parity
+        ? [traceCell("IFRS_S1_S2", "Yes", "Disclosures answered Yes", ifrsScore), traceCell("IFRS_S1_S2", "rows", "Disclosures listed", ifrsMax)]
+        : [traceCell("IFRS_S1_S2", "E29", "Readiness score across the disclosures", ifrsScore), traceCell("IFRS_S1_S2", "max", "Highest score available", ifrsMax)],
+      rule: parity
+        ? "Workbook-parity scoring: 10 points × the share of disclosures answered Yes."
+        : "10 points × the readiness score as a share of the highest score the disclosures allow.",
+    });
+    maturity("d10", 23, 5, "Climate risk in the risk register");
+    record({
+      key: "d12",
+      measured: { value: f21 > 0 ? (f23 > 0 ? "Risk register with climate risk" : "Risk register, no climate risk") : "No risk register", unit: "answer", label: "Risk management in place" },
+      target: null,
+      inputs: [traceCell(G, "F21", "Risk register maturity (0–5)", f21), traceCell(G, "F23", "Climate risk in the register, maturity (0–5)", f23)],
+      rule: "8 points when the risk register is live and covers climate risk; 4 when only the register is live; nothing without one.",
+    });
+    record({
+      key: "d14",
+      measured: { value: fCell(workbook, "F5"), unit: "count", label: "Board members" },
+      target: null,
+      inputs: [traceCell(G, "B5", "Board members (total)", workbook.sections?.["g-data"]?.cells?.B5), traceCell(G, "F5", "Board recorded", fCell(workbook, "F5"))],
+      rule: presentRule(5, "a board"),
+    });
+    maturity("d16", 17, 5, "POPIA Information Officer appointed");
+    maturity("d17", 18, 5, "POPIA impact assessment done");
+    maturity("d19", 20, 8, "Integrated report published");
+    maturity("d20", 19, 5, "External assurance of the ESG report");
+    record({
+      key: "d22",
+      measured: { value: (fCell(workbook, "F15") + fCell(workbook, "F16")) / 2, unit: "rating", label: "Ethics: code and whistleblowing, average maturity (0–5)" },
+      target: null,
+      inputs: [
+        traceCell(G, "F15", "Code of ethics in place, maturity (0–5)", fCell(workbook, "F15")),
+        traceCell(G, "F16", "Whistleblower hotline active, maturity (0–5)", fCell(workbook, "F16")),
+      ],
+      rule: ratingRule(4, "The average of the code of ethics and the whistleblower hotline"),
+    });
+    maturity("d24", 21, 5, "Risk register updated");
+    record({
+      key: "d25",
+      measured: penalties == null ? null : { value: penalties, unit: "count", label: "Material regulatory penalties this period" },
+      target: null,
+      inputs: [traceCell(G, "B25", "Material regulatory penalties (0 for none)", penalties)],
+      rule: parity
+        ? "Workbook-parity scoring: the client workbook's own penalty rule."
+        : "5 points when the company reports no material penalties (an explicit 0); nothing when it reports one, or reports nothing.",
+    });
+  }
 
   const rows = { d5, d6, d7, d9, d10, d12, d14, d16, d17, d19, d20, d22, d24, d25 };
   const score = Object.values(rows).reduce((a, b) => a + b, 0);

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import * as XLSX from "xlsx";
-import { parseEsgWorkbookXlsx } from "../esgWorkbookImport";
+import { esgImportHandover, parseEsgWorkbookXlsx } from "../esgWorkbookImport";
 import { buildEsgWorkbookXlsx } from "../esgWorkbookExport";
 import { buildSgConsumerGoldenWorkbook } from "../../../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
 
@@ -88,5 +88,18 @@ describe("parseEsgWorkbookXlsx", () => {
       expect(Object.keys(preview.sections)).toEqual([]);
       expect(preview.unmatchedSheets).toEqual(["Carbon 2026", "Employees"]);
     });
+  });
+});
+
+describe("esgImportHandover", () => {
+  it("leaves our own template to the template import", () => {
+    const preview = parseEsgWorkbookXlsx(buildEsgWorkbookXlsx(buildSgConsumerGoldenWorkbook()));
+    expect(esgImportHandover(preview)).toBeNull();
+  });
+
+  it("hands a spreadsheet none of whose tabs is a workbook section to the document reader, naming its tabs", () => {
+    const note = esgImportHandover({ sections: {}, unmatchedSheets: ["Carbon 2026", "Employees"] });
+    expect(note).toContain("none of its sheets (Carbon 2026, Employees) match a workbook section");
+    expect(note).toMatch(/token cost before anything is read/);
   });
 });

@@ -10,10 +10,19 @@ import { computeEsgScorecard } from "../../../EsgToolkit/src/lib/calculators";
 export function computeEsgScores(workbook: EsgWorkbookData | null): EsgPillarScores | null {
   const result = computeEsgScorecard(workbook);
   if (!result) return null;
+  // Against the same denominators as the scorecard's own overall — what each
+  // pillar can actually reach after exclusions — not a flat 100, which gave
+  // the summary page a different percentage from the dashboard for the same
+  // company.
   return esgScoresFromPillars(
     result.environmental.score,
     result.social.score,
     result.governance.score,
+    {
+      environmental: result.environmental.scoringDenominator,
+      social: result.social.scoringDenominator,
+      governance: result.governance.scoringDenominator,
+    },
   );
 }
 

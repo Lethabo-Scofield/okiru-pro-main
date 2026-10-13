@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets } from "./sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import type { ColumnDef } from "@/components/workbook/sections";
 import { coerceCellValue, mapHeaderToKey } from "@/lib/workbookGridParse";
@@ -63,6 +64,7 @@ export async function readSectionMatrix(file: File): Promise<unknown[][]> {
   }
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const sheet = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
 }

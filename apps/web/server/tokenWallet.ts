@@ -94,6 +94,7 @@ interface WalletStore {
   appendLedger(entry: Omit<LedgerEntry, "id" | "createdAt"> & { metadata?: unknown }): Promise<boolean>;
   findLedger(reference: string): Promise<LedgerEntry | null>;
   listLedger(orgId: string, limit: number): Promise<LedgerEntry[]>;
+  sumRefundsSince(orgId: string, since: Date): Promise<number>;
 }
 
 class MongoWalletStore implements WalletStore {
@@ -162,6 +163,14 @@ class MongoWalletStore implements WalletStore {
       .lean()) as Array<Record<string, unknown>>;
     return docs.map(toLedgerEntry);
   }
+
+  async sumRefundsSince(orgId: string, since: Date): Promise<number> {
+    const rows = (await TokenLedgerModel.aggregate([
+      { $match: { organizationId: orgId, kind: "refund", createdAt: { $gte: since } } },
+      { $group: { _id: null, total: { $sum: "$delta" } } },
+    ])) as Array<{ total?: number }>;
+    return Number(rows[0]?.total ?? 0);
+  }
 }
 
 class MemoryWalletStore implements WalletStore {
@@ -216,6 +225,12 @@ class MemoryWalletStore implements WalletStore {
 
   async listLedger(orgId: string, limit: number): Promise<LedgerEntry[]> {
     return this.ledger.filter((e) => e.organizationId === orgId).slice(0, limit);
+  }
+
+  async sumRefundsSince(orgId: string, since: Date): Promise<number> {
+    return this.ledger
+      .filter((e) => e.organizationId === orgId && e.kind === "refund" && Date.parse(e.createdAt) >= since.getTime())
+      .reduce((sum, e) => sum + e.delta, 0);
   }
 }
 
@@ -426,4 +441,14 @@ export async function setPlan(orgId: string, plan: "free" | "pro", renewsAt: str
 
 export async function listLedger(orgId: string, limit = 50): Promise<LedgerEntry[]> {
   return store().listLedger(orgId, Math.min(Math.max(1, limit), 200));
+}
+
+/** The one movement recorded under a reference, if any — e.g. `extract:<quoteId>`. */
+export async function findLedgerEntry(reference: string): Promise<LedgerEntry | null> {
+  return store().findLedger(reference);
+}
+
+/** Tokens refunded to an organisation since a moment, by any path. */
+export async function refundedSince(orgId: string, since: Date): Promise<number> {
+  return store().sumRefundsSince(orgId, since);
 }

@@ -3,7 +3,7 @@ import { ESG_GRID_SECTION_IDS } from "../../src/lib/esgGridSections";
 import { ESG_SECTION_IDS } from "../../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../../src/lib/esgValidation";
 import { buildSgConsumerGoldenWorkbook } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
-import { buildGoldenSections } from "../esgGoldenFixture";
+import { buildGoldenSections } from "../../src/lib/esg/__fixtures__/esgSampleSections";
 import { countGoldenCells } from "../../EsgToolkit/src/lib/fixtures/esg-consumer-golden";
 
 /** Registered HTTP paths (must match esgWorkbookRoutes.ts and ingress /api/esg → web). */
@@ -15,7 +15,6 @@ export const ESG_API_ROUTE_PATHS = [
   "POST /api/esg/workbook/:companyId/validate",
   "POST /api/esg/workbook/:companyId/submit",
   "POST /api/esg/workbook/:companyId/unlock",
-  "POST /api/esg/workbook/:companyId/seed-demo",
   "POST /api/esg/workbook/:companyId/import",
   "GET /api/esg/workbook/:companyId/scores",
   "GET /api/esg/workbook/:companyId/export",
@@ -23,7 +22,7 @@ export const ESG_API_ROUTE_PATHS = [
 
 describe("esgWorkbookRoutes section keys", () => {
   it("documents canonical API paths", () => {
-    expect(ESG_API_ROUTE_PATHS.length).toBe(11);
+    expect(ESG_API_ROUTE_PATHS.length).toBe(10);
     expect(ESG_API_ROUTE_PATHS.join(" ")).toContain("/api/esg/");
   });
   it("includes all Phase 1 section ids", () => {
@@ -40,8 +39,8 @@ describe("esgWorkbookRoutes section keys", () => {
   });
 });
 
-describe("esgGoldenFixture", () => {
-  it("seeds all phase-1 sections atomically", () => {
+describe("the sample workbook fixture (tests only)", () => {
+  it("covers all phase-1 sections", () => {
     const sections = buildGoldenSections();
     expect(Object.keys(sections).length).toBeGreaterThanOrEqual(9);
     expect(sections["e-data"]?.cells).toBeDefined();
@@ -49,7 +48,7 @@ describe("esgGoldenFixture", () => {
     expect(countGoldenCells()).toBeGreaterThan(200);
   });
 
-  it("seed-demo headcount matrix sums to L12 total", () => {
+  it("its headcount matrix sums to L12 total", () => {
     const cells = buildGoldenSections()["s-data"]?.cells ?? {};
     let matrixSum = 0;
     for (let ri = 0; ri < 7; ri++) {

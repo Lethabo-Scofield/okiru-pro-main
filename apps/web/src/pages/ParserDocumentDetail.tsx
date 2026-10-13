@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle, Building2, Check, Download, FileWarning, Loader2, RefreshCw, Upload } from "lucide-react";
 import { ExtractionReviewPane } from "@/components/upload/ExtractionReviewPane";
+import { EditableValue } from "@/components/review/EditableValue";
 import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
 
 interface ClientRow { clientId: string; name: string }
@@ -50,7 +51,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientRow[]>([]);
-  const [busy, setBusy] = useState<null | "type" | "company" | "reparse">(null);
+  const [busy, setBusy] = useState<null | "type" | "company" | "reparse" | "review">(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [typeDraft, setTypeDraft] = useState("");
   const replaceRef = useRef<HTMLInputElement>(null);
@@ -100,8 +101,40 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     ...(run?.missingFields ?? []),
     ...Object.entries(fields).filter(([, field]) => field?.raw_value == null && field?.normalized_value == null).map(([key]) => key),
   ]), [run, fields]);
-  const readableFields = Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null);
-  const missingFields = Object.entries(fields).filter(([key]) => missingKeys.has(key));
+  /**
+   * What people have corrected or filled in, field by field. They sit beside the
+   * parser's reading in the run's review history, never over it; the latest
+   * word on a field wins, and a null withdraws an earlier correction.
+   */
+  const corrections = useMemo(() => {
+    const out = new Map<string, { value: unknown; original: unknown }>();
+    for (const e of (run?.reviewHistory ?? []) as Array<{ fieldKey?: string | null; approvalState?: string; correctedValue?: unknown; originalValue?: unknown }>) {
+      if (e.approvalState !== "corrected" || !e.fieldKey || e.fieldKey === "document_type" || e.fieldKey === "document") continue;
+      if (e.correctedValue == null) out.delete(e.fieldKey);
+      else out.set(e.fieldKey, { value: e.correctedValue, original: e.originalValue });
+    }
+    return out;
+  }, [run]);
+  // A missing field someone has filled in is read now — by a person.
+  const readableKeys = Array.from(new Set([
+    ...Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null).map(([key]) => key),
+    ...Array.from(corrections.keys()),
+  ]));
+  const missingKeyList = Array.from(missingKeys).filter((key) => !corrections.has(key));
+
+  /** Save one value a person read off the document. Throws so the editor can say why. */
+  const saveField = async (key: string, value: string) => {
+    const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: { [key]: value } }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 403 ? "You can view this company's documents but not change them." : body?.message ?? "Could not save that value");
+    setRun((current) => (current ? { ...current, reviewHistory: body.reviewHistory ?? current.reviewHistory } : current));
+    setNotice(`Saved ${fieldLabel(key)}.`);
+  };
   const presentation = run ? PARSER_STATUS_PRESENTATION[run.status] : null;
 
   const candidates: ClassificationCandidate[] = Array.isArray(audit.classification_candidates) ? audit.classification_candidates : [];
@@ -116,7 +149,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     if (res.ok) setRun(body.run);
   };
 
-  const patch = async (payload: Record<string, unknown>, kind: "type" | "company", message: string) => {
+  const patch = async (payload: Record<string, unknown>, kind: "type" | "company" | "review", message: string) => {
     setBusy(kind);
     setNotice(null);
     try {
@@ -138,6 +171,115 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     }
   };
 
+  /**
+   * A fresh read, priced and waiting for the user to confirm the spend. Only
+   * an unchanged file's stored reading is free; reading from scratch or a
+   * replacement runs the whole extraction again, so it is priced, paid
+   * through the wallet like any upload, and settled — a read that delivers
+   * nothing comes back as tokens.
+   */
+  const [paidRead, setPaidRead] = useState<null | {
+    quoteId: string;
+    file?: File;
+    tokens: number;
+    balance: number;
+    sufficient: boolean;
+    shortfall: number;
+  }>(null);
+
+  const priceFreshRead = async (replacement?: File) => {
+    setBusy("reparse");
+    setNotice(null);
+    try {
+      const init: RequestInit = { method: "POST", credentials: "include" };
+      if (replacement) {
+        const form = new FormData();
+        form.append("file", replacement, replacement.name);
+        init.body = form;
+      }
+      const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread/quote`, init);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message ?? "We could not price a fresh read of this document.");
+      const priced = await fetch(`/api/tokens/quote/${encodeURIComponent(body.quoteId)}`, { credentials: "include" });
+      const cost = await priced.json().catch(() => ({}));
+      if (!priced.ok) throw new Error(cost?.message ?? "We could not work out what this read costs.");
+      setPaidRead({
+        quoteId: String(body.quoteId),
+        file: replacement,
+        tokens: Number(cost.tokens ?? 0),
+        balance: Number(cost.balance ?? 0),
+        sufficient: cost.sufficient !== false || Boolean(cost.alreadyAuthorized),
+        shortfall: Number(cost.shortfall ?? 0),
+      });
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not price a fresh read");
+    } finally {
+      setBusy(null);
+      if (replaceRef.current) replaceRef.current.value = "";
+    }
+  };
+
+  const confirmFreshRead = async () => {
+    if (!paidRead) return;
+    const { quoteId, file } = paidRead;
+    setBusy("reparse");
+    setNotice(null);
+    try {
+      const auth = await fetch("/api/tokens/authorize", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteId }),
+      });
+      const authBody = await auth.json().catch(() => ({}));
+      if (!auth.ok) {
+        throw new Error(
+          auth.status === 402
+            ? `${authBody?.message ?? "You do not have enough tokens for this read."} Add tokens in Settings → Billing.`
+            : authBody?.message ?? "Could not authorise this read.",
+        );
+      }
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+
+      const form = new FormData();
+      form.append("quoteId", quoteId);
+      if (file) form.append("file", file, file.name);
+      const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      const body = await res.json().catch(() => ({}));
+
+      // Settle the paid run whatever happened — the server decides from the
+      // parser's own record what was delivered, and refunds what was not.
+      let refunded = "";
+      try {
+        const settled = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+          method: "POST",
+          credentials: "include",
+        });
+        const settledBody = await settled.json().catch(() => null);
+        if (settledBody?.state === "settled" && Number(settledBody.refundedTokens) > 0) {
+          refunded = ` ${Number(settledBody.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance.`;
+          window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+        }
+      } catch {
+        // The server's own sweep settles every paid run regardless.
+      }
+
+      setPaidRead(null);
+      if (!res.ok) throw new Error(`${body?.message ?? "The document could not be read again."}${refunded}`);
+      await load();
+      if (file) setPreviewFile(file);
+      setNotice(`${file ? `Read again from ${file.name}.` : "Read again from scratch."}${refunded}`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not read this document again");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   /** Re-read the stored bytes, or a replacement file if one was chosen. */
   const reparse = async (replacement?: File) => {
     setBusy("reparse");
@@ -151,10 +293,22 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       }
       const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reparse`, init);
       const body = await res.json().catch(() => ({}));
+      // Nothing stored to show — a real read is needed, and it is priced first.
+      if (res.status === 402 && body?.code === "PRICE_FIRST") {
+        setBusy(null);
+        await priceFreshRead(replacement);
+        return;
+      }
       if (!res.ok) throw new Error(body?.message ?? "The parser could not read this file");
       await load();
       if (replacement) setPreviewFile(replacement);
-      setNotice(replacement ? `Re-read from ${replacement.name}.` : "Re-read from the stored file.");
+      setNotice(
+        replacement
+          ? `Re-read from ${replacement.name}.`
+          : body?.reused
+            ? "This file hasn't changed, so this is its stored reading — nothing was read again, and nothing was charged."
+            : "Re-read from the stored file.",
+      );
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Could not re-read this document");
     } finally {
@@ -199,6 +353,81 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       </div>
 
       {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" data-testid="document-notice">{notice}</div>}
+
+      {/* A fresh read, priced — nothing is charged until this is confirmed. */}
+      {paidRead && (
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-fresh-read-price">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-white">
+              Reading {paidRead.file ? paidRead.file.name : "this document"} {paidRead.file ? "" : "again from scratch "}costs{" "}
+              {paidRead.tokens.toLocaleString("en-ZA")} tokens
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+              You have {paidRead.balance.toLocaleString("en-ZA")}. If the read gives us nothing, the tokens come back automatically.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => setPaidRead(null)}
+              className="h-9 rounded-lg px-3 text-[12px] text-[color:var(--body)] hover:text-white disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            {paidRead.sufficient ? (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void confirmFreshRead()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-[12px] font-semibold text-black disabled:opacity-40"
+                data-testid="document-fresh-read-confirm"
+              >
+                {busy === "reparse" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Read it — {paidRead.tokens.toLocaleString("en-ZA")} tokens
+              </button>
+            ) : (
+              <a
+                href="/settings/billing"
+                className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-[12px] font-semibold text-black"
+                data-testid="document-fresh-read-topup"
+              >
+                Add tokens — {paidRead.shortfall.toLocaleString("en-ZA")} short
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* The team handoff: whoever uploaded may leave the checking to someone
+          else. Signing it off takes it out of the company's "Needs review". */}
+      <div className="mb-4 flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-review-state">
+        <p className="text-[12.5px] text-[color:var(--body)]">
+          {document.reviewedAt
+            ? `Reviewed ${new Date(document.reviewedAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} — checked against the document by your team.`
+            : document.status === "review_required" || document.status === "failed"
+              ? "Waiting for a review — check what was read against the document, fix anything wrong, then sign it off."
+              : "Not reviewed yet. Signing off is optional for a document that read cleanly."}
+        </p>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() =>
+            void patch(
+              { reviewed: !document.reviewedAt },
+              "review",
+              document.reviewedAt ? "Reopened — it's back in the company's Needs review." : "Signed off — it has left the company's Needs review.",
+            )
+          }
+          className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold disabled:opacity-40 ${
+            document.reviewedAt ? "border border-white/[0.12] text-[color:var(--body)] hover:bg-white/[0.06]" : "bg-white text-black"
+          }`}
+          data-testid="document-mark-reviewed"
+        >
+          {busy === "review" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {document.reviewedAt ? "Reopen" : "Mark as reviewed"}
+        </button>
+      </div>
 
       {/* The three things a person can do here. */}
       <div className="mb-6 grid gap-3 lg:grid-cols-3">
@@ -247,8 +476,10 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
         {/* 3. Try again, with the same file or a better one. */}
         <div className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] p-4">
           <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)]"><RefreshCw className="h-3.5 w-3.5" /> Read it again</div>
-          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">Appended as a new run — the previous reading is kept.</p>
-          <div className="mt-2.5 flex gap-2">
+          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
+            The stored reading is free. Reading from scratch or a replacement is priced first — the previous reading is kept.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
             <button
               type="button"
               disabled={busy !== null}
@@ -258,11 +489,20 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
             >
               {busy === "reparse" ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : "Re-read"}
             </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void priceFreshRead()}
+              className="h-9 flex-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+              data-testid="document-read-fresh"
+            >
+              Read from scratch
+            </button>
             <input
               ref={replaceRef}
               type="file"
               className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void reparse(f); }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void priceFreshRead(f); }}
               data-testid="document-replace-input"
             />
             <button
@@ -306,9 +546,79 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               </div>
             </section>}
 
-            <section><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold text-white">Extracted fields</h2><span className="text-[11px] text-[color:var(--muted)]">{readableFields.length} read</span></div><div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">{readableFields.map(([key, field]) => <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]"><div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div><div><p className="break-words text-[13px] text-white">{formatParserValue(field.normalized_value)}</p>{/* The raw text behind the number. Without it a normalisation bug — "R1,200,000" read as 1200 — is invisible and unarguable. */}{field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && <p className="mt-1 text-[11px] text-[color:var(--muted)]">read as “{String(field.raw_value)}”{field.data_type ? ` · ${field.data_type}` : ""}</p>}{field.source?.text_snippet && <details className="mt-2"><summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">View source</summary><p className="mt-2 border-l border-[color:var(--rule-strong)] pl-3 text-[11px] leading-5 text-[color:var(--body)]">{field.source.text_snippet}</p><p className="mt-1 text-[10px] text-[color:var(--muted)]">{field.source.page != null ? `Page ${field.source.page}` : "Page unavailable"}{field.source.table ? `, ${field.source.table}` : ""}</p></details>}</div><div className={`text-right text-[12px] tabular-nums ${Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>{Math.round(Number(field.confidence || 0) * 100)}%</div></div>)}</div></section>
+            {/* Fact-checking and fixing are one gesture: look at the document on
+                the left, click the value, type. A correction is kept beside the
+                parser's reading — both stay on record. */}
+            <section data-testid="extracted-fields">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-[14px] font-semibold text-white">Extracted fields</h2>
+                <span className="text-[11px] text-[color:var(--muted)]">
+                  {readableKeys.length} read{corrections.size > 0 ? ` · ${corrections.size} checked by your team` : ""}
+                </span>
+              </div>
+              <p className="mb-3 text-[11.5px] text-[color:var(--body)]">Check each value against the document. Click one to correct it.</p>
+              <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
+                {readableKeys.map((key) => {
+                  const field = (fields[key] ?? {}) as Record<string, any>;
+                  const fix = corrections.get(key);
+                  const shown = formatParserValue(fix ? fix.value : field.normalized_value);
+                  return (
+                    <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]" data-testid={`field-row-${key}`}>
+                      <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] text-white">
+                          <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                        </div>
+                        {fix ? (
+                          <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${key}-corrected`}>
+                            {fix.original != null ? `Corrected by your team — the parser read “${formatParserValue(fix.original)}”` : "Added by your team — the parser did not find this"}
+                          </p>
+                        ) : (
+                          // The raw text behind the number. Without it a normalisation bug — "R1,200,000" read as 1200 — is invisible and unarguable.
+                          field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && (
+                            <p className="mt-1 text-[11px] text-[color:var(--muted)]">read as “{String(field.raw_value)}”{field.data_type ? ` · ${field.data_type}` : ""}</p>
+                          )
+                        )}
+                        {field.source?.text_snippet && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">View source</summary>
+                            <p className="mt-2 border-l border-[color:var(--rule-strong)] pl-3 text-[11px] leading-5 text-[color:var(--body)]">{field.source.text_snippet}</p>
+                            <p className="mt-1 text-[10px] text-[color:var(--muted)]">{field.source.page != null ? `Page ${field.source.page}` : "Page unavailable"}{field.source.table ? `, ${field.source.table}` : ""}</p>
+                          </details>
+                        )}
+                      </div>
+                      <div className={`text-right text-[12px] tabular-nums ${fix ? "text-violet-200" : Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>
+                        {fix ? "Checked" : `${Math.round(Number(field.confidence || 0) * 100)}%`}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
 
-            <section><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold text-white">Could not be read</h2><span className="text-[11px] text-[color:var(--muted)]">{missingFields.length} expected</span></div>{missingFields.length === 0 ? <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">No expected fields are missing.</p> : <div className="divide-y divide-[#3a2f20] border-y border-[#3a2f20]">{missingFields.map(([key]) => <div key={key} className="flex items-center justify-between py-3"><span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span><span className="text-[11px] text-amber-300">Not found</span></div>)}</div>}</section>
+            <section data-testid="missing-fields">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-[14px] font-semibold text-white">Not found in this document</h2>
+                <span className="text-[11px] text-[color:var(--muted)]">{missingKeyList.length} expected</span>
+              </div>
+              {missingKeyList.length === 0 ? (
+                <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">No expected fields are missing.</p>
+              ) : (
+                <>
+                  <p className="mb-3 text-[11.5px] text-[color:var(--body)]">If the document does show one of these, add it — you know where to look better than the parser did.</p>
+                  <div className="divide-y divide-[#3a2f20] border-y border-[#3a2f20]">
+                    {missingKeyList.map((key) => (
+                      <div key={key} className="flex items-center justify-between gap-4 py-3" data-testid={`missing-row-${key}`}>
+                        <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span>
+                        <div className="min-w-0 max-w-[60%] text-[12.5px] text-white">
+                          <EditableValue value={null} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
 
             {/* Read, then refused. Being told a value was found and thrown away
                 is a different problem from it never being found, and the fix is

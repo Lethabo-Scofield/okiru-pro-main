@@ -46,6 +46,8 @@ import {
   ESG_SAQ_ROW_TARGET,
   ESG_SCALAR_TARGETS,
   esgDepotRowIndex,
+  esgSiteKey,
+  esgSiteMatch,
   esgHeadcountRowIndex,
   esgMonthColumnFor,
   esgMonthlyCellRef,
@@ -75,6 +77,12 @@ export interface EsgCalculatorRowLike {
   cells: Record<string, unknown>;
   sourceFiles?: string[];
   droppedFields?: string[];
+  /** Read from a hidden sheet: it may add to what is known, not to what exists. */
+  hidden?: boolean;
+  /** The month ("YYYY-MM") the row's figures are for, when it states one month's figures. */
+  period?: string;
+  /** A vehicle's month rolled up from its fuel fills here — never set by the parser. */
+  fromFills?: boolean;
 }
 
 export interface EsgCalculatorResultLike {
@@ -105,6 +113,10 @@ export interface EsgFieldOutcome {
   /** Plain-language, shown to the user verbatim. */
   reason?: string;
   rejection?: EsgRejectionReason;
+  /** A figure a person can place by answering one question — its site, its month. */
+  choice?: EsgPlacementChoice;
+  /** The site or period of the figure with this choice id: placed when that figure is. */
+  partOf?: string;
 }
 
 export interface EsgCellConflict {
@@ -120,6 +132,14 @@ export interface EsgWorkbookMappingResult {
   patches: EsgSectionPatchMap;
   /** Parser field name → outcome. The UI attributes each reading through this. */
   outcomes: Record<string, EsgFieldOutcome>;
+  /**
+   * Field → source file → outcome, for readings whose fate is known document
+   * by document: a bill's figure (and the site and period that placed it), a
+   * dashboard's monthly figures. Wins over `outcomes` for those readings, so
+   * one bill outside the reporting year no longer says "placed" because
+   * another bill was.
+   */
+  sourceOutcomes: Record<string, Record<string, EsgFieldOutcome>>;
   conflicts: EsgCellConflict[];
 }
 
@@ -405,9 +425,28 @@ export function mapEsgCalculatorToWorkbook(
     else rowsByGrid.set(row.grid, [row]);
   }
 
+  // A fuel log's or fuel card's fills have no register of their own: they are
+  // each vehicle's months, and join the fleet register as that.
+  const fills = rowsByGrid.get(FUEL_FILLS_FIELD);
+  const fillRollup = fills ? fillsAsVehicleMonths(fills, rows.length) : null;
+  if (fillRollup) {
+    rowsByGrid.delete(FUEL_FILLS_FIELD);
+    if (fillRollup.months.length > 0) {
+      rowsByGrid.set("fleet_vehicle_rows", [...(rowsByGrid.get("fleet_vehicle_rows") ?? []), ...fillRollup.months]);
+    }
+  }
+
+  // Every site × month figure, whichever reader produced it, is settled in one
+  // pass: in a one-row grid two documents' different sites add up, which they
+  // could not do if each reader settled its own figures.
+  const monthlyFacts: MonthlyFact[] = [];
   for (const [gridField, gridRows] of rowsByGrid) {
+    if (gridField === ESG_MONTHLY_FACTS_FIELD) {
+      monthlyFacts.push(...monthlyFactsFromRows(gridRows));
+      continue;
+    }
     if (ESG_ROW_MONTHLY_GRIDS[gridField]) {
-      applyMonthlyRows(gridField, gridRows, axes, builder, record);
+      monthlyFacts.push(...monthlyFactsFromRowGrid(gridField, gridRows, axes));
       continue;
     }
     if (gridField === "ee_level_rows") {
@@ -425,8 +464,11 @@ export function mapEsgCalculatorToWorkbook(
       });
       continue;
     }
-    applyRegisterRows(gridField, gridRows, target.sectionId, target.columns, gridCells, record);
+    const fleet = applyRegisterRows(gridField, gridRows, target.sectionId, target.columns, gridCells, record, axes);
+    if (gridField === "fleet_vehicle_rows" && fillRollup) recordFills(fillRollup, fleet, record);
   }
+  if (fillRollup && !rowsByGrid.has("fleet_vehicle_rows")) recordFills(fillRollup, undefined, record);
+  const monthlyFates = monthlyFacts.length > 0 ? applyMonthlyFacts(monthlyFacts, axes, builder, record) : [];
 
   /* ---------------- Supplier questionnaire ---------------- */
 
@@ -594,7 +636,10 @@ export function mapEsgCalculatorToWorkbook(
     }
   }
 
-  return { patches, outcomes, conflicts };
+  const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
+  const sourceOutcomes = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+
+  return { patches, outcomes, sourceOutcomes, conflicts };
 }
 
 /* ------------------------------------------------------------------ *
@@ -608,10 +653,17 @@ function applyRegisterRows(
   columns: Readonly<Record<string, string>>,
   gridCells: Map<string, Record<string, EsgCellValue>>,
   record: (field: string, outcome: EsgFieldOutcome) => void,
-): void {
+  axes: EsgReportingAxes,
+): FleetMerge | undefined {
   const def = ESG_GRID_SECTIONS[sectionId];
-  const built: EsgGridRow[] = [];
+  let built: EsgGridRow[] = [];
+  const builtSources: string[] = [];
+  const builtHidden: boolean[] = [];
+  const builtPeriods: Array<string | undefined> = [];
+  const builtFromFills: boolean[] = [];
   const rejected: string[] = [];
+  let fleetNote: string | undefined;
+  let fleet: FleetMerge | undefined;
 
   const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
@@ -622,7 +674,7 @@ function applyRegisterRows(
       if (!(key in row.cells)) continue;
       const column = def.columns.find((c) => c.key === columnKey);
       const kind = gridColumnKind(column?.type);
-      const result = normaliseEsgValue(kind, row.cells[key], esgGridColumnOptions(sectionId, columnKey));
+      const result = normaliseEsgValue(kind, row.cells[key], esgGridColumnOptions(sectionId, columnKey, axes));
       if (!result.ok) {
         rejected.push(`${key}: ${result.detail}`);
         continue;
@@ -630,7 +682,45 @@ function applyRegisterRows(
       gridRow[columnKey] = result.value;
       filled = true;
     }
-    if (filled) built.push(gridRow);
+    if (filled) {
+      built.push(gridRow);
+      builtSources.push((row.sourceFiles ?? [])[0] ?? "");
+      builtHidden.push(row.hidden === true);
+      builtPeriods.push(row.period);
+      builtFromFills.push(row.fromFills === true);
+    }
+  }
+
+  if (sectionId === "fleet" && built.length > 0) {
+    fleet = mergeFleetRows(built, builtSources, builtHidden, builtPeriods, builtFromFills);
+    built = fleet.rows;
+    const said: string[] = [];
+    if (fleet.duplicates > 0) said.push(`${fleet.duplicates} repeat listing(s) of the same vehicles were combined into ${built.length} vehicles`);
+    if (fleet.dated > 0) {
+      said.push(
+        `${fleet.dated} vehicle(s) take their month's kilometres and litres from the depots' fuel reports (${fleet.months.join(", ")})` +
+          (fleet.averaged > 0 ? `, ${fleet.averaged} averaged over the months reported` : ""),
+      );
+    }
+    if (fleet.sold > 0) said.push(`${fleet.sold} vehicle(s) listed as sold or disposed were left out of the fleet`);
+    if (fleet.hiddenOnly > 0) said.push(`${fleet.hiddenOnly} vehicle(s) that appear only on hidden sheets were not counted as fleet`);
+    if (said.length) fleetNote = `${said.join("; ")}.`;
+  }
+
+  // A register is a record to read and correct, not a data lake: a year of
+  // trips (Super Group's driver debrief: 20,000 rows, 140,000 cells) would
+  // make the workbook too heavy to store or open. The most recent rows are
+  // kept, and the note says how many were read.
+  if (built.length > MAX_REGISTER_ROWS) {
+    const read = built.length;
+    const dateKey = def.columns.find((c) => c.type === "date")?.key;
+    if (dateKey) {
+      built = [...built].sort((a, b) => String(b[dateKey] ?? "").localeCompare(String(a[dateKey] ?? "")));
+    }
+    built = built.slice(0, MAX_REGISTER_ROWS);
+    fleetNote = [fleetNote, `${read.toLocaleString("en-ZA")} rows were read; the register keeps the ${dateKey ? "most recent " : "first "}${MAX_REGISTER_ROWS.toLocaleString("en-ZA")}.`]
+      .filter(Boolean)
+      .join(" ");
   }
 
   if (built.length === 0) {
@@ -643,7 +733,7 @@ function applyRegisterRows(
           ? `None of these rows could be written as the register records them (${rejected[0]}).`
           : "These rows carried nothing the register holds.",
     });
-    return;
+    return fleet;
   }
 
   const cells = writeEsgGridCells(sectionId, built) as Record<string, EsgCellValue>;
@@ -670,11 +760,328 @@ function applyRegisterRows(
       },
     ],
     reason:
-      rejected.length > 0
-        ? `${built.length} row(s) written; ${rejected.length} value(s) did not match what the register accepts.`
-        : undefined,
+      [
+        fleetNote,
+        rejected.length > 0
+          ? `${built.length} row(s) written; ${rejected.length} value(s) did not match what the register accepts.`
+          : undefined,
+      ].filter(Boolean).join(" ") || undefined,
   });
   void lastColumn;
+  return fleet;
+}
+
+/** The most rows one register keeps from a read. */
+const MAX_REGISTER_ROWS = 1_000;
+
+/** "LB45BXGP PERMIT" → "LB45BXGP": the first token that reads as a plate. */
+function plateKey(reg: unknown): string {
+  const text = String(reg ?? "").toUpperCase();
+  const token = text.split(/\s+/).find((t) => /[A-Z]/.test(t) && /\d/.test(t)) ?? text;
+  return token.replace(/[^A-Z0-9]/g, "");
+}
+
+/** A sheet of vehicles that have left the fleet. */
+const LEFT_THE_FLEET = /\b(sold|disposed|scrapped|written[ -]?off|decommissioned)\b/i;
+
+/**
+ * One vehicle, one row. A client's fleet list holds the same vehicles on many
+ * sheets — the master, this month's list, last August's, pivots and scratch
+ * copies — each knowing part of what is known about them: GVM on one, depot
+ * and tank on another, the month's kilometres and fuel on a third. Added as
+ * separate rows, Super Group's ~130 trucks became 800 rows; counted, the fleet
+ * was six times its size.
+ *
+ * Rows are matched by plate and combined, the first value known for each
+ * column kept. Vehicles listed on a sheet of vehicles that have left the fleet
+ * (sold, disposed, scrapped) are not counted in it.
+ */
+/**
+ * A vehicle's month — what it drove, what it used, and the rate between them.
+ * One row's month, never assembled from two: a fleet list's kilometres beside a
+ * fuel report's litres is a rate no vehicle ever ran at, and the company's
+ * measured rates are what every vehicle without fuel records is estimated from.
+ */
+const MONTH_FIGURES = ["monthlyKm", "monthlyLitres", "l100Actual"] as const;
+
+const isBlank = (value: unknown) => value === undefined || value === null || value === "";
+const figureOf = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+/** Fuel fills — a fuel log's or a fuel card's lines — a vehicle at a time. */
+const FUEL_FILLS_FIELD = "fleet_fuel_transaction_rows";
+
+interface FillRollup {
+  /** Each vehicle's months, as fleet rows stamped with the month. */
+  months: EsgCalculatorRowLike[];
+  fills: number;
+  /** Lines naming no vehicle or no litres: bowser deliveries, tank dips, totals. */
+  unattributed: number;
+  /** Fills whose month cannot be told: no date, and the vehicle's other fills span months. */
+  undated: number;
+  /** Undated lines that are a vehicle's stated total — the sum of its fills — and not one more fill. */
+  totals: number;
+}
+
+const previousMonth = (month: string): string => {
+  const [year, mon] = month.split("-").map(Number);
+  return mon === 1 ? `${year - 1}-12` : `${year}-${String(mon - 1).padStart(2, "0")}`;
+};
+
+/**
+ * Fuel fills, as each vehicle's months.
+ *
+ * Litres are every fill in the month — the fuel the vehicle drew, the basis
+ * the depots' own diesel figure is on. Kilometres are stated only where the
+ * data holds the month before: from the last fill of that month to the last
+ * fill of this one is exactly the distance this month's fills fuelled, so
+ * kilometres and litres are a true pair. A vehicle's first month in the data
+ * has its litres alone, never a rate it did not run at.
+ */
+function fillsAsVehicleMonths(fills: EsgCalculatorRowLike[], firstIndex: number): FillRollup {
+  type Fill = { month: string | null; odometer: number | null; litres: number };
+  const byPlate = new Map<string, { reg: string; source: string; fills: Fill[] }>();
+  let unattributed = 0;
+  for (const fill of fills) {
+    const reg = String(fill.cells["fleet.vehicle_registration"] ?? "").trim();
+    const litres = figureOf(fill.cells["fleet.fuel_litres"]);
+    const key = plateKey(reg);
+    if (!key || litres === null || litres <= 0) {
+      unattributed += 1;
+      continue;
+    }
+    const date = String(fill.cells["fleet.transaction_date"] ?? "");
+    const entry = byPlate.get(key) ?? { reg, source: (fill.sourceFiles ?? [])[0] ?? "", fills: [] };
+    entry.fills.push({
+      month: /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : null,
+      odometer: figureOf(fill.cells["fleet.odometer_reading"]),
+      litres,
+    });
+    byPlate.set(key, entry);
+  }
+
+  let undated = 0;
+  let totals = 0;
+  const months: EsgCalculatorRowLike[] = [];
+  const lastReading = (these: Fill[]) => {
+    const readings = these.map((f) => f.odometer).filter((n): n is number => n !== null);
+    return readings.length > 0 ? Math.max(...readings) : null;
+  };
+  for (const { reg, source, fills: own } of Array.from(byPlate.values())) {
+    // An undated fill is the month the vehicle's other fills are in — when they are in one.
+    const dated = new Set(own.map((f) => f.month).filter((m): m is string => m !== null));
+    const only = dated.size === 1 ? Array.from(dated)[0] : null;
+    // An undated line holding exactly what the dated fills add to is the log's total line.
+    const datedLitres = own.reduce((sum, f) => sum + (f.month !== null ? f.litres : 0), 0);
+    const isTotal = (fill: Fill) =>
+      fill.month === null && datedLitres > 0 && Math.abs(fill.litres - datedLitres) <= Math.max(0.5, datedLitres * 0.005);
+    const byMonth = new Map<string, Fill[]>();
+    for (const fill of own) {
+      if (isTotal(fill)) {
+        totals += 1;
+        continue;
+      }
+      const month = fill.month ?? only;
+      if (!month) {
+        undated += 1;
+        continue;
+      }
+      byMonth.set(month, [...(byMonth.get(month) ?? []), fill]);
+    }
+    for (const month of Array.from(byMonth.keys()).sort()) {
+      const these = byMonth.get(month)!;
+      const litres = Math.round(these.reduce((sum, f) => sum + f.litres, 0) * 10) / 10;
+      const last = lastReading(these);
+      const before = byMonth.get(previousMonth(month));
+      const lastBefore = before ? lastReading(before) : null;
+      const km = last !== null && lastBefore !== null && last > lastBefore && last - lastBefore <= 30_000 ? last - lastBefore : null;
+      months.push({
+        grid: "fleet_vehicle_rows",
+        index: firstIndex + months.length,
+        cells: {
+          "fleet.vehicle_registration": reg,
+          "fleet.monthly_litres": litres,
+          ...(km !== null ? { "fleet.monthly_km": km } : {}),
+        },
+        sourceFiles: [source],
+        period: month,
+        fromFills: true,
+      });
+    }
+  }
+  return { months, fills: fills.length, unattributed, undated, totals };
+}
+
+/** What became of the fills, in words: which vehicles' months they gave, and what they could not. */
+function recordFills(
+  rollup: FillRollup,
+  fleet: FleetMerge | undefined,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  const said: string[] = [];
+  const used = fleet?.fillVehicles ?? 0;
+  if (used > 0) said.push(`they give ${used} vehicle(s) their month's litres on the fleet register`);
+  if ((fleet?.covered ?? 0) > 0) {
+    said.push(`${fleet!.covered} vehicle-month(s) they cover are already stated by the depot's fuel report, whose figures are used`);
+  }
+  if (fleet && fleet.disagreements.length > 0) {
+    said.push(`they disagree with the report on ${fleet.disagreements.slice(0, 3).join("; ")}${fleet.disagreements.length > 3 ? ` and ${fleet.disagreements.length - 3} more` : ""}`);
+  }
+  if (fleet && fleet.notListed.length > 0) {
+    const named = fleet.notListed.slice(0, 4).join(", ");
+    said.push(`fuel filled into ${fleet.notListed.length} vehicle(s) no fleet list names (${named}${fleet.notListed.length > 4 ? ", …" : ""}) was not added to the fleet`);
+  }
+  if (rollup.unattributed > 0) {
+    said.push(`${rollup.unattributed} line(s) name no vehicle or no litres — bowser deliveries, tank dips, totals — and count only in the depot's own diesel figure`);
+  }
+  if (rollup.totals > 0) said.push(`${rollup.totals} vehicle total line(s) agree with their fills and were not counted again`);
+  if (rollup.undated > 0) said.push(`${rollup.undated} fill(s) have no date to tell their month by`);
+  const reason = `${rollup.fills} fuel line(s) read: ${said.join("; ") || "none of them name a vehicle and its litres"}.`;
+  const reached = used + (fleet?.covered ?? 0);
+  record(
+    FUEL_FILLS_FIELD,
+    reached > 0
+      ? { status: "placed", cells: [{ sectionId: "fleet", cellRef: "Monthly Litres", value: reached }], reason }
+      : { status: "unplaced", cells: [], rejection: "no_workbook_home", reason },
+  );
+}
+
+type MonthFigures = { km: number | null; litres: number | null; fromFills: boolean };
+
+export interface FleetMerge {
+  rows: EsgGridRow[];
+  duplicates: number;
+  sold: number;
+  hiddenOnly: number;
+  /** Vehicles whose month came from a dated document — a fuel report or their fills. */
+  dated: number;
+  averaged: number;
+  months: string[];
+  /** Vehicles whose month came from their own fuel fills. */
+  fillVehicles: number;
+  /** Vehicle-months the fills state that a depot's report already states, and its figure is used. */
+  covered: number;
+  /** Where the fills and the depot's report disagree on a vehicle's month, in words. */
+  disagreements: string[];
+  /** Vehicles whose fuel was filled but which no fleet list names. */
+  notListed: string[];
+}
+
+function mergeFleetRows(
+  rows: EsgGridRow[],
+  sources: string[],
+  hidden: boolean[] = [],
+  periods: Array<string | undefined> = [],
+  fromFills: boolean[] = [],
+): FleetMerge {
+  const sheetOf = (source: string) => source.slice(source.lastIndexOf("›") + 1);
+  const gone = new Set(
+    rows.filter((_, i) => LEFT_THE_FLEET.test(sheetOf(sources[i] ?? ""))).map((row) => plateKey(row.reg)),
+  );
+  // The fleet is what the visible sheets list. A hidden sheet — a scratch
+  // copy, last year's list — adds what it knows about a listed vehicle (its
+  // month's km and fuel), but a vehicle only it lists is not counted. Fuel
+  // fills likewise: a depot fills other business units' vehicles too.
+  const visible = rows.some((_, i) => !hidden[i] && !fromFills[i]);
+  const byPlate = new Map<string, EsgGridRow>();
+  const hiddenOnly = new Set<string>();
+  const notListed = new Map<string, string>();
+  // Each vehicle's DATED months: its depot's fuel report, or its own fills.
+  const monthsOf = new Map<string, Map<string, MonthFigures>>();
+  let duplicates = 0;
+  let covered = 0;
+  const disagreements: string[] = [];
+  const whole = (n: number | null) => (n === null ? "—" : n.toLocaleString("en-ZA", { maximumFractionDigits: 1 }));
+  // The registers describe the vehicles first, then the dated months add to
+  // them (a fuel report before the fills it summarises), then the hidden sheets.
+  const rank = (i: number) => (hidden[i] ? 2 : periods[i] ? 1 : 0);
+  const order = rows.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
+  for (const i of order) {
+    const row = rows[i];
+    const key = plateKey(row.reg);
+    if (!key || gone.has(key)) continue;
+    const period = periods[i];
+    if (period) {
+      const months = monthsOf.get(key) ?? new Map<string, MonthFigures>();
+      const stated: MonthFigures = { km: figureOf(row.monthlyKm), litres: figureOf(row.monthlyLitres), fromFills: fromFills[i] === true };
+      const prior = months.get(period);
+      if (!prior) {
+        months.set(period, stated);
+      } else if (!prior.fromFills && stated.fromFills) {
+        // The same month twice is one month — the report's — checked against the fills.
+        covered += 1;
+        const gap = prior.litres !== null && stated.litres !== null ? Math.abs(prior.litres - stated.litres) : 0;
+        if (prior.litres !== null && gap > Math.max(1, prior.litres * 0.01)) {
+          disagreements.push(`${String(row.reg ?? "").trim()} ${period}: the fills add to ${whole(stated.litres)} L, the report says ${whole(prior.litres)} L`);
+        }
+      }
+      monthsOf.set(key, months);
+    }
+    const prior = byPlate.get(key);
+    if (!prior) {
+      if (visible && hidden[i]) {
+        hiddenOnly.add(key);
+        continue;
+      }
+      if (visible && fromFills[i]) {
+        notListed.set(key, String(row.reg ?? "").trim());
+        continue;
+      }
+      byPlate.set(key, { ...row });
+      continue;
+    }
+    duplicates += 1;
+    const priorHasMonth = MONTH_FIGURES.some((column) => !isBlank(prior[column]));
+    for (const [column, value] of Object.entries(row)) {
+      if (column === "_id") continue;
+      if (priorHasMonth && (MONTH_FIGURES as readonly string[]).includes(column)) continue;
+      if (isBlank(prior[column])) prior[column] = value;
+    }
+  }
+
+  // A dated month replaces an undated one, and several months make one
+  // average month: the register holds a month's figures, not a period's.
+  let dated = 0;
+  let averaged = 0;
+  let fillVehicles = 0;
+  const reported = new Set<string>();
+  const tenth = (n: number) => Math.round(n * 10) / 10;
+  for (const [key, months] of Array.from(monthsOf.entries())) {
+    const vehicle = byPlate.get(key);
+    if (!vehicle) continue;
+    const stated = Array.from(months.entries());
+    const complete = stated.filter(([, m]) => m.km !== null && m.litres !== null);
+    const fuelled = stated.filter(([, m]) => m.litres !== null);
+    const use = complete.length > 0 ? complete : fuelled.length > 0 ? fuelled : stated.filter(([, m]) => m.km !== null);
+    if (use.length === 0) continue;
+    const mean = (pick: (m: MonthFigures) => number | null) => {
+      const values = use.map(([, m]) => pick(m)).filter((n): n is number => n !== null);
+      return values.length === 0 ? null : tenth(values.reduce((sum, n) => sum + n, 0) / values.length);
+    };
+    const km = mean((m) => m.km);
+    const litres = mean((m) => m.litres);
+    for (const column of MONTH_FIGURES) delete vehicle[column];
+    if (km !== null) vehicle.monthlyKm = km;
+    if (litres !== null) vehicle.monthlyLitres = litres;
+    if (km !== null && litres !== null && km > 0) vehicle.l100Actual = tenth((litres / km) * 100);
+    dated += 1;
+    if (use.length > 1) averaged += 1;
+    if (use.some(([, m]) => m.fromFills)) fillVehicles += 1;
+    for (const [month] of use) reported.add(month);
+  }
+
+  return {
+    rows: Array.from(byPlate.values()),
+    duplicates,
+    sold: gone.size,
+    hiddenOnly: hiddenOnly.size,
+    dated,
+    averaged,
+    months: Array.from(reported).sort(),
+    fillVehicles,
+    covered,
+    disagreements,
+    notListed: Array.from(notListed.values()),
+  };
 }
 
 function gridColumnKind(type: string | undefined): EsgCellKind {
@@ -758,75 +1165,506 @@ function applyHeadcountRows(
 }
 
 /* ------------------------------------------------------------------ *
- * Monthly grids
+ * Monthly figures from dashboard tables
  * ------------------------------------------------------------------ */
 
-function applyMonthlyRows(
+/** The parser's rows of site × month figures (okiru-ai-parser esgMonthlyTables.ts). */
+export const ESG_MONTHLY_FACTS_FIELD = "esg_monthly_rows";
+
+/** Diesel from the company's tanks into vehicles outside its fleet: reported, never gridded. */
+const EXTERNAL_DIESEL_ISSUED = "fleet.external_diesel_issued_litres";
+
+/**
+ * Which grid each monthly measure lands in. `perSite: false` marks the blocks
+ * the workbook keeps as one row (Scope 1C LPG, Scope 1D business cars).
+ * Measures with no grid here (fleet distance) are read and reported, not written.
+ */
+const MONTHLY_MEASURE_GRIDS: Record<string, { prefix: string; perSite: boolean; unit: string; label: string }> = {
+  "fleet.diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.fleetDiesel, perSite: true, unit: "litres", label: "Fleet diesel" },
+  "energy.generator_diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.generatorDiesel, perSite: true, unit: "litres", label: "Generator diesel" },
+  "energy.lpg_kg": { prefix: ESG_MONTHLY_PREFIXES.lpg, perSite: false, unit: "kg", label: "LPG" },
+  "fleet.business_car_petrol_litres": { prefix: ESG_MONTHLY_PREFIXES.businessCars, perSite: false, unit: "litres", label: "Business car fuel" },
+  "energy.electricity_kwh": { prefix: ESG_MONTHLY_PREFIXES.electricity, perSite: true, unit: "kWh", label: "Electricity" },
+  "energy.solar_kwh_generated": { prefix: ESG_MONTHLY_PREFIXES.solar, perSite: true, unit: "kWh", label: "Solar generated" },
+  "water.kl": { prefix: ESG_MONTHLY_PREFIXES.water, perSite: true, unit: "kL", label: "Water" },
+};
+
+/**
+ * Where an unplaced figure goes once a person answers what its document did
+ * not say: which of the company's sites a bill's address is, or which month a
+ * figure is for. The figure, its unit and its grid are known — only the cell
+ * is not — so the answer places it, and nothing is guessed meanwhile.
+ */
+export interface EsgPlacementChoice {
+  /** The figure, by what it says — stable when more documents are added. */
+  id: string;
+  kind: "monthly";
+  /** The E_Data monthly grid, e.g. "s2" for electricity. */
+  prefix: string;
+  /** What the figure is: "Electricity". */
+  measure: string;
+  value: number;
+  unit: string;
+  /** What is still needed: a site row, a month column, or both. */
+  needs: Array<"site" | "month">;
+  /** The month column, when the document stated a month inside the reporting year. */
+  month?: string;
+  /** The site's row, when the document named one of the company's sites (0 for a one-row grid). */
+  siteRow?: number;
+  /** The site as the document names it, shown beside the question. */
+  statedSite?: string;
+}
+
+/** One figure for one month, as one document states it. */
+interface MonthlyFact {
+  /** The parser field it arrived under — what its outcome is recorded against. */
+  field: string;
+  measure: string;
+  site: unknown;
+  periodEnd: unknown;
+  value: number;
+  sources: string[];
+  /** Fields that gave the figure its site and month — a bill's site_name, billing_period_end. */
+  context: string[];
+}
+
+function monthlyFactsFromRows(rows: EsgCalculatorRowLike[]): MonthlyFact[] {
+  return rows.map((row) => ({
+    // A bill read as a row names the field it was read as; a dashboard's
+    // figures are the register itself.
+    field: String(row.cells["monthly.field"] ?? "").trim() || ESG_MONTHLY_FACTS_FIELD,
+    context: String(row.cells["monthly.context"] ?? "").split(",").map((f) => f.trim()).filter(Boolean),
+    measure: String(row.cells["monthly.measure"] ?? ""),
+    site: row.cells["monthly.site"],
+    periodEnd: row.cells["monthly.period_end"],
+    value: Number(row.cells["monthly.value"]),
+    sources: row.sourceFiles ?? [],
+  }));
+}
+
+/** A register of bills, one bill per row, is the same thing as a table of figures. */
+function monthlyFactsFromRowGrid(
   gridField: string,
   rows: EsgCalculatorRowLike[],
   axes: EsgReportingAxes,
-  builder: PatchBuilder,
-  record: (field: string, outcome: EsgFieldOutcome) => void,
-): void {
+): MonthlyFact[] {
   const spec = ESG_ROW_MONTHLY_GRIDS[gridField];
-  let placed = 0;
-  const unaddressed: string[] = [];
-
+  const facts: MonthlyFact[] = [];
   for (const row of rows) {
     const raw = row.cells[spec.valueKey];
     if (raw === undefined) continue;
-
-    const rowIndex = spec.siteKey ? esgDepotRowIndex(row.cells[spec.siteKey], axes) : 0;
-    if (rowIndex === null) {
-      unaddressed.push(`site "${String(row.cells[spec.siteKey ?? ""] ?? "unnamed")}"`);
-      continue;
-    }
-    const month = firstMonthColumn(spec.periodKeys.map((k) => row.cells[k]), axes);
-    if (!month) {
-      unaddressed.push("a billing period outside the workbook's reporting year");
-      continue;
-    }
     const result = normaliseEsgValue("number", raw, null);
     if (!result.ok) continue;
-
-    builder.propose({
-      sectionId: "e-data",
-      cellRef: esgMonthlyCellRef(spec.prefix, rowIndex, month),
-      value: result.value,
-      label: `${spec.valueKey} for ${String(row.cells[spec.siteKey ?? ""] ?? "the site")}`,
+    const periods = spec.periodKeys
+      .map((k) => row.cells[k])
+      .filter((p) => p !== undefined && p !== null && String(p).trim() !== "");
+    facts.push({
       field: gridField,
+      measure: spec.valueKey,
+      site: spec.siteKey ? row.cells[spec.siteKey] : undefined,
+      periodEnd: periods.find((p) => esgMonthColumnFor(p, axes)) ?? periods[0],
+      value: Number(result.value),
       sources: row.sourceFiles ?? [],
+      context: [],
     });
-    placed += 1;
   }
+  return facts;
+}
 
-  if (placed === 0) {
-    record(gridField, {
-      status: "unplaced",
-      cells: [],
-      rejection: "needs_context",
-      reason: unaddressed.length
-        ? `The environmental sheet records this per site per month, and we could not place ${unaddressed[0]} on the workbook's own site and month axes.`
-        : "These rows carried no figure the environmental sheet records.",
-    });
-    return;
-  }
+/** What one document says one part of the company used in one cell's month. */
+interface PartReading {
+  value: number;
+  sources: string[];
+  fields: string[];
+  /** The facts (by index) this reading is made of — what each one's fate follows. */
+  factIds: number[];
+}
 
-  record(gridField, {
-    status: "placed",
-    cells: [],
-    reason: unaddressed.length
-      ? `${unaddressed.length} row(s) named a site or period the workbook does not carry and were left for you to enter.`
-      : undefined,
+/** What became of one figure. */
+/**
+ * A month a document states just outside the reporting year: a bill whose
+ * period ends days before the year begins, which the company may book in the
+ * year's first month. One month either side only — further out is another
+ * year's figure, and is not offered for placing.
+ */
+function adjacentToYear(periodEnd: unknown, axes: EsgReportingAxes): boolean {
+  const stated = /^(\d{4})-(\d{2})/.exec(String(periodEnd ?? ""));
+  if (!stated) return false;
+  return [1, -1].some((shift) => {
+    const moved = new Date(Date.UTC(Number(stated[1]), Number(stated[2]) - 1 + shift, 15));
+    return esgMonthColumnFor(moved.toISOString().slice(0, 10), axes) !== null;
   });
 }
 
-function firstMonthColumn(candidates: unknown[], axes: EsgReportingAxes): string | null {
-  for (const candidate of candidates) {
-    const column = esgMonthColumnFor(candidate, axes);
-    if (column) return column;
+interface MonthlyFactFate {
+  status: "placed" | "unplaced";
+  /** The cell it was proposed for; settling may still contest it. */
+  cellRef?: string;
+  reason?: string;
+  /** Held for want of a site or a month a person can supply. */
+  choice?: EsgPlacementChoice;
+}
+
+const uniq = (items: string[]): string[] => Array.from(new Set(items.filter(Boolean)));
+
+/** Readings that state the same figure are one figure, backed by all their documents. */
+function distinctReadings(readings: PartReading[]): PartReading[] {
+  const byValue = new Map<number, PartReading>();
+  for (const reading of readings) {
+    const key = Math.round(reading.value * 1e4) / 1e4;
+    const same = byValue.get(key);
+    if (same) {
+      same.sources = uniq([...same.sources, ...reading.sources]);
+      same.fields = uniq([...same.fields, ...reading.fields]);
+      same.factIds = [...same.factIds, ...reading.factIds];
+    } else {
+      byValue.set(key, { value: key, sources: uniq(reading.sources), fields: uniq(reading.fields), factIds: [...reading.factIds] });
+    }
   }
-  return null;
+  return Array.from(byValue.values());
+}
+
+/**
+ * Site × month figures → the environmental grids.
+ *
+ * The measure picks the grid, the site picks the row against the workbook's OWN
+ * sites, the month picks the column against its OWN reporting year.
+ *
+ * A cell is made of PARTS — the sites whose figures land in it. In a per-site
+ * grid a cell has one part (its depot); in a one-row grid (LPG, business cars,
+ * or every grid of a workbook that reports "Company wide") each site is a part
+ * and the parts ADD UP. Within one document, figures for the same part add up
+ * too — two meters at one depot are one depot's consumption. Between documents
+ * the same part must AGREE: a difference becomes a conflict for the user, never
+ * a pick. A company total with no site is checked against the parts' sum, and
+ * offered beside it when the two differ.
+ */
+function applyMonthlyFacts(
+  facts: MonthlyFact[],
+  axes: EsgReportingAxes,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): MonthlyFactFate[] {
+  const fates: MonthlyFactFate[] = facts.map(() => ({ status: "unplaced", reason: "Not placed." }));
+  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice): void => {
+    for (const id of ids) fates[id] = { status: "unplaced", reason, ...(choice ? { choice } : {}) };
+  };
+  // The question that places a held figure: its grid and value are known,
+  // its site or month is what the document did not settle.
+  const ask = (
+    fact: MonthlyFact,
+    grid: { prefix: string; unit: string; label: string },
+    needs: Array<"site" | "month">,
+    month: string | null,
+    siteRow?: number,
+  ): EsgPlacementChoice => ({
+    // One figure is its document, measure, period and value — read twice with
+    // its address worded two ways, it is still one figure and one question.
+    id: [fact.sources[0] ?? "", fact.measure, String(fact.periodEnd ?? ""), fact.value].join("|"),
+    kind: "monthly",
+    prefix: grid.prefix,
+    measure: grid.label,
+    value: fact.value,
+    unit: grid.unit,
+    needs,
+    ...(month ? { month } : {}),
+    ...(siteRow !== undefined ? { siteRow } : {}),
+    ...(String(fact.site ?? "").trim() ? { statedSite: String(fact.site).trim() } : {}),
+  });
+  type Cell = {
+    prefix: string;
+    month: string;
+    label: string;
+    parts: Map<string, { label: string; bySource: Map<string, PartReading> }>;
+  };
+  const cells = new Map<string, Cell>();
+  const unknownSites = new Set<string>();
+  const outsideYear = new Set<string>();
+  const noGrid = new Set<string>();
+  /**
+   * Diesel issued to vehicles outside the fleet, by document AND part-month.
+   * Per document: a depot's fuel report and its external-issue detail both
+   * state the same 597 L, and adding the two made 1,194 — which then matched
+   * nothing.
+   */
+  const external = new Map<string, { at: string; value: number; site: string; month: string; sources: string[] }>();
+  let siteless = 0;
+  const fieldsSeen = new Set<string>();
+  const fieldsProposed = new Set<string>();
+
+  /**
+   * Which part of the company a figure is for, and which row it lands on. A
+   * one-row grid takes any site — it only needs to know which figures are the
+   * same site's — while a per-site grid needs the site to be one of the
+   * workbook's own: filing an unrecognised site under the nearest row would
+   * credit one depot with another's consumption.
+   */
+  const locate = (
+    site: unknown,
+    perSite: boolean,
+  ): { rowIndex: number; part: string; label: string } | "siteless" | "unknown" => {
+    const named = String(site ?? "").trim();
+    const oneRow = axes.companyWide === true || !perSite;
+    if (!named) return oneRow ? { rowIndex: 0, part: "", label: "the company" } : "siteless";
+    const match = esgSiteMatch(named, axes.depots);
+    if (typeof match === "number") return { rowIndex: oneRow ? 0 : match, part: `#${match}`, label: axes.depots[match] };
+    if (oneRow) return { rowIndex: 0, part: `~${esgSiteKey(named)}`, label: named };
+    return "unknown";
+  };
+
+  facts.forEach((fact, factId) => {
+    fieldsSeen.add(fact.field);
+    if (fact.measure === EXTERNAL_DIESEL_ISSUED) {
+      hold([factId], "Diesel issued to vehicles outside the fleet is reported, not written to a grid — decide whether it belongs in your Scope 1.");
+      // Never written to a grid — whether it is Scope 1 is the company's call —
+      // but kept to catch the same litres booked as something they are not.
+      const where = locate(fact.site, true);
+      const month = esgMonthColumnFor(fact.periodEnd, axes);
+      if (typeof where === "object" && month && Number.isFinite(fact.value)) {
+        const at = `${where.part}|${month}`;
+        const key = `${fact.sources[0] ?? ""}\u0000${at}`;
+        const prior = external.get(key);
+        if (prior) prior.value += fact.value;
+        else {
+          external.set(key, {
+            at,
+            value: fact.value,
+            site: String(fact.site),
+            month: String(fact.periodEnd ?? "").slice(0, 7),
+            sources: fact.sources,
+          });
+        }
+      }
+      return;
+    }
+    const grid = MONTHLY_MEASURE_GRIDS[fact.measure];
+    if (!grid) {
+      if (fact.measure) noGrid.add(fact.measure);
+      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`);
+      return;
+    }
+    if (!Number.isFinite(fact.value)) {
+      hold([factId], "The figure could not be read as a number.");
+      return;
+    }
+
+    const where = locate(fact.site, grid.perSite);
+    if (where === "siteless") {
+      siteless += 1;
+      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.");
+      return;
+    }
+    const month = esgMonthColumnFor(fact.periodEnd, axes);
+    // A month the document does not state is a question for the user, and so
+    // is one just outside the year (a bill booked a month late); one further
+    // out is another year's figure.
+    const statedMonth = String(fact.periodEnd ?? "").slice(0, 7);
+    const nearYear = !month && Boolean(statedMonth) && adjacentToYear(fact.periodEnd, axes);
+    const year = `${axes.months[0]} to ${axes.months[axes.months.length - 1]}`;
+    if (where === "unknown") {
+      unknownSites.add(String(fact.site));
+      // A zero (no water on an electricity bill) is not a figure worth placing.
+      const answerable = fact.value !== 0 && (Boolean(month) || !statedMonth || nearYear);
+      hold(
+        [factId],
+        `Site "${String(fact.site)}" is not a site this workbook reports on (${axes.depots.join(", ")}). Say which of your sites it is, or add it to the workbook's sites.` +
+          (nearYear ? ` Its period ends in ${statedMonth}, just outside the reporting year (${year}) — say which month your company books it in.` : ""),
+        answerable ? ask(fact, grid, month ? ["site"] : ["site", "month"], month) : undefined,
+      );
+      return;
+    }
+    if (!month) {
+      outsideYear.add(statedMonth);
+      hold(
+        [factId],
+        !statedMonth
+          ? "The figure states no month we could read — say which month it is for."
+          : nearYear
+            ? `${statedMonth} falls just outside the workbook's reporting year (${year}). If your company books it in a month of this year, say which.`
+            : `${statedMonth} falls outside the workbook's reporting year (${year}).`,
+        fact.value !== 0 && (!statedMonth || nearYear) ? ask(fact, grid, ["month"], null, where.rowIndex) : undefined,
+      );
+      return;
+    }
+
+    const cellRef = esgMonthlyCellRef(grid.prefix, where.rowIndex, month);
+    let cell = cells.get(cellRef);
+    if (!cell) {
+      const oneRow = axes.companyWide === true || !grid.perSite;
+      cell = { prefix: grid.prefix, month, label: `${fact.measure} for ${oneRow ? "the company" : where.label}`, parts: new Map() };
+      cells.set(cellRef, cell);
+    }
+    let part = cell.parts.get(where.part);
+    if (!part) {
+      part = { label: where.label, bySource: new Map() };
+      cell.parts.set(where.part, part);
+    }
+    const source = fact.sources[0] ?? "";
+    const reading = part.bySource.get(source);
+    if (reading) {
+      reading.value += fact.value;
+      reading.fields = uniq([...reading.fields, fact.field]);
+      reading.factIds.push(factId);
+    } else part.bySource.set(source, { value: fact.value, sources: [...fact.sources], fields: [fact.field], factIds: [factId] });
+  });
+
+  const notes: string[] = [];
+  const told = new Set<string>();
+  for (const issue of Array.from(external.values())) {
+    // Two documents stating one issue is one issue to tell the user about.
+    const said = `${issue.at}|${Math.round(issue.value * 100)}`;
+    if (told.has(said)) continue;
+    told.add(said);
+    notes.push(
+      `${issue.site}, ${issue.month}: ${Math.round(issue.value * 100) / 100} L of diesel was issued to vehicles outside the fleet. It is not written to a grid — decide whether it belongs in your Scope 1 (it may be invoiced to whoever drove it).`,
+    );
+  }
+
+  for (const [cellRef, cell] of Array.from(cells.entries())) {
+    let whole: PartReading[] = [];
+    const named: Array<{ label: string; options: PartReading[] }> = [];
+    for (const [partId, part] of Array.from(cell.parts.entries())) {
+      const readings: PartReading[] = [];
+      for (const reading of Array.from(part.bySource.values())) {
+        // The same litres a fuel report shows going into outside vehicles,
+        // booked by another document as GENERATOR fuel for that site and
+        // month: road diesel misfiled. Held back with the reason.
+        const issue = cell.prefix === ESG_MONTHLY_PREFIXES.generatorDiesel && partId
+          ? Array.from(external.values()).find(
+            (candidate) => candidate.at === `${partId}|${cell.month}` && Math.abs(candidate.value - reading.value) <= 0.5,
+          )
+          : undefined;
+        if (issue) {
+          const why = `${reading.sources[0] ?? "A document"} books ${Math.round(reading.value * 100) / 100} L as generator diesel for ${issue.site} in ${issue.month}, but ${issue.sources[0] ?? "the fuel report"} shows exactly that diesel issued to vehicles outside the fleet — road diesel, not generator fuel. It was not written; check where it belongs.`;
+          notes.push(why);
+          hold(reading.factIds, why);
+          continue;
+        }
+        readings.push(reading);
+      }
+      const options = distinctReadings(readings);
+      if (options.length === 0) continue;
+      if (partId === "") whole = options;
+      else named.push({ label: part.label, options });
+    }
+
+    const candidates: PartReading[] = [];
+    if (named.length > 0) {
+      const contested = named.filter((part) => part.options.length > 1);
+      if (contested.length > 1) {
+        const why = `${cell.label}, ${cell.month}: documents disagree about ${contested.map((part) => part.label).join(" and ")}, so the total was left for you.`;
+        notes.push(why);
+        hold(named.flatMap((part) => part.options.flatMap((option) => option.factIds)), why);
+      } else {
+        const agreed = named.filter((part) => part.options.length === 1).map((part) => part.options[0]);
+        const base: PartReading = {
+          value: agreed.reduce((sum, reading) => sum + reading.value, 0),
+          sources: uniq(agreed.flatMap((reading) => reading.sources)),
+          fields: uniq(agreed.flatMap((reading) => reading.fields)),
+          factIds: agreed.flatMap((reading) => reading.factIds),
+        };
+        for (const option of contested[0]?.options ?? [{ value: 0, sources: [], fields: [], factIds: [] }]) {
+          candidates.push({
+            value: base.value + option.value,
+            sources: uniq([...base.sources, ...option.sources]),
+            fields: uniq([...base.fields, ...option.fields]),
+            factIds: [...base.factIds, ...option.factIds],
+          });
+        }
+      }
+    }
+    for (const option of whole) {
+      // A stated company total that matches the parts' sum is the same figure.
+      const same = candidates.find((candidate) => Math.abs(candidate.value - option.value) <= 0.5);
+      if (same) {
+        same.sources = uniq([...same.sources, ...option.sources]);
+        same.fields = uniq([...same.fields, ...option.fields]);
+        same.factIds = [...same.factIds, ...option.factIds];
+      } else candidates.push(option);
+    }
+
+    for (const candidate of candidates) {
+      builder.propose({
+        sectionId: "e-data",
+        cellRef,
+        // Summed floats carry noise; four places keep two documents that state
+        // the same figure in agreement.
+        value: Math.round(candidate.value * 1e4) / 1e4,
+        label: cell.label,
+        field: candidate.fields[0] ?? ESG_MONTHLY_FACTS_FIELD,
+        sources: candidate.sources,
+      });
+      for (const field of candidate.fields) fieldsProposed.add(field);
+      for (const id of candidate.factIds) fates[id] = { status: "placed", cellRef };
+    }
+  }
+
+  if (unknownSites.size) {
+    const named = Array.from(unknownSites);
+    const one = named.length === 1;
+    notes.push(
+      `${named.slice(0, 4).map((site) => `site "${site}"`).join(", ")}${named.length > 4 ? ` and ${named.length - 4} more` : ""} ${one ? "is not a site" : "are not sites"} this workbook reports on (${axes.depots.join(", ")}), so ${one ? "its" : "their"} figures were left for you. Add ${one ? "it" : "them"} to the workbook's sites to place ${one ? "it" : "them"}.`,
+    );
+  }
+  if (outsideYear.size) {
+    notes.push(`Figures for ${Array.from(outsideYear).sort().slice(0, 3).join(", ")}${outsideYear.size > 3 ? "…" : ""} fall outside the workbook's reporting year.`);
+  }
+  if (siteless) notes.push(`${siteless} company-wide monthly total(s) have no depot row to go in; the depot figures are used instead.`);
+  if (noGrid.size) notes.push(`Read but not recorded on a grid: ${Array.from(noGrid).join(", ")}.`);
+
+  for (const field of Array.from(fieldsSeen)) {
+    record(field, fieldsProposed.has(field)
+      ? { status: "placed", cells: [], reason: notes.length ? notes.join(" ") : undefined }
+      : {
+        status: "unplaced",
+        cells: [],
+        rejection: "needs_context",
+        reason: notes.join(" ") || "These monthly figures had no grid, site or month in this workbook to go in.",
+      });
+  }
+  return fates;
+}
+
+/**
+ * Each reading's own fate, document by document: a bill's figure, and the
+ * site and period that placed it, are placed when THAT bill's figure was
+ * written — contested when its cell is — and otherwise carry that figure's
+ * own reason. A reading backed by several figures (a dashboard) is placed
+ * when any of them was.
+ */
+function monthlyFactOutcomes(
+  facts: MonthlyFact[],
+  fates: MonthlyFactFate[],
+  contested: ReadonlySet<string>,
+  patches: EsgSectionPatchMap,
+): Record<string, Record<string, EsgFieldOutcome>> {
+  const rank = { placed: 2, conflict: 1, unplaced: 0 } as const;
+  const out: Record<string, Record<string, EsgFieldOutcome>> = {};
+  facts.forEach((fact, i) => {
+    const fate = fates[i];
+    let outcome: EsgFieldOutcome;
+    const written = fate?.cellRef !== undefined ? patches["e-data"]?.cells[fate.cellRef] : undefined;
+    if (fate?.status === "placed" && fate.cellRef && contested.has(fate.cellRef)) {
+      outcome = { status: "conflict", cells: [] };
+    } else if (fate?.status === "placed" && fate.cellRef && written !== undefined) {
+      outcome = { status: "placed", cells: [{ sectionId: "e-data", cellRef: fate.cellRef, value: written }] };
+    } else {
+      outcome = { status: "unplaced", cells: [], rejection: "needs_context", reason: fate?.reason ?? "Not placed." };
+    }
+    const source = fact.sources[0] ?? "";
+    for (const field of [fact.field, ...fact.context]) {
+      // The figure carries the question; its site and period readings follow it.
+      const own = fate?.choice && outcome.status === "unplaced"
+        ? field === fact.field
+          ? { ...outcome, choice: fate.choice }
+          : { ...outcome, partOf: fate.choice.id }
+        : outcome;
+      const bySource = out[field] ?? (out[field] = {});
+      const prior = bySource[source];
+      if (!prior || rank[own.status] > rank[prior.status]) bySource[source] = own;
+    }
+  });
+  return out;
 }
 
 function applyMonthlyScalar(
@@ -839,40 +1677,63 @@ function applyMonthlyScalar(
   builder: PatchBuilder,
   record: (field: string, outcome: EsgFieldOutcome) => void,
 ): void {
+  // The month and the site, each settled from the figure's own document — or
+  // left to the one question a person can answer.
+  let month: string | null = null;
+  let statedPeriod: unknown = null;
+  for (const periodKey of spec.periodKeys) {
+    const periodEntry = byKey.get(periodKey);
+    if (!sharesOneSource(entry, periodEntry)) continue;
+    statedPeriod = statedPeriod ?? periodEntry?.value ?? null;
+    month = esgMonthColumnFor(periodEntry?.value, axes);
+    if (month) break;
+  }
+  let rowIndex: number | null = 0;
+  let siteProblem = "";
+  const siteEntry = spec.siteKey ? byKey.get(spec.siteKey) : undefined;
+  // A company that reports as one row needs no site to place a bill.
+  if (spec.siteKey && !axes.companyWide) {
+    if (!sharesOneSource(entry, siteEntry)) {
+      rowIndex = null;
+      siteProblem = "We could not tell which site this figure belongs to: the site name and the figure did not come from the same single document.";
+    } else {
+      rowIndex = esgDepotRowIndex(siteEntry?.value, axes);
+      if (rowIndex === null) {
+        siteProblem = `"${String(siteEntry?.value ?? "")}" is not one of the sites this workbook reports on (${axes.depots.join(", ")}), and we do not file it under the nearest one.`;
+      }
+    }
+  }
+  const figure = typeof entry.value === "number" && Number.isFinite(entry.value) && entry.value !== 0 ? entry.value : null;
+  const monthAnswerable = month !== null || statedPeriod === null || adjacentToYear(statedPeriod, axes);
+  const grid = MONTHLY_MEASURE_GRIDS[key];
+  const choice: EsgPlacementChoice | undefined =
+    figure !== null && monthAnswerable && (rowIndex === null || month === null)
+      ? {
+        id: [(entry.sourceFiles ?? [])[0] ?? "", key, String(statedPeriod ?? ""), figure].join("|"),
+        kind: "monthly",
+        prefix: spec.prefix,
+        measure: grid?.label ?? cellLabel("e-data", esgMonthlyCellRef(spec.prefix, 0, "C"), key),
+        value: figure,
+        unit: spec.unit,
+        needs: [...(rowIndex === null ? (["site"] as const) : []), ...(month === null ? (["month"] as const) : [])],
+        ...(month ? { month } : {}),
+        ...(rowIndex !== null ? { siteRow: rowIndex } : {}),
+        ...(String(siteEntry?.value ?? "").trim() ? { statedSite: String(siteEntry?.value).trim() } : {}),
+      }
+      : undefined;
   const needsContext = (detail: string): void => {
     record(field, {
       status: "unplaced",
       cells: [],
       rejection: "needs_context",
       reason: `The environmental sheet records this in ${spec.unit} per site per month. ${detail}`,
+      ...(choice ? { choice } : {}),
     });
   };
 
-  let rowIndex = 0;
-  if (spec.siteKey) {
-    const siteEntry = byKey.get(spec.siteKey);
-    if (!sharesOneSource(entry, siteEntry)) {
-      needsContext(
-        "We could not tell which site this figure belongs to: the site name and the figure did not come from the same single document.",
-      );
-      return;
-    }
-    const resolved = esgDepotRowIndex(siteEntry?.value, axes);
-    if (resolved === null) {
-      needsContext(
-        `"${String(siteEntry?.value ?? "")}" is not one of the sites this workbook reports on (${axes.depots.join(", ")}), and we do not file it under the nearest one.`,
-      );
-      return;
-    }
-    rowIndex = resolved;
-  }
-
-  let month: string | null = null;
-  for (const periodKey of spec.periodKeys) {
-    const periodEntry = byKey.get(periodKey);
-    if (!sharesOneSource(entry, periodEntry)) continue;
-    month = esgMonthColumnFor(periodEntry?.value, axes);
-    if (month) break;
+  if (rowIndex === null) {
+    needsContext(siteProblem);
+    return;
   }
   if (!month) {
     needsContext(
