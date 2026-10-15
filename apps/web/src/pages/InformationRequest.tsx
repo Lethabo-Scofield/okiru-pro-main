@@ -123,6 +123,49 @@ const CREATE_SCORECARD_LIGHT_CSS = `
   html.light .bbbee-create-light [class*="text-emerald-200"] {
     color: #047857 !important;
   }
+  html.light .bbbee-create-light [class*="text-violet-300"] {
+    color: #6d28d9 !important;
+  }
+  html.light .bbbee-create-light [class*="text-sky-200"],
+  html.light .bbbee-create-light [class*="text-sky-300"] {
+    color: #0369a1 !important;
+  }
+  html.light .bbbee-create-light [class*="text-amber-300"],
+  html.light .bbbee-create-light [class*="text-amber-400"] {
+    color: #b45309 !important;
+  }
+  html.light .bbbee-create-light [class~="text-white"] {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="text-[#86868b]"],
+  html.light .bbbee-create-light [class*="text-[#a1a1aa]"] {
+    color: #71717a !important;
+  }
+  html.light .bbbee-create-light [class*="bg-[#17151d]"],
+  html.light .bbbee-create-light [class*="bg-[#1d1a14]"],
+  html.light .bbbee-create-light [class*="bg-[#16181c]"],
+  html.light .bbbee-create-light [class*="bg-[#0e0e10]"],
+  html.light .bbbee-create-light [class*="bg-[rgba(255,255,255,"] {
+    background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light .bbbee-setup-shell,
+  html.light .bbbee-create-light .bbbee-upload-detail,
+  html.light .bbbee-create-light .bbbee-document-upload {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="border-violet-"],
+  html.light .bbbee-create-light [class*="border-amber-"] {
+    border-color: #d4d4d8 !important;
+  }
+  html.light .bbbee-create-light [class*="bg-red-"],
+  html.light .bbbee-create-light [class*="bg-emerald-"] {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="text-red-"],
+  html.light .bbbee-create-light [class*="text-emerald-"],
+  html.light .bbbee-create-light [class*="text-violet-100"] {
+    color: #52525b !important;
+  }
   html.light .bbbee-create-light [class*="border-white/"],
   html.light .bbbee-create-light [class*="border-white\\["] {
     border-color: #e4e4e7 !important;
@@ -133,12 +176,30 @@ const CREATE_SCORECARD_LIGHT_CSS = `
   }
   html.light .bbbee-create-light [class*="bg-[#0"],
   html.light .bbbee-create-light [class*="bg-[#1"],
+  html.light .bbbee-create-light [class~="bg-zinc-800"],
+  html.light .bbbee-create-light [class~="bg-zinc-950"],
   html.light .bbbee-create-light [class*="bg-[color:var(--ink"] {
     background-color: #ffffff !important;
   }
   html.light .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
   html.light .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
     background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light [class*="hover:bg-white/"]:hover {
+    background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]),
+  html.light .bbbee-create-light [class*="border-white/"] {
+    border-color: #e4e4e7 !important;
+  }
+  html.light .bbbee-create-light [class*="placeholder-[rgba(255,255,255"]::placeholder {
+    color: #a1a1aa !important;
+  }
+  html.light .bbbee-create-light [class*="focus:border-white/"]:focus {
+    border-color: #a1a1aa !important;
+  }
+  html.light .bbbee-create-light [class*="focus:ring-white/"]:focus {
+    --tw-ring-color: rgba(24,24,27,0.12) !important;
   }
   html.light .bbbee-create-light [class*="hover:text-white"]:hover {
     color: #18181b !important;
@@ -149,6 +210,9 @@ const CREATE_SCORECARD_LIGHT_CSS = `
     background: #ffffff !important;
     border-color: #d4d4d8 !important;
     color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="[color-scheme:dark]"] {
+    color-scheme: light !important;
   }
   html.light .bbbee-create-light input::placeholder,
   html.light .bbbee-create-light textarea::placeholder {
@@ -418,7 +482,7 @@ function SetupShell({
         }
         .setup-reveal { animation: setupReveal 220ms ease-out both; }
       `}</style>
-      <div className="rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+      <div className="bbbee-setup-shell rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
           <div className="mb-8 flex items-center justify-between">
             <span className="text-[12px] font-medium text-[color:var(--body)]">{step}</span>
             {showBack && (
@@ -2545,7 +2609,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       {addingDocuments && workbook && (() => {
         const info = (workbook.sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
         return (
-          <div className="mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
+          <div className="bbbee-upload-detail mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
             <div className="mb-2 flex justify-end">
               <button
                 type="button"
