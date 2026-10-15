@@ -50,7 +50,7 @@ const allowedOrigins = (corsEnv && corsEnv.length > 0)
         "https://okiru-pro.com",
         "https://www.okiru-pro.com",
       ]
-    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
+    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5002", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5002", "http://127.0.0.1:5173"]);
 const corsLogger = createLogger("Cors");
 app.use(cors({
   origin(origin, callback) {

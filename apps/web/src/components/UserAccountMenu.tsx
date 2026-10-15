@@ -93,9 +93,9 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
-          <div className="text-sm font-semibold text-foreground truncate">{display}</div>
+          <div className="text-sm font-semibold text-foreground dark:text-[color:var(--ef-text)] truncate">{display}</div>
           {user?.email ? (
-            <div className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</div>
+            <div className="text-xs text-muted-foreground dark:text-[color:var(--ef-text-muted)] truncate mt-0.5">{user.email}</div>
           ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
