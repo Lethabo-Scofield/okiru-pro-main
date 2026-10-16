@@ -104,6 +104,14 @@ export interface Shareholder {
   isDesignatedGroup: boolean;
   designatedGroupType?: 'youth' | 'orphan' | 'disabled' | 'military';
   
+  /**
+   * Share of THIS holder's stake held by black designated groups / black new
+   * entrants, as a fraction like blackOwnership (toolkit BDG% / BNE%). When
+   * present they are scored as given; the yes/no flags are the fallback.
+   */
+  designatedGroupOwnership?: number;
+  blackNewEntrantOwnership?: number;
+
   // Graduation tracking
   blackNewEntrant?: boolean;
   yearsHeld?: number;                  // For graduation factor calculation
@@ -249,6 +257,13 @@ export interface SkillsData {
   trainingManagerSalary?: number;
   /** Training overhead — capped at 15% of total skills spend each. */
   trainingOverheadCost?: number;
+  /**
+   * Black workforce share per demographic group (AM, CM, IM, AF, CF, IF) and
+   * of black employees with disabilities (PWD), over all employees except
+   * non-executive directors. The toolkit allocates training-manager salary and
+   * overhead to each group by these shares. Filled from Management Control.
+   */
+  workforceShares?: Record<string, number>;
 }
 
 // YES 4 Youth Initiative
@@ -382,6 +397,11 @@ export interface ProcurementData {
   tmpsChoice?: 'supplier_sum' | 'stated';
   /** The TMPS the documents state, when they state one: shown beside the sum. */
   statedTmps?: number | null;
+  /**
+   * Toolkit "Total Procurement Spend + Buffer": the procurement denominator is
+   * the larger of TMPS and the supplier listing × (1 + buffer). Fraction.
+   */
+  tmpsBuffer?: number;
   /** Why the documents' TMPS could not be read (contested / withdrawn), or null. */
   statedTmpsHeld?: string | null;
   suppliers: Supplier[];
@@ -450,6 +470,24 @@ export interface Contribution {
   
   // NEW: Benefit factor for ESD (for NDI scoring)
   benefitFactor?: number;                  // 1x, 3x, or 5x multiplier
+
+  /**
+   * ESD beneficiary facts the toolkit qualifies a contribution on (ESD Data):
+   * current size + black ownership, size + black ownership when first
+   * assisted, flow-through black ownership, and the dates/rates the
+   * lower-interest and shorter-payment factors are computed from.
+   * Ownership values are fractions; dates ISO.
+   */
+  beneficiaryCurrentSize?: 'eme' | 'qse' | 'generic';
+  beneficiaryBlackOwnership?: number;
+  beneficiarySizeWhenFirstAssisted?: 'eme' | 'qse' | 'generic';
+  beneficiaryBlackOwnershipWhenFirstAssisted?: number;
+  beneficiaryFlowThroughOwnership?: number;
+  firstAssistanceDate?: string;
+  primeRate?: number;
+  actualInterestRate?: number;
+  invoiceDate?: string;
+  paymentDate?: string;
 
   // Construction-specific beneficiary flags (Phase 1 wiring — see docs/construction-wiring-spec.md)
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary

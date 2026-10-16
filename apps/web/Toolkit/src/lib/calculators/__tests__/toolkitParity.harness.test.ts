@@ -18,7 +18,12 @@ import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '../../sectors/rcogp-generic';
 import { adaptToolkitCase, type ToolkitCase } from '../../../test/parity/caseAdapter';
 import type { ScorecardResult, BreakdownLine } from '../../types';
 
-const PARITY_DIR = path.resolve(__dirname, '../../../../../../../docs/toolkits/parity');
+// PARITY_DIR points another checkout at one shared set of Excel results;
+// PARITY_TAG keeps its report from overwriting another run's.
+const PARITY_DIR = process.env.PARITY_DIR
+  ? path.resolve(process.env.PARITY_DIR)
+  : path.resolve(__dirname, '../../../../../../../docs/toolkits/parity');
+const REPORT_SUFFIX = process.env.PARITY_TAG ? `.${process.env.PARITY_TAG}` : '';
 const TOLERANCE = 0.005;
 
 type PillarKey = keyof ScorecardResult;
@@ -157,14 +162,14 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic',
     }
 
     const outDir = path.join(PARITY_DIR, 'out');
-    writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({ lines: all, unrepresented }, null, 1));
+    writeFileSync(path.join(outDir, `report${REPORT_SUFFIX}.json`), JSON.stringify({ lines: all, unrepresented }, null, 1));
     const fmt = (n: number | null) => (n === null || Number.isNaN(n) ? '—' : n.toFixed(2));
     const md = [
       '| case | row | line | Excel | ours | diff | |',
       '|---|---|---|---|---|---|---|',
       ...all.map((l) => `| ${l.caseId} | ${l.row} | ${l.label} | ${fmt(l.excel)} | ${fmt(l.ours)} | ${fmt(l.diff)} | ${l.ok ? 'ok' : 'DIFF'}${l.note ? ` (${l.note})` : ''} |`),
     ].join('\n');
-    writeFileSync(path.join(outDir, 'report.md'), md);
+    writeFileSync(path.join(outDir, `report${REPORT_SUFFIX}.md`), md);
 
     const bad = all.filter((l) => !l.ok);
     const summary = `${all.length - bad.length}/${all.length} lines match across ${cases.length} case(s)`;

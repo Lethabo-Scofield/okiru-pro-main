@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateManagementScore } from '../management';
 import type { ManagementResult } from '../management';
 import type { ManagementData, Employee } from '../../types';
+import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '../../sectors/rcogp-generic';
 
 const makeEmployee = (overrides: Partial<Employee> = {}): Employee => ({
   id: '1',
@@ -129,19 +130,28 @@ describe('calculateManagementScore', () => {
       expect(result.rawStats.boardBWOPct).toBe(1.0);
     });
 
-    it('weights board black-female by votingRightsPercent when board voting sums to 100% (live bug: 33% entered → was 0)', () => {
+    const votingBoard = [
+      makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female', votingRightsPercent: 33 }),
+      makeEmployee({ id: '2', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+      makeEmployee({ id: '3', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+      makeEmployee({ id: '4', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+      makeEmployee({ id: '5', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+      makeEmployee({ id: '6', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
+    ];
+
+    it('measures the board by headcount by default, as the Empower toolkit does', () => {
+      // 1 black female of 6 = 16.7% against 25% → 0.67 pt, whatever the voting rights entered.
+      const result = calculateManagementScore(makeManagementData({ employees: votingBoard }));
+      expect(result.boardVotingBWO).toBeCloseTo(0.67, 2);
+    });
+
+    it('weights board black-female by votingRightsPercent when a sector opts in (boardMeasure votingRights)', () => {
       // Black-female director holding 33% of board voting (> 25% target) on a 6-person board.
-      // Voting-weighted → full 1 pt; headcount would dilute to 1/6 ≈ 16.7% → ~0.67.
-      const result = calculateManagementScore(makeManagementData({
-        employees: [
-          makeEmployee({ id: '1', designation: 'Board', race: 'African', gender: 'Female', votingRightsPercent: 33 }),
-          makeEmployee({ id: '2', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
-          makeEmployee({ id: '3', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
-          makeEmployee({ id: '4', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
-          makeEmployee({ id: '5', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
-          makeEmployee({ id: '6', designation: 'Board', race: 'White', gender: 'Male', votingRightsPercent: 13.4 }),
-        ],
-      }));
+      const cfg = {
+        ...RCOGP_GENERIC_CALCULATOR_CONFIG,
+        managementControl: { ...RCOGP_GENERIC_CALCULATOR_CONFIG.managementControl!, boardMeasure: 'votingRights' as const },
+      };
+      const result = calculateManagementScore(makeManagementData({ employees: votingBoard }), cfg);
       expect(result.boardVotingBWO).toBeCloseTo(1, 1); // 33% / 25% target, capped at 1 pt
     });
 

@@ -119,10 +119,9 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     const bo = num(r['BO%']);
     const bdg = num(r['BDG%']);
     const bne = num(r['BNE%']);
-    if (bdg > 0 && Math.abs(bdg - bo) > 1e-9) unrepresented.push(`ownership: holder ${i + 1} designated-group share ${bdg} is a part of its black share ${bo}; our model holds a yes/no flag`);
-    if (bne > 0 && Math.abs(bne - bo) > 1e-9) unrepresented.push(`ownership: holder ${i + 1} new-entrant share ${bne} is a part of its black share ${bo}; our model holds a yes/no flag`);
-    if (r['Loan Date']) unrepresented.push(`ownership: holder ${i + 1} loan date (drives the toolkit's graduation factor); our model holds one entity-level years-held`);
     return {
+      designatedGroupOwnership: bdg,
+      blackNewEntrantOwnership: bne,
       id: `sh${i + 1}`,
       name: String(r['Shareholder'] ?? `Holder ${i + 1}`),
       ownershipType: String(r['Ownership Type'] ?? 'shareholder'),
@@ -218,7 +217,9 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     trainingPrograms,
     yesCandidatesCount: trainingPrograms.filter((t) => t.isYesEmployee).length,
     yesAbsorbedCount: trainingPrograms.filter((t) => t.isYesEmployee && t.isAbsorbed).length,
-    headcount: employees.length,
+    // Toolkit headcount ('Client Information'!D14): every MC row in the period
+    // except non-executive directors.
+    headcount: employees.filter((e) => e.designation !== 'Board').length,
   };
 
   // Procurement
@@ -257,6 +258,8 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
 
   // Enterprise and supplier development
   const esdRows = rows(c, 'tblESDData');
+  const optStr = (v: unknown) => (v == null || v === '' ? undefined : String(v));
+  const optNum = (v: unknown) => (v == null || v === '' ? undefined : num(v));
   const contributions: Contribution[] = esdRows.map((r, i) => ({
     id: `c${i + 1}`,
     beneficiary: String(r['Beneficiary Name'] ?? ''),
@@ -265,7 +268,17 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     amount: num(r['Amount']),
     category: String(r['Pillar']) === 'Supplier Development' ? 'supplier_development' : 'enterprise_development',
     blackBenefitPercent: num(r['Current Black ownership %']) * 100,
-    transactionDate: r['Date of Transaction * (format: dd/mm/yyyy)'] ? String(r['Date of Transaction * (format: dd/mm/yyyy)']) : undefined,
+    transactionDate: optStr(r['Date of Transaction * (format: dd/mm/yyyy)']),
+    beneficiaryCurrentSize: SIZE[String(r['Current Size'])],
+    beneficiaryBlackOwnership: optNum(r['Current Black ownership %']),
+    beneficiarySizeWhenFirstAssisted: SIZE[String(r['Size when first assisted *'])],
+    beneficiaryBlackOwnershipWhenFirstAssisted: optNum(r['Black ownership when first assisted *']),
+    beneficiaryFlowThroughOwnership: optNum(r['Flow through Black ownership %']),
+    firstAssistanceDate: optStr(r['Date of First Assistance (format: dd/mm/yyyy) *']),
+    primeRate: optNum(r['Prime Rate']),
+    actualInterestRate: optNum(r['Actual Interest Rate']),
+    invoiceDate: optStr(r['Invoice date (format: dd/mm/yyyy)']),
+    paymentDate: optStr(r['Payment date (format: dd/mm/yyyy)']),
   }));
   const esd: ESDData = {
     id: 'esd',

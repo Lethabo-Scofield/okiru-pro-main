@@ -749,8 +749,8 @@ export default function ManagementControl() {
                     'Black female employees in senior management': 'seniorBWOPct',
                     'Black employees in middle management': 'middleBlackPct',
                     'Black female employees in middle management': 'middleBWOPct',
-                    'Black employees in junior management (incl. Semi-skilled & Unskilled)': 'juniorBlackPct',
-                    'Black female employees in junior management (incl. Semi-skilled & Unskilled)': 'juniorBWOPct',
+                    'Black employees in junior management': 'juniorBlackPct',
+                    'Black female employees in junior management': 'juniorBWOPct',
                     'Black employees with disabilities': 'disabledBlackPct',
                   };
                   const statsKey = statsKeyByName[sl.name];

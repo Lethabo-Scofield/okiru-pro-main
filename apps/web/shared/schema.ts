@@ -81,6 +81,11 @@ export interface CalculatorConfig {
   managementControl?: {
     maxPoints: number;
     subMinimumPercent?: number;
+    /**
+     * How the board lines measure "black board members": by headcount (the
+     * Empower toolkit, and the default) or by the voting rights entered.
+     */
+    boardMeasure?: 'headcount' | 'votingRights';
     boardBlackTarget?: number;
     boardBlackMaxPts?: number;
     boardBWTarget?: number;

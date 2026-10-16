@@ -47,7 +47,10 @@ function scoreBandPerDemographic(
   bandMaxPts: number,
   eapSet: Partial<Record<DemoGroup, number>>,
   groups: DemoGroup[],
+  genderOf: (e: Employee) => Employee['gender'] = (e) => e.gender,
 ): { score: number; breakdown: EAPGroupBreakdown[] } {
+  // The whole band is the denominator, foreign nationals included; only a black
+  // South African fills a demographic group (toolkit `Black?`).
   const total = emps.length;
   let score = 0;
   const breakdown: EAPGroupBreakdown[] = [];
@@ -55,7 +58,7 @@ function scoreBandPerDemographic(
     const eff = eapSet[g] || 0;
     const subTarget = bandTarget * eff;
     const maxPtsG = bandMaxPts * eff;
-    const count = emps.filter(e => classifyDemographic(e.gender, e.race) === g).length;
+    const count = emps.filter(e => !e.isForeign && classifyDemographic(genderOf(e), e.race) === g).length;
     const actual = total > 0 ? count / total : 0;
     const scoreG = subTarget > 0 ? Math.min((actual / subTarget) * maxPtsG, maxPtsG) : 0;
     score += scoreG;
@@ -162,11 +165,35 @@ function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, _useRcogp: boole
   return rcogpDefault;
 }
 
-const countBlack = (emps: Employee[]): number =>
-  emps.filter(e => isBlackRace(e.race)).length;
+/**
+ * Toolkit `Black?`: African, Coloured or Indian AND not a foreign national.
+ * Foreign nationals still count in every denominator — they are employees —
+ * but never as black. (MC Data: Black? = AND(race ∈ {A,C,I}, Foreign.calcs <> "Yes").)
+ */
+const isBlackSouthAfrican = (e: Employee): boolean => isBlackRace(e.race) && !e.isForeign;
 
-const countBlackWomen = (emps: Employee[]): number =>
-  emps.filter(e => isBlackRace(e.race) && e.gender === 'Female').length;
+/**
+ * Toolkit `Gender [Verified]`: the 7th digit of a 13-digit SA ID number decides
+ * (5-9 male, 1-4 female); a missing, foreign or unreadable ID keeps the entered
+ * gender. The toolkit's combined Other Exec + Senior sheet scores on this, its
+ * separate sheet on the entered gender — reproduced as written.
+ */
+export function verifiedGender(e: Employee): Employee['gender'] {
+  const id = String(e.idNumber ?? '').replace(/\s/g, '');
+  if (!/^\d{13}$/.test(id) || id.slice(10, 12) === '18') return e.gender;
+  const d = id[6];
+  if (d >= '5') return 'Male';
+  if (d > '0') return 'Female';
+  return e.gender;
+}
+
+const countBlack = (emps: Employee[]): number =>
+  emps.filter(isBlackSouthAfrican).length;
+
+const countBlackWomenBy = (genderOf: (e: Employee) => Employee['gender']) => (emps: Employee[]): number =>
+  emps.filter(e => isBlackSouthAfrican(e) && genderOf(e) === 'Female').length;
+
+const countBlackWomen = countBlackWomenBy((e) => e.gender);
 
 function groupByDesignation(employees: Employee[]): Record<string, Employee[]> {
   const groups: Record<string, Employee[]> = {};
@@ -203,6 +230,10 @@ export function calculateManagementScore(
   const employees = data.employees || [];
   const grouped = groupByDesignation(employees);
   const combineExcoSenior = data.combineExcoSenior === true;
+  // The toolkit's combined sheet reads gender from the ID number; its separate
+  // sheet reads the gender entered. Each layout is reproduced as written.
+  const genderOf = combineExcoSenior ? verifiedGender : (e: Employee) => e.gender;
+  const countBW = countBlackWomenBy(genderOf);
   const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
   // QSE scorecards score Senior+Middle+Junior management as ONE combined band
   // against flat 60%/30% targets (no provincial-EAP split). See the isQse branch
@@ -300,28 +331,30 @@ export function calculateManagementScore(
   const semiSkilled = grouped['Semi-skilled'] || [];
   const unskilled = grouped['Unskilled'] || [];
 
-  // Board "exercisable voting rights": weight each board member by their entered
-  // votingRightsPercent when the board's voting shares are an intentionally COMPLETE
-  // distribution (sum ≈ 100%); otherwise fall back to equal-weight headcount. This
-  // connects the previously-orphaned votingRightsPercent input — live bug: a user
-  // entered 33% black-female board voting and scored 0 because the field was never
-  // read. Targets stay the per-sector config values (boardBlackTarget/boardWomenTarget).
+  // Board line. The Empower toolkit measures it by HEADCOUNT — black board
+  // members over all board members — even though the indicator is worded
+  // "exercisable voting rights" and the MC Data sheet collects voting rights
+  // (no formula reads that column). Headcount is the default so the score
+  // matches the toolkit; a sector may set boardMeasure 'votingRights' to weight
+  // each member by the voting rights entered, used only when they add up to a
+  // complete board (≈100%).
+  const boardMeasure = cfg?.boardMeasure ?? 'headcount';
   const boardVotingSum = board.reduce((s, e) => s + (e.votingRightsPercent ?? 0), 0);
-  const useBoardVotingWeights = boardVotingSum >= 99 && boardVotingSum <= 101;
-  const boardBlackVoting = board.reduce((s, e) => s + (isBlackRace(e.race) ? (e.votingRightsPercent ?? 0) : 0), 0);
-  const boardBWVoting = board.reduce((s, e) => s + (isBlackRace(e.race) && e.gender === 'Female' ? (e.votingRightsPercent ?? 0) : 0), 0);
+  const useBoardVotingWeights = boardMeasure === 'votingRights' && boardVotingSum >= 99 && boardVotingSum <= 101;
+  const boardBlackVoting = board.reduce((s, e) => s + (isBlackSouthAfrican(e) ? (e.votingRightsPercent ?? 0) : 0), 0);
+  const boardBWVoting = board.reduce((s, e) => s + (isBlackSouthAfrican(e) && genderOf(e) === 'Female' ? (e.votingRightsPercent ?? 0) : 0), 0);
   const boardBlackPct = useBoardVotingWeights ? boardBlackVoting / boardVotingSum : pctOf(board, countBlack);
-  const boardBWOPct = useBoardVotingWeights ? boardBWVoting / boardVotingSum : pctOf(board, countBlackWomen);
+  const boardBWOPct = useBoardVotingWeights ? boardBWVoting / boardVotingSum : pctOf(board, countBW);
   const execBlackPct = pctOf(execDirs, countBlack);
-  const execBWOPct = pctOf(execDirs, countBlackWomen);
+  const execBWOPct = pctOf(execDirs, countBW);
   const otherExecBlackPct = pctOf(otherExec, countBlack);
-  const otherExecBWOPct = pctOf(otherExec, countBlackWomen);
+  const otherExecBWOPct = pctOf(otherExec, countBW);
   const seniorBlackPct = pctOf(senior, countBlack);
-  const seniorBWOPct = pctOf(senior, countBlackWomen);
+  const seniorBWOPct = pctOf(senior, countBW);
   const middleBlackPct = pctOf(middle, countBlack);
-  const middleBWOPct = pctOf(middle, countBlackWomen);
+  const middleBWOPct = pctOf(middle, countBW);
   const juniorBlackPct = pctOf(junior, countBlack);
-  const juniorBWOPct = pctOf(junior, countBlackWomen);
+  const juniorBWOPct = pctOf(junior, countBW);
   // Employment Equity additional levels percentages
   const skilledTechnicalBlackPct = pctOf(skilledTechnical, countBlack);
   const skilledTechnicalBWOPct = pctOf(skilledTechnical, countBlackWomen);
@@ -330,9 +363,13 @@ export function calculateManagementScore(
   const unskilledBlackPct = pctOf(unskilled, countBlack);
   const unskilledBWOPct = pctOf(unskilled, countBlackWomen);
 
-  const disabledEmps = employees.filter(e => e.isDisabled);
-  const blackDisabledPct = employees.length > 0
-    ? countBlack(disabledEmps) / employees.length
+  // Disabled line: black South African employees with a disability over ALL
+  // employees — every row except non-executive board members (toolkit
+  // Employee? = designation <> "Non-executive Director").
+  const staff = employees.filter(e => normalizeDesignationForScoring(e.designation) !== 'Board');
+  const disabledEmps = staff.filter(e => e.isDisabled);
+  const blackDisabledPct = staff.length > 0
+    ? countBlack(disabledEmps) / staff.length
     : 0;
 
   const boardVotingBlack = clampScore(safeRatio(boardBlackPct, boardBlackTarget, boardBlackMaxPts), boardBlackMaxPts);
@@ -340,23 +377,25 @@ export function calculateManagementScore(
   const execDirectorsBlack = clampScore(safeRatio(execBlackPct, execBlackTarget, execBlackMaxPts), execBlackMaxPts);
   const execDirectorsBWO = clampScore(safeRatio(execBWOPct, execWomenTarget, execBWMaxPts), execBWMaxPts);
 
-  // Junior band combines Junior + Semi-skilled + Unskilled (workbook grouping).
-  const juniorCombined = [...junior, ...semiSkilled, ...unskilled];
+  // Junior band = "Junior Manager" only. The toolkit counts no Semi-skilled or
+  // Unskilled employee in any Management Control band (MC Scorecard K57:K66
+  // filter Designation.calcs = "Junior Manager"); folding them in moved the
+  // junior lines away from the toolkit's.
 
   // Per-demographic band scoring — faithful replica of the workbook MC Scorecard.
   // Black bands split their target across the 6-group effective EAP; black-female
   // bands split across the black-female-only effective set. Scores sum per band.
-  const seniorBlackResult = scoreBandPerDemographic(senior, seniorBlackTarget, seniorMaxPts, effEap, BLACK_GROUPS);
-  const seniorBWResult = scoreBandPerDemographic(senior, seniorBWBandTarget, seniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
-  const middleBlackResult = scoreBandPerDemographic(middle, middleBlackTarget, middleMaxPts, effEap, BLACK_GROUPS);
-  const middleBWResult = scoreBandPerDemographic(middle, middleBWBandTarget, middleBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
-  const juniorBlackResult = scoreBandPerDemographic(juniorCombined, juniorBlackTarget, juniorMaxPts, effEap, BLACK_GROUPS);
-  const juniorBWResult = scoreBandPerDemographic(juniorCombined, juniorBWBandTarget, juniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS);
+  const seniorBlackResult = scoreBandPerDemographic(senior, seniorBlackTarget, seniorMaxPts, effEap, BLACK_GROUPS, genderOf);
+  const seniorBWResult = scoreBandPerDemographic(senior, seniorBWBandTarget, seniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS, genderOf);
+  const middleBlackResult = scoreBandPerDemographic(middle, middleBlackTarget, middleMaxPts, effEap, BLACK_GROUPS, genderOf);
+  const middleBWResult = scoreBandPerDemographic(middle, middleBWBandTarget, middleBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS, genderOf);
+  const juniorBlackResult = scoreBandPerDemographic(junior, juniorBlackTarget, juniorMaxPts, effEap, BLACK_GROUPS, genderOf);
+  const juniorBWResult = scoreBandPerDemographic(junior, juniorBWBandTarget, juniorBWMaxPts, effBfEap, BLACK_FEMALE_GROUPS, genderOf);
 
   // Toolkit toggle: merge Other Executive + Senior into one band (aggregate scoring).
   const combinedExcoSeniorEmps = [...otherExec, ...senior];
   const combinedExcoBlackPct = pctOf(combinedExcoSeniorEmps, countBlack);
-  const combinedExcoBWOPct = pctOf(combinedExcoSeniorEmps, countBlackWomen);
+  const combinedExcoBWOPct = pctOf(combinedExcoSeniorEmps, countBW);
   const combinedExcoBlackMax = otherExecBlackMaxPts + seniorMaxPts;
   const combinedExcoBWMax = otherExecBWMaxPts + seniorBWMaxPts;
 
@@ -376,7 +415,7 @@ export function calculateManagementScore(
     // middle/junior maxPts are 0, so their EAP-split results stay 0.
     const smj = [...senior, ...middle, ...junior];
     const smjBlackPct = pctOf(smj, countBlack);
-    const smjBWOPct = pctOf(smj, countBlackWomen);
+    const smjBWOPct = pctOf(smj, countBW);
     otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);
     otherExecBWOScore = clampScore(safeRatio(otherExecBWOPct, otherExecWomenTarget, otherExecBWMaxPts), otherExecBWMaxPts);
     seniorBlack = clampScore(safeRatio(smjBlackPct, seniorBlackTarget, seniorMaxPts), seniorMaxPts);
@@ -431,12 +470,14 @@ export function calculateManagementScore(
         { name: "Junior Management (NOT AVAILABLE)", target: "0%", weighting: 0, score: 0 },
       ]
     : [
-        { name: "Black employees in senior management", target: `${(seniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: seniorMaxPts, score: seniorBlack },
-        { name: "Black female employees in senior management", target: `${(seniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: seniorBWMaxPts, score: seniorBWO },
+        // Combined layout: senior management is scored inside the other-executive
+        // line, so its own two lines carry no weighting (toolkit Summary C35:C36 "N/A").
+        { name: "Black employees in senior management", target: `${(seniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: combineExcoSenior && !isQse ? 0 : seniorMaxPts, score: seniorBlack, ...(combineExcoSenior && !isQse ? { note: 'Combined with other executive management.' } : {}) },
+        { name: "Black female employees in senior management", target: `${(seniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: combineExcoSenior && !isQse ? 0 : seniorBWMaxPts, score: seniorBWO, ...(combineExcoSenior && !isQse ? { note: 'Combined with other executive management.' } : {}) },
         { name: "Black employees in middle management", target: `${(middleBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: middleMaxPts, score: middleBlack },
         { name: "Black female employees in middle management", target: `${(middleBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: middleBWMaxPts, score: middleBWO },
-        { name: "Black employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorMaxPts, score: juniorBlackScore },
-        { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
+        { name: "Black employees in junior management", target: `${(juniorBlackTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorMaxPts, score: juniorBlackScore },
+        { name: "Black female employees in junior management", target: `${(juniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
       ];
 
   /**
@@ -478,8 +519,8 @@ export function calculateManagementScore(
     { name: "Exercisable voting rights of black female board members", target: `${(boardWomenTarget * 100).toFixed(0)}%`, weighting: boardBWMaxPts, score: boardVotingBWO },
     { name: "Black executive directors", target: `${(execBlackTarget * 100).toFixed(0)}%`, weighting: execBlackMaxPts, score: execDirectorsBlack },
     { name: "Black female executive directors", target: `${(execWomenTarget * 100).toFixed(0)}%`, weighting: execBWMaxPts, score: execDirectorsBWO },
-    { name: "Black other executive management", target: `${(otherExecBlackTarget * 100).toFixed(0)}%`, weighting: otherExecBlackMaxPts, score: otherExecBlackScore },
-    { name: "Black female other executive management", target: `${(otherExecWomenTarget * 100).toFixed(0)}%`, weighting: otherExecBWMaxPts, score: otherExecBWOScore },
+    { name: "Black other executive management", target: `${(otherExecBlackTarget * 100).toFixed(0)}%`, weighting: combineExcoSenior && !isQse ? combinedExcoBlackMax : otherExecBlackMaxPts, score: otherExecBlackScore },
+    { name: "Black female other executive management", target: `${(otherExecWomenTarget * 100).toFixed(0)}%`, weighting: combineExcoSenior && !isQse ? combinedExcoBWMax : otherExecBWMaxPts, score: otherExecBWOScore },
     ...smjSubLines,
     ...skilledTechnicalSubLines,
     { name: "Black employees with disabilities", target: `${(disabledTarget * 100).toFixed(0)}%`, weighting: disabledMaxPts, score: disabledScore },
@@ -514,18 +555,18 @@ export function calculateManagementScore(
     eapProvince: province,
     rawStats: {
       boardBlackPct: pctOf(board, countBlack),
-      boardBWOPct: pctOf(board, countBlackWomen),
+      boardBWOPct: pctOf(board, countBW),
       execBlackPct: pctOf(execDirs, countBlack),
-      execBWOPct: pctOf(execDirs, countBlackWomen),
+      execBWOPct: pctOf(execDirs, countBW),
       otherExecBlackPct: pctOf(otherExec, countBlack),
-      otherExecBWOPct: pctOf(otherExec, countBlackWomen),
+      otherExecBWOPct: pctOf(otherExec, countBW),
       seniorBlackPct: pctOf(senior, countBlack),
-      seniorBWOPct: pctOf(senior, countBlackWomen),
+      seniorBWOPct: pctOf(senior, countBW),
       middleBlackPct: pctOf(middle, countBlack),
-      middleBWOPct: pctOf(middle, countBlackWomen),
+      middleBWOPct: pctOf(middle, countBW),
       juniorBlackPct: pctOf(junior, countBlack),
-      juniorBWOPct: pctOf(junior, countBlackWomen),
-      disabledBlackPct: employees.length > 0 ? countBlack(disabledEmps) / employees.length : 0,
+      juniorBWOPct: pctOf(junior, countBW),
+      disabledBlackPct: blackDisabledPct,
     },
   };
 }
