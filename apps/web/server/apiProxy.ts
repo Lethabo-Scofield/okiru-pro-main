@@ -26,12 +26,11 @@ const PROXIED_PREFIXES = [
   "/api/extract-entities-hybrid",
   "/api/entity-mappings",
   "/api/scorecard",
-  "/api/accuracy",
   "/api/documents",
   "/api/parser-documents",
-  "/api/extract-and-score",
   "/api/manifest",
-  "/api/calculate",
+  /** Extraction → pillarData mapping on apps/api (no scoring: the browser scores). */
+  "/api/calculate-from-extraction",
   "/api/assessments",
   "/api/sectors",
   /** Calculation Review notes live beside the sector rules on apps/api. Without

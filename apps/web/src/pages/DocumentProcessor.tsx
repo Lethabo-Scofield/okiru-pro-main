@@ -27,7 +27,14 @@ import { filterScorecardPillarRows, filterSubMinimumsByScope, sumPillarRows, can
 import { normalizeSectorCodeForExtraction } from '@/lib/bbeeSectorCodes';
 import { BuildPopulateUploadDialog } from '@/components/build/BuildPopulateUploadDialog';
 import { useFoundationSync, clientInfoToToolkitClient, mergeYesIntoSkills, populateAndScore, getPreferredWorkspaceId, loadAssessmentData, toolkitClientToClientInfo, toolkitClientToFinancials, mapClientDataToBuildPillars } from '@/lib/foundationApi';
-import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
+import { useBbeeStore } from '@toolkit/lib/store';
+import {
+  fetchSectorCalculatorConfig,
+  mapExtractionPillarData,
+  scoreExtractionPillarData,
+  toScorecardPreview,
+  type ScorecardPreview,
+} from '@/lib/extractionPillarState';
 import { DevModeBadge } from '@/components/AutoFillButton';
 import {
   lakeTradingOwnership, lakeTradingManagement,
@@ -250,8 +257,8 @@ const REC_MAP: Record<number, string> = {
   5: '80%', 6: '60%', 7: '50%', 8: '10%',
 };
 
-function normalizeUCSResult(
-  apiResult: APIScorecardResult,
+/** The Toolkit scorecard in the legacy flat shape the summary page renders. */
+function toLegacyScorecardResult(
   scorecard: ReturnType<typeof useBbeeStore.getState>['scorecard'],
   options?: { yesTier?: string; yesLevelIncrease?: number },
 ) {
@@ -295,9 +302,7 @@ function normalizeUCSResult(
     finalLevel,
     isDiscounted: scorecard.isDiscounted,
     recognitionLevel: REC_MAP[finalLevel] || scorecard.recognitionLevel || '0%',
-    _source: 'ucs_engine',
-    ontologySnapshot: apiResult.ontologySnapshot,
-    validation: apiResult.validation,
+    _source: 'toolkit_calculators',
   };
 }
 
@@ -1320,7 +1325,7 @@ export default function DocumentProcessor() {
   } | null>(null);
   // Approximate scorecard preview (score-preview step) — non-destructive
   // calculate-from-extraction so the user sees the score BEFORE reviewing.
-  const [approxScore, setApproxScore] = useState<any | null>(null);
+  const [approxScore, setApproxScore] = useState<ScorecardPreview | null>(null);
   const [approxLoading, setApproxLoading] = useState(false);
   const [approxError, setApproxError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -2364,7 +2369,7 @@ export default function DocumentProcessor() {
         totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
       } as YESData);
 
-      const scorecardLegacy = normalizeUCSResult(result.apiResult!, scorecard, {
+      const scorecardLegacy = toLegacyScorecardResult(scorecard, {
         yesTier: yesForLevel.yesTierAchieved,
         yesLevelIncrease: yesForLevel.yesBeeLevelIncrease || 0,
       });
@@ -2582,7 +2587,7 @@ export default function DocumentProcessor() {
         totalYesCost: yesCandidates.reduce((s, c) => s + c.cost, 0),
       } as YESData);
 
-      const scorecardLegacy = normalizeUCSResult(result.apiResult!, scorecard, {
+      const scorecardLegacy = toLegacyScorecardResult(scorecard, {
         yesTier: yesForLevel.yesTierAchieved,
         yesLevelIncrease: yesForLevel.yesBeeLevelIncrease || 0,
       });
@@ -3123,8 +3128,9 @@ export default function DocumentProcessor() {
     );
 
   /**
-   * Approximate scorecard for the score-preview step. Same server mapping the
-   * final Submit uses (calculate-from-extraction), but read-only: nothing is
+   * Approximate scorecard for the score-preview step. The same mapping the
+   * final Submit uses (calculate-from-extraction → mapExtractionPillarData) and
+   * the same scorer (the Toolkit calculator), but read-only: nothing is
    * persisted and the store is not hydrated. Shown BEFORE entity review so the
    * user sees what the score would be as-extracted — and what fixing flagged
    * extractions could recover.
@@ -3162,10 +3168,25 @@ export default function DocumentProcessor() {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || errBody.details || `Scoring returned ${res.status}`);
+        throw new Error(errBody.error || errBody.details || `Mapping returned ${res.status}`);
       }
       const raw = await res.json();
-      setApproxScore(raw.scorecard ?? raw);
+      if (!raw.pillarData) throw new Error('The extraction could not be mapped to pillar data');
+      const calculatorConfig =
+        (await fetchSectorCalculatorConfig(sectorCode, scorecardType)) ?? useBbeeStore.getState().calculatorConfig;
+      if (!calculatorConfig) throw new Error(`No scoring rules loaded for ${sectorCode} ${scorecardType}`);
+      const ci = foundationData?.clientInfo;
+      const scorecard = scoreExtractionPillarData(
+        raw.pillarData,
+        useBbeeStore.getState(),
+        {
+          name: ci?.companyName || companyInfo.name,
+          sectorCode: ci?.sectorCode || companyInfo.sector,
+          registrationNumber: ci?.registrationNumber || companyInfo.registrationNumber,
+        },
+        calculatorConfig,
+      );
+      setApproxScore(toScorecardPreview(scorecard));
     } catch (err) {
       setApproxError(err instanceof Error ? err.message : 'Could not compute the preview score');
       setApproxScore(null);
@@ -5270,8 +5291,8 @@ export default function DocumentProcessor() {
                   ),
                 });
 
-                // Use the new AI-powered endpoint that handles all mapping, normalization,
-                // financial derivation, and scoring in one server-side call
+                // The server maps and normalizes the extraction into pillarData
+                // (and derives missing financials); the Toolkit calculator scores it.
                 const ucsResponse = await fetch(`${API_BASE}/api/calculate-from-extraction`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -5286,23 +5307,17 @@ export default function DocumentProcessor() {
 
                 if (!ucsResponse.ok) {
                   const errBody = await ucsResponse.json().catch(() => ({}));
-                  throw new Error(errBody.error || errBody.details || `UCS returned ${ucsResponse.status}`);
+                  throw new Error(errBody.error || errBody.details || `Mapping returned ${ucsResponse.status}`);
                 }
 
                 const raw = await ucsResponse.json();
-                const apiResult: APIScorecardResult = raw.scorecard ?? raw;
                 const dataQuality = raw.dataQuality;
 
                 // Load calculatorConfig for the sector before hydrating store
                 try {
-                  const cfgRes = await fetch(
-                    `/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`
-                  );
-                  if (cfgRes.ok) {
-                    const cfgData = await cfgRes.json();
-                    if (cfgData.success && cfgData.config) {
-                      useBbeeStore.setState({ calculatorConfig: cfgData.config });
-                    }
+                  const calculatorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
+                  if (calculatorConfig) {
+                    useBbeeStore.setState({ calculatorConfig });
                   }
                 } catch (cfgErr) {
                   console.error('[DocumentProcessor] Failed to load calculatorConfig:', cfgErr);
@@ -5313,132 +5328,21 @@ export default function DocumentProcessor() {
 
                 // Hydrate store with pillar data so Pillar page and Scorecard sub-indicators work
                 if (raw.pillarData) {
-                  const pd = raw.pillarData;
-                  const fin = pd.financials || {};
                   const ci = foundationData?.clientInfo;
                   useBbeeStore.setState({
                     isLoaded: true,
-                    client: {
-                      ...useBbeeStore.getState().client,
-                      name: ci?.companyName || companyInfo.name || useBbeeStore.getState().client.name,
-                      sectorCode: (ci?.sectorCode || companyInfo.sector || useBbeeStore.getState().client.sectorCode) as any,
-                      registrationNumber: ci?.registrationNumber || companyInfo.registrationNumber || '',
-                      revenue: fin.revenue || 0,
-                      npat: fin.npat || 0,
-                      leviableAmount: fin.leviableAmount || 0,
-                    },
-                    ownership: {
-                      ...useBbeeStore.getState().ownership,
-                      shareholders: (pd.shareholders || []).map((s: any, i: number) => ({
-                        id: s.id || `sh-${i}`,
-                        name: s.name || `Shareholder ${i + 1}`,
-                        ownershipType: 'shareholder' as const,
-                        blackOwnership: s.blackOwnership || 0,
-                        blackWomenOwnership: s.blackWomenOwnership || 0,
-                        votingRightsPercent: s.votingRightsPercent || s.blackOwnership || 0,
-                        economicInterestPercent: s.economicInterestPercent || s.blackOwnership || 0,
-                        isDesignatedGroup: s.isDesignatedGroup || false,
-                        designatedGroupType: undefined,
-                        blackNewEntrant: s.blackNewEntrant || false,
-                        yearsHeld: s.yearsHeld || 0,
-                        graduationFactor: undefined,
-                        shares: s.shares || 0,
-                        shareValue: s.shareValue || 0,
-                      })),
-                      companyValue: fin.companyValue || 0,
-                      outstandingDebt: fin.outstandingDebt || 0,
-                      yearsHeld: fin.yearsHeld || 0,
-                    },
-                    management: {
-                      ...useBbeeStore.getState().management,
-                      employees: (pd.employees || []).map((e: any, i: number) => ({
-                        id: e.id || `emp-${i}`,
-                        name: e.name || `Employee ${i + 1}`,
-                        gender: e.gender || 'Male',
-                        race: e.race || 'African',
-                        designation: e.designation || 'Junior',
-                        isDisabled: e.isDisabled || false,
-                        isForeign: e.isForeign || false,
-                      })),
-                    },
-                    skills: {
-                      ...useBbeeStore.getState().skills,
-                      leviableAmount: fin.leviableAmount || 0,
-                      trainingPrograms: (pd.trainingPrograms || []).map((tp: any, i: number) => ({
-                        id: tp.id || `tp-${i}`,
-                        programName: tp.name || tp.programName || `Program ${i + 1}`,
-                        name: tp.name || tp.programName || `Program ${i + 1}`,
-                        learnerName: tp.learnerName || tp.name || '',
-                        categoryCode: tp.categoryCode || 'A',
-                        category: tp.category || 'other',
-                        gender: tp.gender || 'Male',
-                        race: tp.race || 'African',
-                        isDisabled: tp.isDisabled || false,
-                        isForeign: false,
-                        employmentStatus: 'Permanent' as const,
-                        isYesEmployee: tp.isYesEmployee || false,
-                        isCompleted: false,
-                        isAbsorbed: tp.isAbsorbed || false,
-                        transactionDate: '',
-                        courseCost: tp.cost || tp.courseCost || 0,
-                        travelCost: 0, accommodationCost: 0, cateringCost: 0,
-                        stationeryCost: 0, facilityCost: 0, salaryCost: 0, otherCosts: 0,
-                        totalCost: tp.cost || tp.courseCost || 0,
-                        cost: tp.cost || tp.courseCost || 0,
-                        isAbet: false, isMandatory: false,
-                        isBursary: tp.isBursary || tp.category === 'bursary' || false,
-                      })),
-                    },
-                    procurement: {
-                      ...useBbeeStore.getState().procurement,
-                      tmps: fin.tmps || 0,
-                      suppliers: (pd.suppliers || []).map((s: any, i: number) => ({
-                        id: s.id || `sup-${i}`,
-                        name: s.name || `Supplier ${i + 1}`,
-                        beeLevel: s.beeLevel || 0,
-                        blackOwnership: s.blackOwnership || 0,
-                        blackWomenOwnership: s.blackWomenOwnership || 0,
-                        youthOwnership: 0,
-                        disabledOwnership: 0,
-                        enterpriseType: s.enterpriseType || 'generic',
-                        isEmpoweringSupplier: true,
-                        isSupplierDevRecipient: false,
-                        hasThreeYearContract: false,
-                        spend: s.spend || 0,
-                        isForeignSupplier: s.isForeignSupplier || false,
-                      })),
-                    },
-                    esd: {
-                      ...useBbeeStore.getState().esd,
-                      contributions: (pd.contributions || [])
-                        .filter((c: any) => c.category === 'sd' || c.category === 'ed')
-                        .map((c: any, i: number) => ({
-                          id: c.id || `esd-${i}`,
-                          beneficiary: c.beneficiary || `Beneficiary ${i + 1}`,
-                          type: c.type || 'direct_cost',
-                          amount: c.amount || 0,
-                          category: c.category === 'sd' ? 'supplier_development' as const : 'enterprise_development' as const,
-                        })),
-                    },
-                    sed: {
-                      ...useBbeeStore.getState().sed,
-                      contributions: (pd.contributions || [])
-                        .filter((c: any) => c.category === 'sed')
-                        .map((c: any, i: number) => ({
-                          id: c.id || `sed-${i}`,
-                          beneficiary: c.beneficiary || `Beneficiary ${i + 1}`,
-                          type: c.type || 'grant',
-                          amount: c.amount || 0,
-                          category: 'socio_economic' as const,
-                        })),
-                    },
+                    ...mapExtractionPillarData(raw.pillarData, useBbeeStore.getState(), {
+                      name: ci?.companyName || companyInfo.name,
+                      sectorCode: ci?.sectorCode || companyInfo.sector,
+                      registrationNumber: ci?.registrationNumber || companyInfo.registrationNumber,
+                    }),
                   });
                 }
 
                 useBbeeStore.getState()._recalculateAll();
 
                 const { scorecard } = useBbeeStore.getState();
-                const normalised = normalizeUCSResult(apiResult, scorecard);
+                const normalised = toLegacyScorecardResult(scorecard);
 
                 // Log data quality warnings
                 if (dataQuality) {
@@ -5478,7 +5382,7 @@ export default function DocumentProcessor() {
                 toast({ title: "Assessment complete", description: qualityMsg });
 
               } catch (err: any) {
-                console.error('[DocumentProcessor] UCS scorecard generation failed:', err);
+                console.error('[DocumentProcessor] Scorecard generation failed:', err);
                 toast({
                   title: "Scorecard generation failed",
                   description: err.message || 'The calculation service returned an error. Please try again.',

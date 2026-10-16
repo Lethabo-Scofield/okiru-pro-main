@@ -140,7 +140,7 @@ export interface ScenarioSnapshot {
   scorecard: ScorecardResult;
 }
 
-interface PillarState {
+export interface PillarState {
   client: Client;
   ownership: OwnershipData;
   management: ManagementData;
@@ -677,7 +677,7 @@ function flowThroughBlackOwnership(state: PillarState): { voting: number; ei: nu
   return { voting, ei: voting };
 }
 
-function calculateScorecard(
+export function calculateScorecard(
   state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {

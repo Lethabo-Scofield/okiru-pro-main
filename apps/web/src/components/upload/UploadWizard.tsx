@@ -198,8 +198,11 @@ function pillarVisibleForScopes(templatePillarLabel: string, scopes: string[] | 
 
 /**
  * Shape of the JSON returned by POST /api/import/excel (maps 1-to-1 with
- * the API's PipelineResult type).  Field names here MUST match what
- * `buildPipelineResult` actually outputs — do NOT rely on legacy names.
+ * the API's ImportResult type).  Field names here MUST match what
+ * `buildImportResult` actually outputs — do NOT rely on legacy names.
+ *
+ * It is parsed data only: no points, levels or sub-minimums. The browser
+ * scores the mapped pillars with the Toolkit calculators.
  */
 export interface ExtractionApiResult {
   status: 'success' | 'partial_success' | 'partial' | 'failed';
@@ -241,10 +244,6 @@ export interface ExtractionApiResult {
     industryNormUsed?: number;
   };
   ownership: {
-    blackOwnershipPercent?: number;
-    blackFemaleOwnershipPercent?: number;
-    calculatedPoints?: number;
-    subMinimumMet?: boolean;
     shareholders?: Array<{
       name?: string;
       /** Black-ownership percent (0–100), already converted by the API. */
@@ -264,7 +263,6 @@ export interface ExtractionApiResult {
     }>;
   };
   managementControl: {
-    calculatedPoints?: number;
     employees?: Array<{
       name?: string;
       gender?: string;
@@ -280,7 +278,6 @@ export interface ExtractionApiResult {
   };
   skillsDevelopment: {
     leviableAmount?: number;
-    calculatedPoints?: number;
     trainings?: Array<{
       /** API field name is `name` (not `programName`). */
       name?: string;
@@ -302,7 +299,6 @@ export interface ExtractionApiResult {
   };
   preferentialProcurement: {
     tmps?: number;
-    calculatedPoints?: number;
     suppliers?: Array<{
       /** API field name is `supplierName` (not `name`). */
       supplierName?: string;
@@ -319,8 +315,6 @@ export interface ExtractionApiResult {
     }>;
   };
   enterpriseSupplierDevelopment: {
-    calculatedPoints?: number;
-    totalContributions?: number;
     esdList?: Array<{
       beneficiary?: string;
       description?: string;
@@ -333,8 +327,6 @@ export interface ExtractionApiResult {
     }>;
   };
   socioEconomicDevelopment: {
-    calculatedPoints?: number;
-    totalSpend?: number;
     sedList?: Array<{
       beneficiary?: string;
       description?: string;
@@ -350,12 +342,6 @@ export interface ExtractionApiResult {
     entitiesExtracted?: number;
     warnings?: string[];
     errors?: string[];
-  };
-  /** Present in the full PipelineResult but not used by the client mappers. */
-  scorecard?: {
-    beeLevel?: string;
-    recognitionLevelPercent?: number;
-    subMinimumsMet?: boolean;
   };
   /** True when the server's LLM reconciliation pass made corrections. */
   reconciliationApplied?: boolean;

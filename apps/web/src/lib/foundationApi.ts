@@ -10,7 +10,6 @@
 import type { ClientInformationData } from '@/components/build/ClientInformationForm';
 import type { FinancialsData } from '@/components/build/FinancialsForm';
 import { calculateFinancials } from '@/components/build/FinancialsForm';
-import { toFractionOrZero } from '../../../api/pipeline/units/percentage';
 import { lookupIndustryNormPercent } from '@/lib/industryNormLookup';
 import type { FoundationData } from '@/components/build/FoundationStep';
 import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
@@ -27,7 +26,7 @@ import type {
   YESCandidate,
   ScorecardResult,
 } from '@toolkit/lib/types';
-import { useBbeeStore, type APIScorecardResult } from '@toolkit/lib/store';
+import { useBbeeStore } from '@toolkit/lib/store';
 import type { CalculatorConfig } from '@shared/schema';
 import { validateScorecardCriticalInputs } from '@/lib/scorecardCriticalValidation';
 
@@ -559,7 +558,6 @@ export interface PopulateAndScoreResult {
   client?: Client;
   error?: string;
   validationErrors?: string[];
-  apiResult?: APIScorecardResult;
 }
 
 /**
@@ -578,10 +576,9 @@ function validateCriticalEntities(
  * 
  * This function:
  * 1. Validates critical entities are present
- * 2. Hydrates the Zustand store with pillar data (for real-time preview)
- * 3. POSTs to /api/calculate (UCS) for the authoritative scorecard
- * 4. Sets the store's scorecard from the UCS result
- * 5. Returns the ScorecardResult
+ * 2. Hydrates the Zustand store with pillar data
+ * 3. Scores it with the Toolkit calculators (_recalculateAll)
+ * 4. Returns the ScorecardResult
  */
 export async function populateAndScore(
   input: PopulateAndScoreInput
@@ -642,152 +639,22 @@ export async function populateAndScore(
       );
     }
     
-    // Build entity arrays for the UCS API
-    const fin = foundation.financials;
-    const storeState = useBbeeStore.getState();
-    
-    const employees = (storeState.management?.employees || []).map(e => ({
-      name: e.name,
-      race: e.race,
-      gender: e.gender,
-      designation: e.designation,
-      isDisabled: e.isDisabled,
-      isForeign: e.isForeign,
-      annualSalary: e.annualSalary || 0,
-      votingRightsPercent: e.votingRightsPercent || 0,
-    }));
-    
-    const shareholders = (storeState.ownership?.shareholders || []).map(s => ({
-      name: s.name,
-      blackOwnership: s.blackOwnership,
-      blackWomenOwnership: s.blackWomenOwnership,
-      shares: s.shares,
-      shareValue: s.shareValue,
-      yearsHeld: s.yearsHeld,
-      isDesignatedGroup: s.isDesignatedGroup,
-      blackNewEntrant: s.blackNewEntrant,
-    }));
-    
-    const suppliers = (storeState.procurement?.suppliers || []).map(s => ({
-      name: s.name,
-      registrationNumber: s.registrationNumber,
-      vatNumber: s.vatNumber,
-      spend: s.spend,
-      beeLevel: s.beeLevel,
-      blackOwnership: s.blackOwnership,
-      blackWomenOwnership: s.blackWomenOwnership,
-      youthOwnership: s.youthOwnership || 0,
-      disabledOwnership: s.disabledOwnership || 0,
-      enterpriseType: String(s.enterpriseType).toLowerCase() === 'large' ? 'generic' : s.enterpriseType,
-      isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
-      // The 51% / 30% gates compare on ONE convention rather than branching on
-      // magnitude, so a supplier at exactly 1 is not silently promoted to 100%.
-      isBlackOwned51: toFractionOrZero(s.blackOwnership) >= 0.51,
-      isBlackWomanOwned30: toFractionOrZero(s.blackWomenOwnership) >= 0.30,
-      isEME: s.enterpriseType === 'eme',
-      isQSE: s.enterpriseType === 'qse',
-      isForeignSupplier: s.isForeignSupplier,
-    }));
-    
-    const categoryMap: Record<string, 'sd' | 'ed' | 'sed'> = {
-      supplier_development: 'sd',
-      enterprise_development: 'ed',
-      socio_economic: 'sed',
-    };
-    const esdContributions = (storeState.esd?.contributions || []).map(c => ({
-      beneficiary: c.beneficiary,
-      type: c.type,
-      amount: c.amount,
-      category: categoryMap[c.category] || 'ed' as const,
-    }));
-    const sedContributions = (storeState.sed?.contributions || []).map(c => ({
-      beneficiary: c.beneficiary,
-      type: c.type,
-      amount: c.amount,
-      category: 'sed' as const,
-    }));
-    const contributions = [...esdContributions, ...sedContributions];
-    
-    const trainingPrograms = (storeState.skills?.trainingPrograms || []).map(tp => ({
-      id: tp.id,
-      name: tp.programName || tp.name,
-      programName: tp.programName || tp.name,
-      category: tp.category || (
-        tp.categoryCode === 'A' ? 'learnership' :
-        tp.categoryCode === 'C' || tp.categoryCode === 'D' ? 'bursary' :
-        tp.categoryCode === 'E' ? 'internship' :
-        'short_course'
-      ),
-      categoryCode: tp.categoryCode,
-      cost: tp.totalCost || tp.cost ||
-        ((tp.courseCost || 0) + (tp.travelCost || 0) + (tp.accommodationCost || 0) +
-        (tp.cateringCost || 0) + (tp.stationeryCost || 0) + (tp.facilityCost || 0) +
-        (tp.salaryCost || 0) + (tp.otherCosts || 0)),
-      courseCost: tp.courseCost || 0,
-      travelCost: tp.travelCost || 0,
-      accommodationCost: tp.accommodationCost || 0,
-      cateringCost: tp.cateringCost || 0,
-      stationeryCost: tp.stationeryCost || 0,
-      facilityCost: tp.facilityCost || 0,
-      salaryCost: tp.salaryCost || 0,
-      otherCosts: tp.otherCosts || 0,
-      municipality: tp.municipality,
-      isYesEmployee: tp.isYesEmployee || false,
-      isAbsorbed: tp.isAbsorbed || false,
-      race: tp.race,
-      gender: tp.gender,
-      isDisabled: tp.isDisabled || false,
-    }));
-
-    const financials = {
-      revenue: fin.totalRevenue || clientData.revenue || 0,
-      npat: fin.npat || clientData.npat || 0,
-      leviableAmount: fin.leviableAmount || clientData.leviableAmount || 0,
-      tmps: fin.tmps || storeState.procurement?.tmps || 0,
-      headcount: employees.length,
-    };
-    
-    // POST to UCS for the authoritative scorecard
-    const response = await fetch(`${API_BASE}/calculate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        assessmentId: `populate-${Date.now()}`,
-        sectorCode,
-        scorecardType,
-        entityValues: {},
-        employees,
-        shareholders,
-        suppliers,
-        contributions,
-        trainingPrograms,
-        financials,
-      }),
-    });
-    
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      throw new Error(errBody.error || `UCS returned ${response.status}`);
-    }
-    
-    const raw = await response.json();
-    const apiResult: APIScorecardResult = raw.scorecard ?? raw;
-    
-    // Recalculate locally for consistency with frontend calculators
+    // Score with the Toolkit calculators — the only B-BBEE scorer. (This used
+    // to also POST the same data to a server-side copy of the engine, whose
+    // result no screen showed; that copy was deleted.)
     useBbeeStore.getState()._recalculateAll();
-    
+
     return {
       success: true,
       scorecard: useBbeeStore.getState().scorecard,
       client: useBbeeStore.getState().client,
-      apiResult,
     };
     
   } catch (error) {
     console.error('populateAndScore error:', error);
     return {
       success: false,
-      error: `UCS calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Scorecard calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 }
