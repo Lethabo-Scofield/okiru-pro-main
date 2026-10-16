@@ -56,6 +56,9 @@ import {
   type PillarLedger,
   type SectorConfigView,
 } from "@/lib/calcReview/ledger";
+import { buildWorkedScorecard, hasWorkedScorecard } from "@/lib/calcReview/workedScorecard";
+import { RCOGP_GENERIC_DECISIONS } from "@/lib/calcReview/decisions";
+import { WorkedScorecardView } from "@/components/calc-review/WorkedScorecardView";
 
 // ---------------------------------------------------------------------------
 // Notes
@@ -556,7 +559,7 @@ function PillarSection({
 
 export default function CalculationReview() {
   const [sectorCode, setSectorCode] = useState<string>("RCOGP");
-  const [scorecardType, setScorecardType] = useState<string>("QSE");
+  const [scorecardType, setScorecardType] = useState<string>("Generic");
 
   // Named reviewers only — the api holds the allow-list and enforces it on the
   // notes routes too; this only decides whether there is anything to render.
@@ -623,6 +626,21 @@ export default function CalculationReview() {
   const ledger = useMemo(() => (config ? buildLedger(config) : []), [config]);
   const rules = useMemo(() => (config ? levelRules(config) : null), [config]);
 
+  // A scorecard checked line by line against the Empower toolkit shows the
+  // live calculator's own working beside the toolkit's, instead of prose.
+  const verified = hasWorkedScorecard(sectorCode, scorecardType);
+  const worked = useMemo(() => (verified ? buildWorkedScorecard() : null), [verified]);
+  const renderedAnchors = useMemo(() => {
+    const anchors = new Set<string>(["pillar:scorecard"]);
+    for (const p of worked?.pillars ?? []) for (const l of p.lines) anchors.add(l.anchor);
+    for (const d of RCOGP_GENERIC_DECISIONS) anchors.add(`indicator:decision-${d.id}`);
+    return anchors;
+  }, [worked]);
+  const earlierNotes = useMemo(
+    () => (verified ? notes.filter((n) => !renderedAnchors.has(n.anchor)) : []),
+    [verified, notes, renderedAnchors],
+  );
+
   const totalFlags = ledger.reduce(
     (s, p) => s + p.flags.length + p.rows.filter((r) => r.flag).length,
     0,
@@ -666,33 +684,16 @@ export default function CalculationReview() {
             Calculation Review
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Every indicator this system scores, one scorecard at a time, written as a verification
-            professional reads it: what is counted, what it is measured against, and how the
-            weighting points are awarded. The weightings, compliance targets and level table below
-            are read live from the configuration the scoring engine itself uses — not retyped — so
-            nothing here can drift from what a client's scorecard actually does.
+            What Okiru's B-BBEE calculator computes, one scorecard at a time. Every Okiru scorecard
+            is worked out by one calculator; this page runs that same calculator.
           </p>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Rows marked{" "}
-            <span className="font-medium text-amber-600 dark:text-amber-400">Check this</span> are
-            places where the engine makes a decision — a fixed measure, a fallback, a cap or a guard
-            — that should be confirmed against the gazette. Those are the most likely reasons a
-            score does not match the data a client entered. Please record what you find in the note
-            box under each indicator.
+            Scorecards checked against the Empower toolkit show, for every line, Okiru's own
+            arithmetic beside the toolkit's answer for the same company, with the toolkit's cells
+            and formulas. Scorecards not yet checked show a written description of each indicator.
+            Please record what you find in the note box under each line, and give your ruling on
+            each item listed under "Rulings needed".
           </p>
-          <div className="mt-4 max-w-3xl rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm leading-relaxed">
-            <span className="font-medium text-amber-700 dark:text-amber-400">Which calculator this is. </span>
-            Okiru currently scores in two places. This page describes the <em>server</em> scoring
-            engine, which runs when a scorecard is calculated from uploaded documents. The scores a
-            client sees while filling in the toolkit workbook are worked out by a separate copy of
-            the calculators in the browser, and the two do not agree on every indicator. Known
-            differences so far: the browser applies the procurement recognition percentage to
-            supplier spend and the server does not; the browser measures designated-group ownership
-            against the sector's configured target (3% by default) and the server against a fixed 10%; and the browser measures black new entrants
-            against their target while the server awards the full points on the presence of one
-            new entrant. The same client data can therefore score differently depending on which
-            route it took.
-          </div>
         </header>
 
         {/* Scorecard picker */}
@@ -834,18 +835,64 @@ export default function CalculationReview() {
             </Card>
 
             {/* The elements */}
-            <div className="space-y-4">
-              {ledger.map((p, i) => (
-                <PillarSection
-                  key={p.key}
-                  pillar={p}
-                  sectorCode={sectorCode}
-                  scorecardType={scorecardType}
-                  notes={notes}
-                  defaultOpen={i === 0}
-                />
-              ))}
-            </div>
+            {worked ? (
+              <WorkedScorecardView
+                worked={worked}
+                decisions={RCOGP_GENERIC_DECISIONS}
+                renderNotes={(anchor, pillarKey) => (
+                  <NoteThread
+                    anchor={anchor}
+                    pillarKey={pillarKey}
+                    sectorCode={sectorCode}
+                    scorecardType={scorecardType}
+                    notes={notes.filter((n) => n.anchor === anchor)}
+                    compact
+                  />
+                )}
+              />
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm leading-relaxed">
+                  This scorecard has not yet been checked line by line against its Empower toolkit.
+                  The descriptions below say what the calculator does; they are not a worked example.
+                </div>
+                {ledger.map((p, i) => (
+                  <PillarSection
+                    key={p.key}
+                    pillar={p}
+                    sectorCode={sectorCode}
+                    scorecardType={scorecardType}
+                    notes={notes}
+                    defaultOpen={i === 0}
+                  />
+                ))}
+              </div>
+            )}
+
+            {earlierNotes.length > 0 && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="text-lg">Earlier notes on this scorecard</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p className="text-muted-foreground">
+                    Written against the earlier description of each indicator, before this scorecard
+                    was checked against the toolkit. Kept here so none is lost.
+                  </p>
+                  {earlierNotes.map((n) => (
+                    <div key={n.id} className="rounded-md border border-border p-3">
+                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <VerdictBadge verdict={n.verdict} />
+                        <span>{n.authorName ?? "Reviewer"}</span>
+                        <span>{formatWhen(n.updatedAt)}</span>
+                        <span className="font-mono">{n.anchor}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap leading-relaxed">{n.body}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <p className="py-8 text-center text-xs text-muted-foreground">
               Notes are saved against the sector code, the scorecard type and the individual

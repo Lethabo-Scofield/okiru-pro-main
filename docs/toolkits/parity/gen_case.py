@@ -74,7 +74,9 @@ def make(seed, profile="full"):
     rng = random.Random(seed)
     small = profile == "small"
     revenue = rng.randint(60, 900) * 1_000_000
-    npat = round(revenue * rng.uniform(0.02, 0.14))
+    # Some entities trade below a quarter of the industry norm, so the deemed
+    # NPAT rule is exercised; some have a loss year in their history.
+    npat = round(revenue * (rng.uniform(-0.03, 0.01) if rng.random() < 0.25 else rng.uniform(0.02, 0.14)))
     cells = dict(PERIOD_CELLS)
     cells.update({
         "Client Information!C3": f"Parity case {seed}",
@@ -88,9 +90,12 @@ def make(seed, profile="full"):
     })
     for i in range(12):
         cells[f"Client Information!G{4 + i}"] = round(rng.uniform(15_000, 90_000), 2)
+    if rng.random() < 0.4:
+        cells["Skills Toolkit!D6"] = round(rng.uniform(200_000, 900_000), 2)
+        cells["Skills Toolkit!D7"] = round(rng.uniform(20_000, 200_000), 2)
     for i in range(3):
         rev = round(revenue * rng.uniform(0.7, 1.2))
-        cells[f"Financials!C{4 + i}"] = round(rev * rng.uniform(-0.02, 0.15))
+        cells[f"Financials!C{4 + i}"] = round(rev * rng.uniform(-0.04, 0.15))
         cells[f"Financials!E{4 + i}"] = rev
 
     # Ownership
@@ -182,8 +187,8 @@ def make(seed, profile="full"):
             "Size at first procurement": rng.choice(SIZES),
             "Current Black ownership": bo,
             "Current Black Female ownership": round(bo * rng.choice([0, 0.3, 0.5, 1.0]), 4),
-            "Flow through Black ownership": 0,
-            "Black Designated Group  ownership": round(bo * rng.choice([0, 0, 0.5, 1.0]), 4),
+            "Flow through Black ownership": rng.choice([0, 0, 0, 0.6, 0.8]),
+            "Black Designated Group  ownership": round(bo * rng.choice([0, 0, 0.5, 0.9, 1.0]), 4),
             "Supplier development recipient? (Yes/No)2": yn(rng, 0.15),
             "3 year contract in place? (Yes/No)3": yn(rng, 0.2),
             "Spend *": spend,
@@ -204,7 +209,8 @@ def make(seed, profile="full"):
             "Date of First Assistance (format: dd/mm/yyyy) *": d(rng.randint(2019, 2025), rng.randint(1, 12), 1),
             "Black ownership when first assisted *": rng.choice([0.51, 1.0]),
             "Size when first assisted *": rng.choice(['EME', 'QSE']),
-            "Current Black ownership %": rng.choice([0.51, 1.0]), "Current Size": rng.choice(['EME', 'QSE']),
+            "Current Black ownership %": rng.choice([0.3, 0.51, 1.0]), "Current Size": rng.choice(['EME', 'QSE', 'Generic']),
+            "Flow through Black ownership %": rng.choice([0, 0, 0.6]),
             "Contribution Description*": f"Contribution {i + 1}",
             "Date of Transaction * (format: dd/mm/yyyy)": rdate(rng),
             "Contribution Type": rng.choice(simple),
