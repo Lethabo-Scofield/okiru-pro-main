@@ -10,7 +10,6 @@
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:lake": "vitest run pipeline/__tests__/lakeTrading.test.ts",
     "test:arango-calc": "tsx __tests__/accuracy/arangoCalcPathTest.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",

@@ -1,19 +1,19 @@
 /**
- * AI Entity Mapper — Maps Extraction Results to UCS Engine Format
+ * AI Entity Mapper — Maps Extraction Results to the scorecard's entity arrays
  *
- * The UCS engine (calculationEngine.ts) expects specific entity arrays and
- * crossPillarValues. This module:
- *   1. Validates extracted tables against UCS requirements
+ * The scorecard is scored in the browser by the Toolkit calculators; this
+ * module turns raw extraction output into the entity arrays the Toolkit
+ * store is hydrated from (POST /api/calculate-from-extraction). It:
+ *   1. Validates extracted tables against what the scorecard needs
  *   2. Uses AI to fix/normalize malformed data
  *   3. Derives missing financials from available data
- *   4. Returns a UCS-ready payload
+ *   4. Returns the mapped payload — it never scores it
  *
  * This is the bridge between "what the extraction found" and
- * "what the calculation engine needs."
+ * "what the scorecard needs."
  */
 
 import { chatCompletion, fastChatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
-import type { EmployeeInput, ShareholderInput, SupplierInput, ContributionInput, FinancialsInput } from '../rules/calculationEngine.js';
 import { createLogger } from '../../src/logger.js';
 import { toPercentOrZero } from '../units/percentage.js';
 
@@ -22,6 +22,64 @@ const logger = createLogger('AIEntityMapper');
 // ────────────────────────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────────────────────────
+
+export interface EmployeeInput {
+  name?: string;
+  race: string;
+  gender: string;
+  designation: string;
+  isDisabled: boolean;
+  isForeign?: boolean;
+}
+
+export interface ShareholderInput {
+  name: string;
+  blackOwnership: number;
+  blackWomenOwnership: number;
+  shares: number;
+  shareValue: number;
+  yearsHeld?: number;
+  isDesignatedGroup?: boolean;
+  blackNewEntrant?: boolean;
+  votingRightsPercent?: number;
+  economicInterestPercent?: number;
+}
+
+export interface SupplierInput {
+  name: string;
+  spend: number;
+  beeLevel: number;
+  blackOwnership: number;
+  blackWomenOwnership: number;
+  enterpriseType: string;
+  isDesignatedGroup?: boolean;
+  isBlackOwned51?: boolean;
+  isBlackWomanOwned30?: boolean;
+  isEME?: boolean;
+  isQSE?: boolean;
+  isForeignSupplier?: boolean;
+}
+
+export interface ContributionInput {
+  beneficiary: string;
+  type: string;
+  amount: number;
+  // 'unclassified' is counted by no pillar — an unknown SD-vs-ED split is
+  // reported, never guessed.
+  category: 'sd' | 'ed' | 'sed' | 'unclassified';
+  benefitFactor?: number;
+}
+
+export interface FinancialsInput {
+  revenue: number;
+  npat: number;
+  leviableAmount: number;
+  tmps: number;
+  headcount: number;
+  companyValue?: number;
+  outstandingDebt?: number;
+  yearsHeld?: number;
+}
 
 export interface ExtractionOutput {
   entities: Array<{ name: string; value: any; pillar: string; fieldType: string; confidence: number; status: string }>;

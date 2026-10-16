@@ -13,7 +13,7 @@ import { createLogger } from '../logger.js';
 
 const logger = createLogger("Import");
 import { requireAuth } from '../middleware/auth.js';
-import type { PipelineResult } from '../../pipeline/index.js';
+import type { ImportResult } from '../../pipeline/index.js';
 import type { SheetSnippet } from '../../pipeline/excelParser.js';
 import { reconcileExtraction } from '../services/extractionReconciler.js';
 
@@ -26,7 +26,7 @@ const __dirname_compat = typeof __dirname !== 'undefined'
 const WORKER_PATH = path.resolve(__dirname_compat, 'excelParseWorker.cjs');
 
 interface WorkerParseOutput {
-  result: PipelineResult;
+  result: ImportResult;
   snippets: SheetSnippet[];
 }
 
@@ -35,7 +35,7 @@ function runParseInWorker(buffer: Buffer, filename: string): Promise<WorkerParse
     const worker = new Worker(WORKER_PATH, {
       workerData: { buffer: new Uint8Array(buffer), filename },
     });
-    worker.once('message', (msg: { ok: boolean; result?: PipelineResult; snippets?: SheetSnippet[]; error?: string }) => {
+    worker.once('message', (msg: { ok: boolean; result?: ImportResult; snippets?: SheetSnippet[]; error?: string }) => {
       if (msg.ok) resolve({ result: msg.result!, snippets: msg.snippets ?? [] });
       else reject(new Error(msg.error ?? 'Worker parse error'));
     });
@@ -108,17 +108,13 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
       extractionSummary: { sheetsParsed: 0, sheetsTotal: 0, rowsExtracted: 0, entitiesExtracted: 0, warnings: [] as string[], errors: [] as string[] },
       client: { name: '', tradeName: '', address: '', registrationNumber: '', vatNumber: '', financialYearEnd: '', industrySector: '', applicableScorecard: '', applicableCodes: '', certificateNumber: '' },
       financials: { revenue: 0, npat: 0, payroll: 0, leviableAmount: 0, tmpsInclusions: 0, tmpsExclusions: 0, tmps: 0, deemedNpat: 0, deemedNpatUsed: false, industryNormUsed: 0 },
-      ownership: { blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, votingRightsBlack: 0, economicInterestBlack: 0, calculatedPoints: 0, subMinimumMet: false, shareholders: [] },
-      managementControl: { calculatedPoints: 0, employeesCount: 0, blackBoardPercent: 0, blackExecPercent: 0, disabledPercent: 0, employees: [] },
-      skillsDevelopment: { calculatedPoints: 0, subMinimumMet: false, leviableAmount: 0, totalSpendBlack: 0, trainingProgramsCount: 0, trainings: [] },
-      preferentialProcurement: { calculatedPoints: 0, subMinimumMet: false, tmps: 0, recognizedSpend: 0, suppliersCount: 0, suppliers: [] },
-      enterpriseSupplierDevelopment: { calculatedPoints: 0, totalContributions: 0, esdList: [] },
-      socioEconomicDevelopment: { calculatedPoints: 0, totalSpend: 0, sedList: [] },
-      yes: { qualified: false, youthCount: 0, absorbedCount: 0 },
-      scorecard: { pillars: { ownership: 0, managementControl: 0, employmentEquity: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
+      ownership: { shareholders: [] },
+      managementControl: { employeesCount: 0, employees: [] },
+      skillsDevelopment: { leviableAmount: 0, trainingProgramsCount: 0, trainings: [] },
+      preferentialProcurement: { tmps: 0, suppliersCount: 0, suppliers: [] },
+      enterpriseSupplierDevelopment: { esdList: [] },
+      socioEconomicDevelopment: { sedList: [] },
       rawData: { financeRaw: [], ownershipRaw: [], mcRaw: [] },
-      pdfCertificateData: { docNo: '', approvedBy: '', revisionNo: '', lastModified: '', verificationDate: '', analyst: '', signatory: '' },
-      strategyPackSuggestions: [],
       sheetsFound: [] as string[],
       sheetsMatched: [] as unknown[],
       logs: [] as { message: string; type: string; timestamp: string }[],
@@ -143,8 +139,8 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
     const { result: workerResult, snippets } = await runParseInWorker(fileBuffer, excelFile.originalname);
 
     // LLM reconciliation pass — graceful degradation when Azure OpenAI is not
-    // configured or the call fails. Always returns a PipelineResult.
-    let pipelineResult: PipelineResult;
+    // configured or the call fails. Always returns an ImportResult.
+    let pipelineResult: ImportResult;
     try {
       const reconciled = await reconcileExtraction(workerResult, snippets);
       pipelineResult = {
@@ -195,17 +191,13 @@ router.post('/excel', requireAuth, uploadLimiter, upload.array('files', 10), asy
       extractionSummary: { sheetsParsed: 0, sheetsTotal: 0, rowsExtracted: 0, entitiesExtracted: 0, warnings: [], errors: [message] },
       client: { name: '', tradeName: '', address: '', registrationNumber: '', vatNumber: '', financialYearEnd: '', industrySector: '', applicableScorecard: '', applicableCodes: '', certificateNumber: '' },
       financials: { revenue: 0, npat: 0, payroll: 0, leviableAmount: 0, tmpsInclusions: 0, tmpsExclusions: 0, tmps: 0, deemedNpat: 0, deemedNpatUsed: false, industryNormUsed: 0 },
-      ownership: { blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, votingRightsBlack: 0, economicInterestBlack: 0, calculatedPoints: 0, subMinimumMet: false, shareholders: [] },
-      managementControl: { calculatedPoints: 0, employeesCount: 0, blackBoardPercent: 0, blackExecPercent: 0, disabledPercent: 0, employees: [] },
-      skillsDevelopment: { calculatedPoints: 0, subMinimumMet: false, leviableAmount: 0, totalSpendBlack: 0, trainingProgramsCount: 0, trainings: [] },
-      preferentialProcurement: { calculatedPoints: 0, subMinimumMet: false, tmps: 0, recognizedSpend: 0, suppliersCount: 0, suppliers: [] },
-      enterpriseSupplierDevelopment: { calculatedPoints: 0, totalContributions: 0, esdList: [] },
-      socioEconomicDevelopment: { calculatedPoints: 0, totalSpend: 0, sedList: [] },
-      yes: { qualified: false, youthCount: 0, absorbedCount: 0 },
-      scorecard: { pillars: { ownership: 0, managementControl: 0, employmentEquity: 0, skillsDevelopment: 0, preferentialProcurement: 0, enterpriseSupplierDevelopment: 0, socioEconomicDevelopment: 0, yesInitiative: 0, totalPoints: 0 }, beeLevel: 'Non-Compliant', recognitionLevelPercent: 0, blackOwnershipPercent: 0, blackFemaleOwnershipPercent: 0, valueAddingSupplier: 'NO', edBeneficiary: 'NO', edCategory: 'N/A', subMinimumsMet: false, discountedLevel: 'Non-Compliant', isDiscounted: false, yesTier: null },
+      ownership: { shareholders: [] },
+      managementControl: { employeesCount: 0, employees: [] },
+      skillsDevelopment: { leviableAmount: 0, trainingProgramsCount: 0, trainings: [] },
+      preferentialProcurement: { tmps: 0, suppliersCount: 0, suppliers: [] },
+      enterpriseSupplierDevelopment: { esdList: [] },
+      socioEconomicDevelopment: { sedList: [] },
       rawData: { financeRaw: [], ownershipRaw: [], mcRaw: [] },
-      pdfCertificateData: { docNo: '', approvedBy: '', revisionNo: '', lastModified: '', verificationDate: '', analyst: '', signatory: '' },
-      strategyPackSuggestions: [],
       sheetsFound: [],
       sheetsMatched: [],
       logs: [{ message: isProd ? 'Server error during import.' : `Server error: ${error instanceof Error ? error.message : 'Unknown'}`, type: 'error', timestamp: new Date().toISOString() }],

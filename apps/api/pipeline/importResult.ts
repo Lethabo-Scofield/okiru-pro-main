@@ -1,0 +1,251 @@
+/**
+ * A parsed workbook, shaped for POST /api/import/excel — and NOT scored.
+ *
+ * Every B-BBEE score is calculated in the browser by the Toolkit calculators,
+ * from the pillar data the browser maps out of this result. This module used
+ * to be buildPipelineResult(), which also ran a second, server-side copy of the
+ * scoring engine over the same data; nothing the user saw ever came from those
+ * numbers, so the copy was deleted and only the parsed data is returned.
+ */
+import type { ParseResult } from './excelParser.js';
+import type { ImportResult, PipelineLog } from './types.js';
+import { resolveIndustryNorm } from './industryNorms.js';
+import { resolveNpatForTargets } from './npatResolution.js';
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function buildImportResult(parsed: ParseResult, filename: string): ImportResult {
+  const now = new Date().toISOString();
+
+  const revenue = parsed.client.revenue || 0;
+  const npat = parsed.client.npat || 0;
+  const leviableAmount = parsed.client.leviableAmount || 0;
+  const payroll = parsed.client.payroll || leviableAmount || 0;
+  const tmps = parsed.client.tmps || 0;
+  const tmpsInclusions = parsed.client.tmpsInclusions || revenue;
+  const tmpsExclusions = parsed.client.tmpsExclusions || (revenue - tmps);
+
+  // Deemed NPAT is a financial INPUT the browser shows and scores against,
+  // not a score — it stays.
+  const industryNorm = resolveIndustryNorm(parsed.client.industrySector || '', parsed.client.name || '');
+  const npatResolved = resolveNpatForTargets({
+    currentRevenue: revenue,
+    currentNpat: npat,
+    industryNormPercent: industryNorm,
+    priorYears: [],
+  });
+  const deemedNpatUsed = npatResolved.deemedNpatUsed;
+  const deemedNpat = npatResolved.deemedNpat;
+  const actualMargin = revenue > 0 ? (npat / revenue) * 100 : 0;
+
+  const logs: PipelineLog[] = [...parsed.logs];
+  const addLog = (msg: string, type: PipelineLog['type'] = 'info') => {
+    logs.push({ message: msg, type, timestamp: new Date().toISOString() });
+  };
+
+  addLog(`Entity: ${parsed.client.name || filename}`, 'info');
+  addLog(`Sector: ${parsed.client.industrySector || 'Generic'} · Industry norm: ${industryNorm}%`, 'info');
+  addLog(`Revenue: R${(revenue / 1e6).toFixed(2)}M · NPAT: R${(npat / 1e6).toFixed(2)}M · Payroll: R${(leviableAmount / 1e6).toFixed(2)}M · TMPS: R${(tmps / 1e6).toFixed(2)}M`, 'info');
+  if (deemedNpatUsed) {
+    addLog(`Deemed NPAT used: R${(deemedNpat / 1e6).toFixed(2)}M (actual margin ${r2(actualMargin)}% < ${r2(industryNorm * 0.25)}% threshold)`, 'warning');
+  }
+
+  addLog(`Found ${parsed.shareholders.length} shareholders`, parsed.shareholders.length > 0 ? 'success' : 'warning');
+  for (const s of parsed.shareholders.slice(0, 8)) {
+    addLog(`  → ${s.name}: BO ${r2(s.blackOwnership * 100)}%, BWO ${r2(s.blackWomenOwnership * 100)}%`, 'info');
+  }
+  if (parsed.shareholders.length > 8) addLog(`  ... and ${parsed.shareholders.length - 8} more`, 'info');
+
+  addLog(`Found ${parsed.employees.length} employees`, parsed.employees.length > 0 ? 'success' : 'warning');
+  const designations: Record<string, number> = {};
+  for (const e of parsed.employees) { designations[e.designation] = (designations[e.designation] || 0) + 1; }
+  if (Object.keys(designations).length > 0) {
+    addLog(`  → Breakdown: ${Object.entries(designations).map(([k, v]) => `${k}: ${v}`).join(', ')}`, 'info');
+  }
+
+  addLog(`Found ${parsed.trainingPrograms.length} training programmes`, parsed.trainingPrograms.length > 0 ? 'success' : 'warning');
+  if (parsed.trainingPrograms.length > 0) {
+    const blackTraining = parsed.trainingPrograms.filter(t => t.isBlack);
+    const totalCost = parsed.trainingPrograms.reduce((a, t) => a + t.cost, 0);
+    addLog(`  → Black learners: ${blackTraining.length} · Total spend: R${(totalCost / 1e6).toFixed(2)}M`, 'info');
+  }
+
+  addLog(`Found ${parsed.suppliers.length} suppliers`, parsed.suppliers.length > 0 ? 'success' : 'warning');
+  if (parsed.suppliers.length > 0) {
+    const totalSpend = parsed.suppliers.reduce((a, s) => a + s.spend, 0);
+    const levelGroups: Record<number, number> = {};
+    for (const s of parsed.suppliers) { levelGroups[s.beeLevel] = (levelGroups[s.beeLevel] || 0) + 1; }
+    addLog(`  → Total spend: R${(totalSpend / 1e6).toFixed(2)}M · Levels: ${Object.entries(levelGroups).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `L${k}:${v}`).join(', ')}`, 'info');
+  }
+
+  addLog(`Found ${parsed.esdContributions.length} ESD + ${parsed.sedContributions.length} SED contributions`, (parsed.esdContributions.length + parsed.sedContributions.length) > 0 ? 'success' : 'warning');
+
+  const totalEntities = parsed.shareholders.length + parsed.employees.length +
+    parsed.trainingPrograms.length + parsed.suppliers.length +
+    parsed.esdContributions.length + parsed.sedContributions.length;
+
+  let status: ImportResult['status'] = 'failed';
+  if (parsed.success && totalEntities > 0) status = 'success';
+  else if (parsed.success) status = 'partial_success';
+
+  return {
+    status,
+    processedAt: now,
+    sourceFiles: [filename],
+    extractionSummary: {
+      sheetsParsed: parsed.stats.matchedSheets,
+      sheetsTotal: parsed.stats.totalSheets,
+      rowsExtracted: totalEntities,
+      entitiesExtracted: parsed.stats.entitiesExtracted,
+      warnings: parsed.warnings,
+      errors: parsed.errors,
+    },
+
+    client: {
+      name: parsed.client.name || filename.replace(/\.(xlsx?|csv)$/i, ''),
+      tradeName: parsed.client.tradeName || parsed.client.name || '',
+      address: parsed.client.address || '',
+      postalAddress: parsed.client.postalAddress,
+      registrationNumber: parsed.client.registrationNumber || '',
+      vatNumber: parsed.client.vatNumber || '',
+      taxNumber: parsed.client.taxNumber,
+      financialYearEnd: parsed.client.financialYear || '',
+      measurementPeriodStart: parsed.client.measurementPeriodStart,
+      measurementPeriodEnd: parsed.client.measurementPeriodEnd,
+      industrySector: parsed.client.industrySector || 'Generic',
+      applicableScorecard: parsed.client.applicableScorecard || 'Generic',
+      applicableCodes: parsed.client.applicableCodes || 'Revised Codes',
+      sectorCode: parsed.client.sectorCode,
+      eapProvince: parsed.client.eapProvince,
+      numberOfEmployees: parsed.client.numberOfEmployees,
+      contactPerson: parsed.client.contactPerson,
+      contactEmail: parsed.client.contactEmail,
+      contactPhone: parsed.client.contactPhone,
+      certificateNumber: parsed.client.beeCertificateNumber || '',
+      certificateExpiry: parsed.client.beeCertificateExpiry,
+      certificateLevel: parsed.client.beeCertificateLevel,
+      verificationAgency: parsed.client.verificationAgency,
+    },
+
+    financials: {
+      revenue,
+      npat,
+      payroll,
+      leviableAmount,
+      tmpsInclusions: r2(tmpsInclusions),
+      tmpsExclusions: r2(tmpsExclusions),
+      tmps,
+      deemedNpat: r2(deemedNpat),
+      deemedNpatUsed,
+      industryNormUsed: industryNorm,
+    },
+
+    ownership: {
+      shareholders: parsed.shareholders.map(s => ({
+        name: s.name,
+        boPercent: r2(s.blackOwnership * 100),
+        bwoPercent: r2(s.blackWomenOwnership * 100),
+        shares: s.shares || 0,
+        shareValue: s.shareValue || 0,
+        votingRightsPercent: s.votingRightsPercent !== undefined ? r2(s.votingRightsPercent * 100) : undefined,
+        economicInterestPercent: s.economicInterestPercent !== undefined ? r2(s.economicInterestPercent * 100) : undefined,
+        isDesignatedGroup: s.isDesignatedGroup,
+        designatedGroupType: s.designatedGroupType,
+        blackNewEntrant: s.blackNewEntrant,
+        yearsHeld: s.yearsHeld,
+      })),
+    },
+
+    managementControl: {
+      employeesCount: parsed.employees.length,
+      employees: parsed.employees.map(e => ({
+        name: e.name,
+        gender: e.gender,
+        race: e.race,
+        designation: e.designation,
+        disabled: e.isDisabled,
+        idNumber: e.idNumber,
+        isForeign: e.isForeign,
+        province: e.province,
+        hireDate: e.hireDate,
+      })),
+    },
+
+    skillsDevelopment: {
+      leviableAmount,
+      trainingProgramsCount: parsed.trainingPrograms.length,
+      trainings: parsed.trainingPrograms.map(t => ({
+        name: t.name,
+        category: t.category,
+        cost: t.cost,
+        isBlack: t.isBlack,
+        isEmployed: t.isEmployed,
+        learnerName: t.learnerName,
+        race: t.race,
+        gender: t.gender,
+        isDisabled: t.isDisabled,
+        isYesEmployee: t.isYesEmployee,
+        isAbsorbed: t.isAbsorbed,
+        isAbet: t.isAbet,
+        transactionDate: t.transactionDate,
+      })),
+    },
+
+    preferentialProcurement: {
+      tmps,
+      suppliersCount: parsed.suppliers.length,
+      suppliers: parsed.suppliers.map(s => ({
+        supplierName: s.name,
+        level: s.beeLevel,
+        spend: s.spend,
+        blackOwnership: r2(s.blackOwnership * 100),
+        blackWomenOwnership: s.blackWomenOwnership !== undefined ? r2(s.blackWomenOwnership * 100) : undefined,
+        vatNumber: s.vatNumber,
+        enterpriseType: s.enterpriseType,
+        isEmpoweringSupplier: s.isEmpoweringSupplier,
+        isDesignatedGroupSupplier: s.isDesignatedGroupSupplier,
+      })),
+    },
+
+    enterpriseSupplierDevelopment: {
+      esdList: parsed.esdContributions.map(c => ({
+        beneficiary: c.beneficiary,
+        type: c.type,
+        amount: c.amount,
+        category: c.category,
+        description: c.description,
+        blackBenefitPercent: c.blackBenefitPercent,
+        transactionDate: c.transactionDate,
+        jobsCreated: c.jobsCreated,
+      })),
+    },
+
+    socioEconomicDevelopment: {
+      sedList: parsed.sedContributions.map(c => ({
+        beneficiary: c.beneficiary,
+        type: c.type,
+        amount: c.amount,
+        category: c.category,
+        description: c.description,
+        blackBenefitPercent: c.blackBenefitPercent,
+        transactionDate: c.transactionDate,
+      })),
+    },
+
+    rawData: {
+      financeRaw: [`Revenue: ${revenue}`, `NPAT: ${npat}`, `Payroll: ${payroll}`, `TMPS: ${tmps}`],
+      ownershipRaw: parsed.shareholders.map(s => `${s.name}: BO=${r2(s.blackOwnership * 100)}%, BWO=${r2(s.blackWomenOwnership * 100)}%`),
+      mcRaw: parsed.employees.map(e => `${e.name}: ${e.gender}, ${e.race}, ${e.designation}`),
+    },
+
+    sheetsFound: parsed.sheetsFound || [],
+    sheetsMatched: parsed.sheetsMatched || [],
+
+    logs,
+
+    reconciliationApplied: false,
+    reconciliationNotes: [],
+  };
+}

@@ -4,6 +4,13 @@ export interface PipelineLog {
   timestamp: string;
 }
 
+/**
+ * The scored workbook result the deleted server-side engine produced. Nothing
+ * on this server builds one any more (every score is calculated in the
+ * browser by the Toolkit calculators); the type survives because
+ * POST /api/scorecard/generate-summary still formats one a caller sends, and
+ * because ImportResult below is cut from its parsed-data parts.
+ */
 export interface PipelineResult {
   status: 'success' | 'partial_success' | 'failed';
   processedAt: string;
@@ -238,6 +245,53 @@ export interface PipelineResult {
 
   logs: PipelineLog[];
 
+  /** True when the LLM reconciliation pass ran and improved the result. */
+  reconciliationApplied: boolean;
+  /** Human-readable notes describing what the reconciliation step corrected. */
+  reconciliationNotes: string[];
+}
+
+/**
+ * What POST /api/import/excel returns: the workbook's parsed data, unscored.
+ *
+ * The browser maps this into the Toolkit's pillar state and scores it there.
+ * No points, levels, sub-minimums or recognised spend are calculated on this
+ * server — the copy of the engine that used to fill those in is gone.
+ */
+export interface ImportResult {
+  status: PipelineResult['status'];
+  processedAt: string;
+  sourceFiles: string[];
+  extractionSummary: PipelineResult['extractionSummary'];
+  client: PipelineResult['client'];
+  financials: PipelineResult['financials'];
+  ownership: {
+    shareholders: PipelineResult['ownership']['shareholders'];
+  };
+  managementControl: {
+    employeesCount: number;
+    employees: PipelineResult['managementControl']['employees'];
+  };
+  skillsDevelopment: {
+    leviableAmount: number;
+    trainingProgramsCount: number;
+    trainings: PipelineResult['skillsDevelopment']['trainings'];
+  };
+  preferentialProcurement: {
+    tmps: number;
+    suppliersCount: number;
+    suppliers: PipelineResult['preferentialProcurement']['suppliers'];
+  };
+  enterpriseSupplierDevelopment: {
+    esdList: PipelineResult['enterpriseSupplierDevelopment']['esdList'];
+  };
+  socioEconomicDevelopment: {
+    sedList: PipelineResult['socioEconomicDevelopment']['sedList'];
+  };
+  rawData: PipelineResult['rawData'];
+  sheetsFound: string[];
+  sheetsMatched: PipelineResult['sheetsMatched'];
+  logs: PipelineLog[];
   /** True when the LLM reconciliation pass ran and improved the result. */
   reconciliationApplied: boolean;
   /** Human-readable notes describing what the reconciliation step corrected. */
