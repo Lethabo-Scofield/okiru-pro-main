@@ -144,6 +144,19 @@ export function ProductWorkspace({ product }: { product: Product }) {
     void fetchClients();
   }, [fetchClients]);
 
+  useEffect(() => {
+    let previous: string | null = null;
+    try { previous = sessionStorage.getItem('okiru-last-product'); } catch { /* ignore */ }
+    const eventType = previous && previous !== product ? 'product_switched' : 'product_opened';
+    try { sessionStorage.setItem('okiru-last-product', product); } catch { /* ignore */ }
+    void fetch(`${API_BASE}/api/activity/product`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productCode: product, eventType }),
+    }).catch(() => undefined);
+  }, [product]);
+
   const companies = useMemo<Company[]>(
     () =>
       clients

@@ -12,6 +12,7 @@ const userSchema = new Schema({
   organizationId: { type: String, default: null },
   profilePicture: { type: String, default: null },
   isDemo: { type: Boolean, default: false },
+  lastLoginAt: { type: Date, default: null, index: true },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "users" });
 
@@ -482,6 +483,38 @@ processorSessionSchema.set("toJSON", {
 
 export const UserModel = mongoose.model("User", userSchema);
 export const OrganizationModel = mongoose.model("Organization", organizationSchema);
+
+const PRODUCT_CODES = ["esg", "bbbee", "certificates"] as const;
+
+const userProductInterestSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  userId: { type: String, required: true, index: true },
+  productCode: { type: String, enum: PRODUCT_CODES, required: true, index: true },
+  isInitialSelection: { type: Boolean, default: false, index: true },
+  selectedAt: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now },
+}, { collection: "user_product_interests" });
+userProductInterestSchema.index({ userId: 1, isInitialSelection: 1 });
+
+const userActivityEventSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  userId: { type: String, required: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  companyId: { type: String, default: null, index: true },
+  eventType: { type: String, required: true, index: true },
+  productCode: { type: String, enum: [...PRODUCT_CODES, null], default: null, index: true },
+  sessionId: { type: String, default: null, index: true },
+  dedupeKey: { type: String, default: null, unique: true, sparse: true },
+  metadata: { type: Schema.Types.Mixed, default: {} },
+  createdAt: { type: Date, default: Date.now, index: true },
+}, { collection: "user_activity_events" });
+userActivityEventSchema.index({ userId: 1, createdAt: -1 });
+userActivityEventSchema.index({ organizationId: 1, createdAt: -1 });
+userActivityEventSchema.index({ eventType: 1, productCode: 1, createdAt: -1 });
+userActivityEventSchema.index({ productCode: 1, createdAt: -1 });
+
+export const UserProductInterestModel = mongoose.models.UserProductInterest || mongoose.model("UserProductInterest", userProductInterestSchema);
+export const UserActivityEventModel = mongoose.models.UserActivityEvent || mongoose.model("UserActivityEvent", userActivityEventSchema);
 export const ClientModel = mongoose.model("Client", clientSchema);
 export const FinancialYearModel = mongoose.model("FinancialYear", financialYearSchema);
 export const ShareholderModel = mongoose.model("Shareholder", shareholderSchema);
