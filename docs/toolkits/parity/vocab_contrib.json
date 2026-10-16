@@ -1,0 +1,42 @@
+{
+ "tblSDContributions": [
+  "Grant Contribution",
+  "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
+  "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiary",
+  "Interest free loan with no security requirements",
+  "Standard Loan to Enterprise and Supplier Development beneficiaries",
+  "Guarantees provided on behalf of Enterprise and Supplier Development beneficiaries",
+  "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+  "Minority Investment in Enterprise and Supplier Development beneficiaries",
+  "Minority Investment in Enterprise and Supplier Development beneficiaries",
+  "Enterprise and Supplier Development Investment with lower dividend to fanacier",
+  "Professional services rendered at no cost and supporting Enterprise and Supplier Development beneficiaries",
+  "Professional services rendered at discount and supporting Enterprise and Supplier Development beneficiaries",
+  "Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries",
+  "Shorter payment periods for Enterprise and Supplier Development beneficiaries"
+ ],
+ "tblEDContributions": [
+  "Grant Contribution",
+  "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
+  "Discounts in addition to normal business practice supporting Enterprise and Supplier Development beneficiaries",
+  "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries",
+  "Interest free loan with no security requirements",
+  "Standard Loan to Enterprise and Supplier Development beneficiaries",
+  "Guarantees provided on behalf of an Enterprise and Supplier Development beneficiaries",
+  "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+  "Minority Investment in an Enterprise and Supplier Development beneficiaries",
+  "Enterprise and Supplier Development Investment with lower dividend to fanacier",
+  "Professional services rendered at no cost and supporting Enterprise and Supplier Development beneficiaries",
+  "Professional services rendered at discount and supporting Enterprise and Supplier Development beneficiaries",
+  "Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries"
+ ],
+ "tblSEDContributions": [
+  "Grant Contribution",
+  "Direct Cost incurred in support of Socioeconomic Development beneficiaries",
+  "Discounts in addition to normal business practice supporting Socioeconomic Development beneficiaries",
+  "Overhead costs incurred in supporting Socioeconomic Development beneficiaries",
+  "Professional services rendered at no cost and supporting Socioeconomic Development beneficiaries",
+  "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
+  "Time of employees productively deployed in assisting Socioeconomic Development beneficiaries"
+ ]
+}
