@@ -10,7 +10,7 @@
  * able to show its working, so this opens the actual PDF beside the row it
  * filled in.
  *
- * The file is fetched through /api/certificates/:id/view, which returns a
+ * The file is fetched through /internal/records/:id/view, which returns a
  * short-lived signed URL rather than the bytes. The URL is deliberately not
  * kept: it expires in minutes, and re-asking is cheaper than reasoning about a
  * stale one.
@@ -43,7 +43,7 @@ export function CertificatePreview({ certificateId, supplierName, matchedName, o
   const load = useCallback(async (id: string) => {
     setState({ kind: "loading" });
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(id)}/view`, {
+      const res = await fetch(`/internal/records/${encodeURIComponent(id)}/view`, {
         credentials: "include",
       });
       const body = await res.json().catch(() => ({}));

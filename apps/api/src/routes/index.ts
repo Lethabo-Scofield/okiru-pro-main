@@ -42,6 +42,7 @@ import onboardingRouter from './onboarding.js';
 import adminUsersRouter from './adminUsers.js';
 import adminAnalyticsRouter from './adminAnalytics.js';
 import feedbackRouter from './feedback.js';
+import userActivityRouter from './userActivity.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -135,6 +136,10 @@ export async function registerRoutes(
 
   // Company onboarding (shared session cookie with web)
   app.use('/api/onboarding', onboardingRouter);
+
+  // Product interest and authenticated usage telemetry. Admin paths are
+  // protected inside the router and are intentionally separate from GA.
+  app.use('/api', userActivityRouter);
 
   // Client routes
   app.use('/api/clients', clientsRouter);

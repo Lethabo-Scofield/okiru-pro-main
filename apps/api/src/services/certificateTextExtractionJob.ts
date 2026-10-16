@@ -13,6 +13,7 @@ import {
   type CertificateExtractionMode,
   type CertificateExtractionStatus,
   MIN_USEFUL_EXTRACTED_TEXT_LENGTH,
+  storedCertificateText,
   extractionStatusForText,
   hasUsefulExtractedText,
   usefulExtractedTextLength,
@@ -608,7 +609,10 @@ export async function runCertificateTextExtractionRetryJob(
           extractionError: extracted.status === 'completed' ? null : failureReason,
           extractedAt: new Date(),
         };
-        if (extracted.text.trim()) set.extractedText = extracted.text.substring(0, 4000);
+        if (extracted.text.trim()) set.extractedText = storedCertificateText(extracted.text);
+        set.textExtractionStatus = extracted.status;
+        set.metadataStatus = extracted.status === 'completed' ? 'pending' : 'pending_text_recovery';
+        set.enrichmentStatus = 'pending';
 
         try {
           await withMetadataUpdateTimeout(
@@ -687,6 +691,9 @@ export async function runCertificateTextExtractionRetryJob(
               {
                 $set: {
                   extractionStatus: nextStatus,
+                  textExtractionStatus: nextStatus,
+                  metadataStatus: 'pending_text_recovery',
+                  enrichmentStatus: 'pending',
                   extractionMode: 'failed',
                   extractionError: reason,
                   extractedTextLength: 0,

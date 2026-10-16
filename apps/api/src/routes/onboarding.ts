@@ -5,9 +5,27 @@ import { storage } from '../../storage.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createLogger } from '../logger.js';
 import { mongoose } from '../../db.js';
+import { isProductCode, recordUserActivity, saveInitialProductInterest } from '../services/userActivity.js';
 
 const logger = createLogger("Onboarding");
 const router = Router();
+
+router.post('/product', requireAuth, requireMongo, async (req: Request, res: Response) => {
+  const productCode = req.body?.productCode;
+  if (!isProductCode(productCode)) {
+    return res.status(400).json({ message: "Select a valid product" });
+  }
+  const userId = String(req.session.userId!);
+  await saveInitialProductInterest(userId, productCode);
+  await recordUserActivity(req, {
+    eventType: "product_selected",
+    productCode,
+    userId,
+    metadata: { source: "onboarding" },
+    dedupeKey: `user_product_selection:${userId}:${productCode}`,
+  });
+  return res.json({ productCode, saved: true });
+});
 
 const MAX_LEN = 500;
 

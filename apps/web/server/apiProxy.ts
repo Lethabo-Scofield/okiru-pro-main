@@ -7,6 +7,7 @@
  */
 
 import http from "http";
+import https from "node:https";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createLogger } from "./logger";
 
@@ -37,6 +38,10 @@ const PROXIED_PREFIXES = [
   "/api/sectors",
   "/api/processor-sessions",
   "/api/certificates",
+  "/api/cert-registry",
+  "/api/compliance-files",
+  "/internal/data-hub",
+  "/internal/records",
   /** Toolkit Excel import lives on the API app (`apps/api`); without this, requests hit the SPA and return HTML. */
   "/api/import",
   /** Admin traffic analytics (GA4 + Search Console) live on the API app. */
@@ -86,14 +91,24 @@ export function proxyTargetFor(path: string): string {
 }
 
 function proxyRequest(req: Request, res: Response): void {
+  const upstreamOriginalUrl = req.originalUrl.replace(/^\/api\/cert-registry(?=\/|\?|$)/, "/api/certificates");
+  const upstreamUrl = upstreamOriginalUrl
+    .replace(/^\/api\/compliance-files(?=\/|\?|$)/, "/api/certificates")
+    .replace(/^\/internal\/data-hub(?=\/|\?|$)/, "/api/certificates")
+    .replace(/^\/internal\/records(?=\/|\?|$)/, "/api/certificates");
+  const upstreamPath = req.path
+    .replace(/^\/api\/cert-registry(?=\/|$)/, "/api/certificates")
+    .replace(/^\/api\/compliance-files(?=\/|$)/, "/api/certificates")
+    .replace(/^\/internal\/data-hub(?=\/|$)/, "/api/certificates")
+    .replace(/^\/internal\/records(?=\/|$)/, "/api/certificates");
   const publicCertificateRead =
     process.env.NODE_ENV !== "production" &&
     req.method === "GET" &&
-    (req.path === "/api/certificates" ||
-      req.path === "/api/certificates/stats" ||
-      req.path.startsWith("/api/certificates/by-slug/"));
-  const targetBase = publicCertificateRead ? CERTIFICATE_READ_BASE : proxyTargetFor(req.path);
-  const url = new URL(req.originalUrl, targetBase);
+    (upstreamPath === "/api/certificates" ||
+      upstreamPath === "/api/certificates/stats" ||
+      upstreamPath.startsWith("/api/certificates/by-slug/"));
+  const targetBase = publicCertificateRead ? CERTIFICATE_READ_BASE : proxyTargetFor(upstreamPath);
+  const url = new URL(upstreamUrl, targetBase);
 
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
@@ -123,20 +138,20 @@ function proxyRequest(req: Request, res: Response): void {
     headers["x-okiru-demo-role"] = session.userData?.role || "admin";
   }
 
-  const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
+  const isHybridExtract = upstreamPath.startsWith("/api/extract-entities-hybrid");
   // The ESG routes mount the same operations one segment deeper
   // (/api/parser/esg/resolve-case-files-stream), so match on the operation
   // rather than the exact prefix. Without this an ESG read the user has PAID
   // for is cut off at the 120s default — the one place a timeout costs money.
-  const isParserExtraction = /^\/api\/parser\/(esg\/)?(resolve-case-files|resolve-file)/.test(req.path);
+  const isParserExtraction = /^\/api\/parser\/(esg\/)?(resolve-case-files|resolve-file)/.test(upstreamPath);
   // Pricing a big evidence pack inspects every file; give it the long budget too
   // so it can't be cut off at the 120s default mid-scan.
-  const isParserQuote = /^\/api\/parser\/(esg\/)?quote-files/.test(req.path);
+  const isParserQuote = /^\/api\/parser\/(esg\/)?quote-files/.test(upstreamPath);
   // A paid fresh read of one library document (and its pricing) runs the full
   // extraction chain through apps/api — cut off at 120s, the user is charged
   // for a read whose result never reaches them.
-  const isPaidReread = /^\/api\/parser-documents\/[^/]+\/reread(\/quote)?$/.test(req.path);
-  const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || isPaidReread || req.path.startsWith("/api/import");
+  const isPaidReread = /^\/api\/parser-documents\/[^/]+\/reread(\/quote)?$/.test(upstreamPath);
+  const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || isPaidReread || upstreamPath.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,
@@ -146,7 +161,12 @@ function proxyRequest(req: Request, res: Response): void {
     timeout: isLongRunning ? 600_000 : 120_000,
   };
 
-  const proxyReq = http.request(options, (proxyRes) => {
+  // A target can be https (the dev certificate read goes to the production site).
+  // The plain http module would hit port 80, get a 301 to https, and hand that
+  // redirect to the browser, which then blocks it on CORS - so the Hub showed
+  // "0 certificates" in development. Use the module that matches the target.
+  const transport = url.protocol === "https:" ? https : http;
+  const proxyReq = transport.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
     proxyRes.pipe(res, { end: true });
   });

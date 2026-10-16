@@ -101,12 +101,12 @@ function buildSectionSummary(sections: WorkbookSectionsInput) {
 const CREATE_SCORECARD_LIGHT_CSS = `
   html.light .bbbee-create-light {
     --ink: #ffffff;
-    --ink-2: rgba(255,255,255,0.9);
-    --ink-3: rgba(255,255,255,0.82);
+    --ink-2: #fafafa;
+    --ink-3: #ffffff;
     --body: #52525b;
     --muted: #71717a;
-    --rule: rgba(24,24,27,0.1);
-    --rule-strong: rgba(24,24,27,0.18);
+    --rule: #e4e4e7;
+    --rule-strong: #d4d4d8;
     color: #18181b;
   }
   html.light .bbbee-create-light [class~="text-white"]:not([class*="bg-"]) {
@@ -123,22 +123,83 @@ const CREATE_SCORECARD_LIGHT_CSS = `
   html.light .bbbee-create-light [class*="text-emerald-200"] {
     color: #047857 !important;
   }
+  html.light .bbbee-create-light [class*="text-violet-300"] {
+    color: #6d28d9 !important;
+  }
+  html.light .bbbee-create-light [class*="text-sky-200"],
+  html.light .bbbee-create-light [class*="text-sky-300"] {
+    color: #0369a1 !important;
+  }
+  html.light .bbbee-create-light [class*="text-amber-300"],
+  html.light .bbbee-create-light [class*="text-amber-400"] {
+    color: #b45309 !important;
+  }
+  html.light .bbbee-create-light [class~="text-white"] {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="text-[#86868b]"],
+  html.light .bbbee-create-light [class*="text-[#a1a1aa]"] {
+    color: #71717a !important;
+  }
+  html.light .bbbee-create-light [class*="bg-[#17151d]"],
+  html.light .bbbee-create-light [class*="bg-[#1d1a14]"],
+  html.light .bbbee-create-light [class*="bg-[#16181c]"],
+  html.light .bbbee-create-light [class*="bg-[#0e0e10]"],
+  html.light .bbbee-create-light [class*="bg-[rgba(255,255,255,"] {
+    background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light .bbbee-setup-shell,
+  html.light .bbbee-create-light .bbbee-upload-detail,
+  html.light .bbbee-create-light .bbbee-document-upload {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="border-violet-"],
+  html.light .bbbee-create-light [class*="border-amber-"] {
+    border-color: #d4d4d8 !important;
+  }
+  html.light .bbbee-create-light [class*="bg-red-"],
+  html.light .bbbee-create-light [class*="bg-emerald-"] {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="text-red-"],
+  html.light .bbbee-create-light [class*="text-emerald-"],
+  html.light .bbbee-create-light [class*="text-violet-100"] {
+    color: #52525b !important;
+  }
   html.light .bbbee-create-light [class*="border-white/"],
   html.light .bbbee-create-light [class*="border-white\\["] {
-    border-color: rgba(24,24,27,0.1) !important;
+    border-color: #e4e4e7 !important;
   }
   html.light .bbbee-create-light [class*="bg-white/"],
   html.light .bbbee-create-light [class*="bg-white\\["] {
-    background-color: rgba(24,24,27,0.035) !important;
+    background-color: #f4f4f5 !important;
   }
   html.light .bbbee-create-light [class*="bg-[#0"],
   html.light .bbbee-create-light [class*="bg-[#1"],
+  html.light .bbbee-create-light [class~="bg-zinc-800"],
+  html.light .bbbee-create-light [class~="bg-zinc-950"],
   html.light .bbbee-create-light [class*="bg-[color:var(--ink"] {
-    background-color: rgba(255,255,255,0.88) !important;
+    background-color: #ffffff !important;
   }
   html.light .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
   html.light .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
     background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light [class*="hover:bg-white/"]:hover {
+    background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]),
+  html.light .bbbee-create-light [class*="border-white/"] {
+    border-color: #e4e4e7 !important;
+  }
+  html.light .bbbee-create-light [class*="placeholder-[rgba(255,255,255"]::placeholder {
+    color: #a1a1aa !important;
+  }
+  html.light .bbbee-create-light [class*="focus:border-white/"]:focus {
+    border-color: #a1a1aa !important;
+  }
+  html.light .bbbee-create-light [class*="focus:ring-white/"]:focus {
+    --tw-ring-color: rgba(24,24,27,0.12) !important;
   }
   html.light .bbbee-create-light [class*="hover:text-white"]:hover {
     color: #18181b !important;
@@ -147,8 +208,11 @@ const CREATE_SCORECARD_LIGHT_CSS = `
   html.light .bbbee-create-light select,
   html.light .bbbee-create-light textarea {
     background: #ffffff !important;
-    border-color: rgba(24,24,27,0.14) !important;
+    border-color: #d4d4d8 !important;
     color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="[color-scheme:dark]"] {
+    color-scheme: light !important;
   }
   html.light .bbbee-create-light input::placeholder,
   html.light .bbbee-create-light textarea::placeholder {
@@ -418,7 +482,7 @@ function SetupShell({
         }
         .setup-reveal { animation: setupReveal 220ms ease-out both; }
       `}</style>
-      <div className="rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+      <div className="bbbee-setup-shell rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
           <div className="mb-8 flex items-center justify-between">
             <span className="text-[12px] font-medium text-[color:var(--body)]">{step}</span>
             {showBack && (
@@ -1016,12 +1080,12 @@ export function CompanyPicker({
 
     return (
       <div className="max-w-5xl mx-auto py-5">
-        <div className="rounded-[28px] bg-[color:var(--ink-2)] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
-          <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-white/[0.07]">
+        <div className="rounded-[28px] bg-white border border-[color:var(--rule)] overflow-hidden shadow-[0_18px_45px_rgba(24,24,27,0.08)]">
+          <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-[color:var(--rule)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2
-                  className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
+                  className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-[color:var(--hi)] leading-tight"
                 >
                   Create scorecard
                 </h2>
@@ -1029,7 +1093,7 @@ export function CompanyPicker({
                   Upload documents for a quote, or use a free setup path.
                 </p>
               </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-[color:var(--body)]">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--rule)] bg-zinc-50 px-3 py-1.5 text-[11px] font-medium text-[color:var(--body)]">
                 <Upload className="h-3.5 w-3.5 text-[#a78bfa]" />
                 Quote before processing
               </div>
@@ -1039,7 +1103,7 @@ export function CompanyPicker({
           <div className="px-4 sm:px-5 py-5 space-y-4">
             {/* HERO — document-upload start: preset expected-documents flow
                 (parser-classified evidence → workbook sections → same submit path). */}
-            <div className="rounded-[24px] border border-violet-300/20 bg-[#17151d] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="rounded-[24px] border border-[color:var(--rule)] bg-zinc-50 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
               <DocumentUploadStart
                 onCreate={async (companyName, sections, extras) => {
                   // Document flow lands on the provisional live-score page, not the workbook.
@@ -1054,13 +1118,13 @@ export function CompanyPicker({
             </div>
             <div className="flex items-center justify-between pt-1">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Free setup</p>
-              <div className="h-px flex-1 bg-white/[0.07] ml-3" />
+              <div className="h-px flex-1 bg-[color:var(--rule)] ml-3" />
             </div>
 
             {/* Secondary paths: blank workbook + Excel import */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-              <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
-                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
+              <div className="rounded-[18px] border border-[color:var(--rule)] bg-white p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
                   <Building2 className="h-4 w-4 text-[color:var(--body)]" />
                   Manual entry
                 </div>
@@ -1073,14 +1137,14 @@ export function CompanyPicker({
                   idPrefix="manual-entry"
                 />
               </div>
-              <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
-                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
+              <div className="rounded-[18px] border border-[color:var(--rule)] bg-white p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
                   <Download className="h-4 w-4 text-[color:var(--body)]" />
                   Excel import
                 </div>
                 <ExcelImportButton
                   label="Import workbook"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.10] bg-[#0c0c0e] px-3.5 py-2.5 text-[13px] font-semibold text-[#e5e5ea] transition-colors hover:border-white/[0.16] hover:bg-[#222225] disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--rule)] bg-zinc-950 px-3.5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-zinc-800 disabled:opacity-60"
                   onImport={async (file) => {
                 const result = await importBeeGatheringExcel(file, API_BASE);
                 if (!result.extraction.isBeeGatheringFormat) {
@@ -1190,21 +1254,16 @@ export function CompanyPicker({
 
       {/* Start a new company — primary action */}
       <div
-        className="relative overflow-hidden rounded-2xl border border-violet-400/20 p-6"
+        className="relative overflow-hidden rounded-2xl border border-[color:var(--rule)] bg-white p-6 shadow-[0_18px_45px_rgba(24,24,27,0.08)]"
         style={{
           backgroundImage:
-            'linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.04) 45%, rgba(255,255,255,0.015) 100%)',
+            'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
         }}
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-16 -right-12 w-48 h-48 rounded-full opacity-60 blur-3xl"
-          style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.30) 0%, rgba(168,85,247,0) 70%)' }}
-        />
         <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 md:gap-6 md:items-end">
           <div>
             <h2
-              className="text-[22px] font-semibold text-white tracking-tight leading-tight"
+              className="text-[22px] font-semibold text-[color:var(--hi)] tracking-tight leading-tight"
             >
               Create scorecard
             </h2>
@@ -1221,7 +1280,7 @@ export function CompanyPicker({
               />
             </div>
           </div>
-          <div className="md:pl-4 md:border-l md:border-white/[0.08]">
+          <div className="md:pl-4 md:border-l md:border-[color:var(--rule)]">
             <div className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--body)] mb-2">Or</div>
             <ExcelImportButton
               label="Import Excel (free)"
@@ -1284,10 +1343,10 @@ export function CompanyPicker({
         </div>
 
       {/* Existing companies */}
-      <div className="rounded-2xl bg-[color:var(--ink-3)] border border-white/[0.05] p-6">
+      <div className="rounded-2xl bg-white border border-[color:var(--rule)] p-6 shadow-[0_12px_35px_rgba(24,24,27,0.06)]">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-[15px] font-semibold text-white">Your companies</h2>
+            <h2 className="text-[15px] font-semibold text-[color:var(--hi)]">Your companies</h2>
             <span className="text-[11px] text-[color:var(--muted)] tabular-nums">
               {loading ? "" : `${filtered.length}${search && filtered.length !== companies.length ? ` of ${companies.length}` : ""}`}
             </span>
@@ -1299,7 +1358,7 @@ export function CompanyPicker({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search companies…"
               aria-label="Search companies"
-              className="w-full bg-[color:var(--ink)]/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-white/[0.18] transition-colors"
+              className="w-full bg-white border border-[color:var(--rule)] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[color:var(--hi)] placeholder:text-[color:var(--muted)] outline-none focus:border-[color:var(--rule-strong)] transition-colors"
               data-testid="input-company-search"
             />
           </div>
@@ -1311,7 +1370,7 @@ export function CompanyPicker({
           </div>
         ) : companies.length === 0 ? (
           <div className="text-center py-12 px-4">
-            <div className="mx-auto w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.06] grid place-items-center mb-3">
+            <div className="mx-auto w-12 h-12 rounded-xl bg-zinc-50 border border-[color:var(--rule)] grid place-items-center mb-3">
               <Building2 className="h-5 w-5 text-[color:var(--muted)]" />
             </div>
             <div className="text-[14px] text-[color:var(--body)] font-medium">No companies yet</div>
@@ -1328,7 +1387,7 @@ export function CompanyPicker({
               return (
                 <div
                   key={companyId || c.name}
-                  className="group flex items-center gap-1 rounded-xl border border-transparent bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.08] smooth"
+                  className="group flex items-center gap-1 rounded-xl border border-transparent bg-white hover:bg-zinc-50 hover:border-[color:var(--rule)] smooth"
                 >
                   <button
                     type="button"
@@ -1337,15 +1396,15 @@ export function CompanyPicker({
                     data-testid={`company-${companyId}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-white/[0.10] to-white/[0.03] border border-white/[0.06] grid place-items-center shrink-0 group-hover:border-violet-400/30 transition-colors">
+                      <div className="h-9 w-9 rounded-lg bg-zinc-50 border border-[color:var(--rule)] grid place-items-center shrink-0 group-hover:border-zinc-300 transition-colors">
                         <Building2 className="h-4 w-4 text-[color:var(--body)] group-hover:text-violet-300 transition-colors" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[13.5px] font-medium text-white truncate">{c.name}</div>
+                        <div className="text-[13.5px] font-medium text-[color:var(--hi)] truncate">{c.name}</div>
                         <div className="text-[11px] text-[color:var(--muted)] truncate font-mono">{companyId}</div>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-[color:var(--muted)] shrink-0 ml-2 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                    <ChevronRight className="h-4 w-4 text-[color:var(--muted)] shrink-0 ml-2 group-hover:text-[color:var(--hi)] group-hover:translate-x-0.5 transition-all" />
                   </button>
                   <DeleteCompanyButton
                     companyId={companyId}
@@ -2550,7 +2609,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       {addingDocuments && workbook && (() => {
         const info = (workbook.sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
         return (
-          <div className="mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
+          <div className="bbbee-upload-detail mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
             <div className="mb-2 flex justify-end">
               <button
                 type="button"

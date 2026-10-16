@@ -6,7 +6,7 @@ import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
-import { Loader2, ArrowLeft, Check, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowLeft, Check, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2, Leaf, Award, FileCheck2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
@@ -167,6 +167,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     confirmPassword: '',
     fullName: '',
     email: '',
+    productCode: '' as '' | 'esg' | 'bbbee' | 'certificates',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -246,6 +247,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   const validateRegistration = (): boolean => {
     const errors: Record<string, string> = {};
     if (!form.fullName.trim()) errors.fullName = "Full name is required";
+    if (!form.productCode) errors.productCode = "Choose a product to get started";
     if (!form.email.trim()) errors.email = "Work email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
     else if (!isWorkEmail(form.email)) errors.email = WORK_EMAIL_REQUIRED_MESSAGE;
@@ -321,6 +323,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         password: form.password,
         fullName: form.fullName,
         email: form.email.trim().toLowerCase(),
+        productCode: form.productCode as 'esg' | 'bbbee' | 'certificates',
       });
       if (result?.requiresVerification) {
         setEmailHint(result.emailHint || form.email);
@@ -329,6 +332,9 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         setOtpValue('');
         toast({ title: "Verify Your Email", description: result.message || "Check your email for the code." });
       } else {
+        if (result?.initialProduct) {
+          try { sessionStorage.setItem('okiru-initial-product', result.initialProduct); } catch { /* ignore */ }
+        }
         markAuthSessionJustCompleted();
       }
     } catch (error: any) {
@@ -446,15 +452,15 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-[#cdd2da] text-zinc-950 dark:bg-[#08090b] dark:text-zinc-50"
+      className="min-h-screen flex flex-col bg-white text-zinc-950"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}
     >
       <header
-        className="sticky top-0 z-20 shrink-0 border-b border-zinc-300/90 bg-[#cdd2da]/90 backdrop-blur-md dark:border-white/10 dark:bg-[#08090b]/90"
+        className="sticky top-0 z-20 shrink-0 border-b border-zinc-200 bg-white/90 backdrop-blur-md"
       >
         <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <AppNavBack href="/" label="Home" variant="light" size="compact" data-testid="btn-back-to-home" />
-          <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase dark:text-zinc-400">{headerEyebrow}</span>
+          <span className="hidden sm:inline text-[12px] text-zinc-500 tracking-wide uppercase">{headerEyebrow}</span>
           <div className="w-12 shrink-0" aria-hidden />
         </div>
       </header>
@@ -774,6 +780,41 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                               Workspace: <span className="font-medium text-foreground/80">{companyNameFromWorkEmail(form.email)}</span>
                             </p>
                           )}
+                        </div>
+
+                        <div className="space-y-2" data-testid="signup-product-selection">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">What brings you to Okiru?</Label>
+                          <p className="text-[11px] text-muted-foreground">Choose the tool you'd like to get started with.</p>
+                          <div className="grid gap-2">
+                            {[
+                              { code: 'esg' as const, title: 'ESG', description: 'Environmental, social and governance reporting.', Icon: Leaf },
+                              { code: 'bbbee' as const, title: 'B-BBEE', description: 'Compliance, scorecards and ownership.', Icon: Award },
+                              { code: 'certificates' as const, title: 'Certificates', description: 'Document management and verification.', Icon: FileCheck2 },
+                            ].map(({ code, title, description, Icon }) => {
+                              const selected = form.productCode === code;
+                              return (
+                                <button
+                                  key={code}
+                                  type="button"
+                                  onClick={() => {
+                                    setForm(prev => ({ ...prev, productCode: code }));
+                                    setFieldErrors(prev => ({ ...prev, productCode: '' }));
+                                  }}
+                                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                                  aria-pressed={selected}
+                                  data-testid={`signup-product-${code}`}
+                                >
+                                  <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                                  <span className="min-w-0">
+                                    <span className="block text-[13px] font-medium">{title}</span>
+                                    <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{description}</span>
+                                  </span>
+                                  {selected && <CheckCircle2 className="ml-auto mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {fieldErrors.productCode && <p className="text-[11px] text-destructive" data-testid="error-product-code">{fieldErrors.productCode}</p>}
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

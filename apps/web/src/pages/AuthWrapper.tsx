@@ -42,6 +42,15 @@ export default function AuthWrapper() {
     const rTo = q.redirectTo;
     const isNewAccount = readSessionFlag(AUTH_JUST_COMPLETED_KEY);
     const hasPendingInvite = readSessionFlag(PENDING_TEAM_INVITE_KEY);
+    const selectedProduct = (user as any)?.initialProduct as string | null | undefined;
+    const productDestination = selectedProduct === "esg"
+      ? "/esg"
+      : selectedProduct === "certificates"
+        ? "/certificates"
+        : selectedProduct === "bbbee"
+          ? "/bbbee"
+          : null;
+    const postAuthDestination = rTo || productDestination;
     try { sessionStorage.removeItem(AUTH_JUST_COMPLETED_KEY); } catch { /* empty */ }
 
     if (isNewAccount || hasPendingInvite) {
@@ -72,7 +81,7 @@ export default function AuthWrapper() {
     return (
       <Onboarding
         startAtTeam
-        redirectProp={redirectTo}
+        redirectProp={postAuthDestination}
         onFullyDone={(path) => {
           clearOnboardingFlowVisible();
           try {

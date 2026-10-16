@@ -143,7 +143,7 @@ export function FeedbackWidget() {
         whileTap={{ scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 320, damping: 24 }}
         style={formFontStyle}
-        className="fixed bottom-5 right-5 z-[9998] flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-medium text-zinc-900 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] ring-1 ring-black/5 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-black"
+        className="fixed bottom-5 right-5 z-[9998] flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-medium text-zinc-900 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] ring-1 ring-black/5 transition hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-white dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10 dark:hover:bg-zinc-800 dark:focus:ring-offset-black"
       >
         <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={2.25} />
         <span className="hidden sm:inline">Feedback</span>
@@ -157,7 +157,7 @@ export function FeedbackWidget() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 p-3 sm:items-center sm:justify-center sm:p-4"
+            className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm dark:bg-black/60 sm:items-center sm:justify-center sm:p-4"
             onClick={() => !submitting && setOpen(false)}
             role="presentation"
           >
@@ -169,14 +169,14 @@ export function FeedbackWidget() {
               transition={{ type: 'spring', stiffness: 300, damping: 28 }}
               onClick={(e) => e.stopPropagation()}
               style={formFontStyle}
-              className="w-full max-w-[440px] overflow-hidden rounded-xl bg-white text-zinc-900 shadow-2xl ring-1 ring-black/5"
+              className="w-full max-w-[440px] overflow-hidden rounded-xl bg-white text-zinc-900 shadow-2xl ring-1 ring-black/5 dark:bg-zinc-950 dark:text-zinc-50 dark:ring-white/10"
               data-testid="dialog-feedback"
               role="dialog"
               aria-modal="true"
               aria-labelledby="feedback-title"
             >
-              <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5">
-                <h3 id="feedback-title" className="text-[14px] font-semibold tracking-tight text-zinc-900">
+              <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5 dark:border-white/10">
+                <h3 id="feedback-title" className="text-[14px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
                   Send feedback
                 </h3>
                 <button
@@ -184,7 +184,7 @@ export function FeedbackWidget() {
                   onClick={() => !submitting && setOpen(false)}
                   aria-label="Close feedback"
                   data-testid="button-feedback-close"
-                  className="-mr-1.5 rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                  className="-mr-1.5 rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-100"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2.25} />
                 </button>
@@ -192,7 +192,7 @@ export function FeedbackWidget() {
 
               <form onSubmit={handleSubmit} className="px-5 py-4">
                 <div className="mb-4">
-                  <div className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5">
+                  <div className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-white/10">
                     {CATEGORIES.map((c) => {
                       const active = category === c.value;
                       return (
@@ -202,13 +202,13 @@ export function FeedbackWidget() {
                           onClick={() => setCategory(c.value)}
                           data-testid={`button-feedback-category-${c.value}`}
                           className={`relative rounded-md px-2.5 py-1 text-[12px] font-medium transition ${
-                            active ? 'text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'
+                            active ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
                           }`}
                         >
                           {active && (
                             <motion.span
                               layoutId="feedback-cat-pill"
-                              className="absolute inset-0 rounded-md bg-white shadow-sm ring-1 ring-black/[0.04]"
+                              className="absolute inset-0 rounded-md bg-white shadow-sm ring-1 ring-black/[0.04] dark:bg-zinc-800 dark:ring-white/10"
                               transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                             />
                           )}
@@ -220,7 +220,7 @@ export function FeedbackWidget() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="feedback-pillar" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                  <label htmlFor="feedback-pillar" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     Pillar / area
                   </label>
                   <select
@@ -229,7 +229,7 @@ export function FeedbackWidget() {
                     value={pillar}
                     onChange={(e) => setPillar(e.target.value as FeedbackPillar)}
                     style={formFontStyle}
-                    className="block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-0"
+                    className="block w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-zinc-600"
                   >
                     {FEEDBACK_PILLAR_OPTIONS.map((option) => (
                       <option key={option.value || 'general'} value={option.value}>
@@ -251,11 +251,11 @@ export function FeedbackWidget() {
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={PLACEHOLDERS[category]}
                     style={formFontStyle}
-                    className="block w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0"
+                    className="block w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-zinc-600"
                   />
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-[11px] text-zinc-400">
-                      Page <span className="font-mono text-zinc-500">{currentPath || '/'}</span>
+                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Page <span className="font-mono text-zinc-500 dark:text-zinc-400">{currentPath || '/'}</span>
                     </span>
                     <span className="text-[11px] text-zinc-400">{message.length}/5000</span>
                   </div>
@@ -270,7 +270,7 @@ export function FeedbackWidget() {
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Name"
                       style={formFontStyle}
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0"
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-zinc-600"
                     />
                     <input
                       type="email"
@@ -279,15 +279,15 @@ export function FeedbackWidget() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Email"
                       style={formFontStyle}
-                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0"
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-zinc-600"
                     />
                   </div>
                 )}
 
                 <div className="flex items-center justify-between">
-                  <span className="hidden text-[11px] text-zinc-400 sm:block">
-                    <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-px font-mono text-[10px] text-zinc-500">⌘</kbd>{' '}
-                    <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-px font-mono text-[10px] text-zinc-500">↵</kbd>{' '}
+                  <span className="hidden text-[11px] text-zinc-400 dark:text-zinc-500 sm:block">
+                    <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-px font-mono text-[10px] text-zinc-500 dark:border-white/10 dark:bg-white/10 dark:text-zinc-300">⌘</kbd>{' '}
+                    <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-px font-mono text-[10px] text-zinc-500 dark:border-white/10 dark:bg-white/10 dark:text-zinc-300">↵</kbd>{' '}
                     to send
                   </span>
                   <motion.button
