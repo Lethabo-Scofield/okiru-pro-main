@@ -82,6 +82,59 @@ const PILLAR_TOTAL_ROWS: Array<{ row: number; pillar: PillarKey; label: string }
 
 interface LineResult { caseId: string; row: number; label: string; excel: number | null; ours: number | null; diff: number | null; ok: boolean; note?: string }
 
+/**
+ * Where the toolkit's own formula is broken, the referee is what the formula
+ * evidently means, computed from the toolkit's OWN measured values. Each
+ * replacement is labelled in the report; nothing else is touched.
+ *
+ *  - Ownership points use MIN(I / LEFT(E,3) × D, D). LEFT() truncates numeric
+ *    targets: 3% and 2% become "0.0" (designated groups and new entrants
+ *    always 0), 25% becomes "0.2" (economic interest scored against 20%).
+ *  - 'Scorecard Calculations'!G5 sums empty cells, so the Skills sub-minimum
+ *    always fails and every entity is discounted.
+ *  - The level lookup uses a strict "<", so a total exactly on a threshold
+ *    drops a level.
+ */
+const OWNERSHIP_LEFT_DEFECT: Array<{ row: number; measure: string; target: number; pts: number }> = [
+  { row: 22, measure: 'I7', target: 0.25, pts: 4 },
+  { row: 24, measure: 'I10', target: 0.03, pts: 3 },
+  { row: 25, measure: 'I12', target: 0.02, pts: 2 },
+];
+const LEVEL_THRESHOLDS: Array<[number, number]> = [[100, 1], [95, 2], [90, 3], [80, 4], [75, 5], [70, 6], [55, 7], [40, 8]];
+const levelFor = (points: number) => (LEVEL_THRESHOLDS.find(([min]) => points >= min)?.[1] ?? 9);
+
+function intendedToolkit(sheets: Record<string, Record<string, { v: unknown }>>) {
+  const v = (sheet: string, ref: string) => Number(sheets[sheet]?.[ref]?.v ?? 0) || 0;
+  const lines = new Map<number, { value: number; note: string }>();
+  let ownershipDelta = 0;
+  for (const d of OWNERSHIP_LEFT_DEFECT) {
+    const manual = sheets['Ownership Scorecard']?.[`J${d.row === 22 ? 7 : d.row === 24 ? 10 : 12}`]?.v;
+    if (manual !== undefined && manual !== null && manual !== '') continue;
+    const measure = v('Ownership Scorecard', d.measure);
+    const intended = Math.min(Math.max(measure, 0) / d.target * d.pts, d.pts);
+    const excel = v('Summary Scorecard', `F${d.row}`);
+    if (Math.abs(intended - excel) > 1e-9) {
+      lines.set(d.row, { value: intended, note: `toolkit defect: LEFT() target; intended ${(measure * 100).toFixed(2)}% ÷ ${d.target * 100}% × ${d.pts}` });
+      ownershipDelta += intended - excel;
+    }
+  }
+  const total = v('Summary Scorecard', 'F69') + ownershipDelta;
+  if (ownershipDelta !== 0) {
+    lines.set(19, { value: v('Summary Scorecard', 'F19') + ownershipDelta, note: 'toolkit defect: LEFT() target lines' });
+    lines.set(69, { value: total, note: 'toolkit defect: LEFT() target lines' });
+  }
+  const achieved = levelFor(total);
+  const netValuePts = v('Summary Scorecard', 'F26');
+  const skillsBase = v('Summary Scorecard', 'F44') + v('Summary Scorecard', 'F45') + v('Summary Scorecard', 'F46') + v('Summary Scorecard', 'F47');
+  const subMinFailed = netValuePts < 3.2
+    || skillsBase < 8
+    || v('Scorecard Calculations', 'G6') < v('Scorecard Calculations', 'F6')
+    || v('Scorecard Calculations', 'G7') < v('Scorecard Calculations', 'F7')
+    || v('Scorecard Calculations', 'G8') < v('Scorecard Calculations', 'F8');
+  const discounted = subMinFailed ? (achieved >= 8 ? 9 : achieved + 1) : achieved;
+  return { lines, achieved, discounted };
+}
+
 function excelValue(sheets: Record<string, Record<string, { v: unknown }>>, sheet: string, ref: string): number | null {
   const v = sheets[sheet]?.[ref]?.v;
   if (v === '' || v == null) return null;
@@ -136,8 +189,10 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic',
         calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG,
       });
       const sheets = excel.sheets;
+      const intended = intendedToolkit(sheets);
       for (const spec of RCOGP_GENERIC_LINES) {
-        const ex = excelValue(sheets, 'Summary Scorecard', `F${spec.row}`);
+        const fix = intended.lines.get(spec.row);
+        const ex = fix ? fix.value : excelValue(sheets, 'Summary Scorecard', `F${spec.row}`);
         const pillar = result[spec.pillar] as { subLines?: BreakdownLine[] } | undefined;
         const line = findLine(pillar?.subLines, spec.names);
         const ours = line ? Number(line.score) : null;
@@ -146,19 +201,23 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic',
         all.push({
           caseId: id, row: spec.row, label: spec.label, excel: ex, ours, diff,
           ok: diff !== null ? Math.abs(diff) <= TOLERANCE : (ex ?? 0) === 0 && (ours ?? 0) === 0,
-          note: line ? undefined : ex === null ? 'toolkit shows no value' : 'no matching line in our scorecard',
+          note: fix ? fix.note : line ? undefined : ex === null ? 'toolkit shows no value' : 'no matching line in our scorecard',
         });
       }
       for (const t of PILLAR_TOTAL_ROWS) {
-        const ex = excelValue(sheets, 'Summary Scorecard', `F${t.row}`);
+        const fix = intended.lines.get(t.row);
+        const ex = fix ? fix.value : excelValue(sheets, 'Summary Scorecard', `F${t.row}`);
         const ours = Number((result[t.pillar] as { score?: number })?.score ?? NaN);
         const diff = ex !== null ? ours - ex : null;
-        all.push({ caseId: id, row: t.row, label: t.label, excel: ex, ours, diff, ok: diff !== null && Math.abs(diff) <= TOLERANCE });
+        all.push({ caseId: id, row: t.row, label: t.label, excel: ex, ours, diff, ok: diff !== null && Math.abs(diff) <= TOLERANCE, note: fix?.note });
       }
       const exLevel = levelNumber(sheets['Summary Scorecard']?.F73?.v);
       const exDisc = levelNumber(sheets['Summary Scorecard']?.F75?.v);
-      all.push({ caseId: id, row: 73, label: 'ACHIEVED LEVEL', excel: exLevel, ours: result.achievedLevel, diff: result.achievedLevel - exLevel, ok: result.achievedLevel === exLevel });
-      all.push({ caseId: id, row: 75, label: 'DISCOUNTED LEVEL', excel: exDisc, ours: result.discountedLevel, diff: result.discountedLevel - exDisc, ok: result.discountedLevel === exDisc });
+      const levelNote = intended.achieved !== exLevel ? 'toolkit defect: level lookup' : undefined;
+      const discNote = intended.discounted !== exDisc ? 'toolkit defect: Skills sub-minimum reads empty cells' : undefined;
+      const oursDisc = result.preYesDiscountedLevel ?? result.discountedLevel;
+      all.push({ caseId: id, row: 73, label: 'ACHIEVED LEVEL', excel: intended.achieved, ours: result.achievedLevel, diff: result.achievedLevel - intended.achieved, ok: result.achievedLevel === intended.achieved, note: levelNote });
+      all.push({ caseId: id, row: 75, label: 'DISCOUNTED LEVEL', excel: intended.discounted, ours: oursDisc, diff: oursDisc - intended.discounted, ok: oursDisc === intended.discounted, note: discNote });
     }
 
     const outDir = path.join(PARITY_DIR, 'out');

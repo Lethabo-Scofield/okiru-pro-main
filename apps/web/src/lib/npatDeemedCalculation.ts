@@ -1,13 +1,11 @@
 /**
  * NPAT deemed / Leibrandt logic for ESD/SED/Skills target bases.
  *
- * When current NPAT margin is below 25% of the industry norm:
- * 1. Find the most recent year (current + up to 5 prior) with margin >= 25% of norm.
- * 2. Indicative Profit Margin (Leibrandt) = qualifying NPAT / qualifying turnover.
- * 3. Effective NPAT = IPM × current turnover (turnover-based target).
- * 4. If no qualifying year within 5 years: deemed NPAT = turnover × industry norm %.
- *
- * Deemed NPAT (auto or manual override) requires prior-year history to be captured.
+ * Toolkit sectors follow the Empower toolkit exactly (see resolveNpatForTargets):
+ * the larger of current NPAT and the current + 4-year average stands unless it
+ * is below revenue × norm ÷ 4; then the smallest qualifying year margin × revenue,
+ * floored at revenue × norm ÷ 4. Transport keeps the full-norm fallback its
+ * verified certificates use.
  */
 
 export type FinancialYearRecord = {
@@ -18,6 +16,7 @@ export type FinancialYearRecord = {
 
 export type NpatResolutionMethod =
   | "actual"
+  | "five-year-average"
   | "leibrandt"
   | "industry-norm-deemed"
   | "override";
@@ -76,9 +75,87 @@ export function isBelowIndustryNormQuarterThreshold(
 }
 
 /**
- * Resolve NPAT used for SD/ED/SED target calculations.
+ * Resolve NPAT used for SD/ED/SED target calculations — the Empower toolkit's
+ * rule ('Financials'!C11:C17 → 'Client Information'!C23):
+ *
+ *   base       = MAX(average NPAT of the current + up to 4 prior years, current NPAT)
+ *   indicative = revenue × industry norm ÷ 4
+ *   if base ≥ indicative → deemed NPAT = base
+ *   otherwise            → deemed NPAT = MAX(smallest year margin strictly above
+ *                          norm ÷ 4 × revenue, indicative)
+ *   a manual deemed NPAT always wins.
+ *
+ * `fallbackBasis: 'fullNorm'` keeps the certificate-backed Transport practice
+ * (deemed = revenue × the FULL norm when nothing qualifies); the toolkit
+ * sectors use a quarter of the norm.
  */
 export function resolveNpatForTargets(params: {
+  currentRevenue: number;
+  currentNpat: number;
+  industryNormPercent: number;
+  priorYears: FinancialYearRecord[];
+  deemedNpatOverride?: unknown;
+  fallbackBasis?: "quarterNorm" | "fullNorm";
+}): NpatResolutionResult {
+  if (params.fallbackBasis !== "fullNorm") return resolveNpatToolkit(params);
+  return resolveNpatFullNormFallback(params);
+}
+
+function resolveNpatToolkit(params: {
+  currentRevenue: number;
+  currentNpat: number;
+  industryNormPercent: number;
+  priorYears: FinancialYearRecord[];
+  deemedNpatOverride?: unknown;
+}): NpatResolutionResult {
+  const { currentRevenue, currentNpat, industryNormPercent } = params;
+  if (!blank(params.deemedNpatOverride)) {
+    const override = num(params.deemedNpatOverride);
+    return { effectiveNpat: override, deemedNpat: override, deemedNpatUsed: true, method: "override" };
+  }
+
+  const years: FinancialYearRecord[] = [
+    { yearLabel: "Current", revenue: currentRevenue, npat: currentNpat },
+    ...params.priorYears.slice(0, 4),
+  ];
+  const average = years.reduce((sum, y) => sum + y.npat, 0) / years.length;
+  const base = Math.max(average, currentNpat);
+  const baseMethod: NpatResolutionMethod = base > currentNpat ? "five-year-average" : "actual";
+  const quarterNorm = industryNormPercent / 100 / 4;
+  const indicative = currentRevenue * quarterNorm;
+
+  if (base >= indicative) {
+    return {
+      effectiveNpat: base,
+      deemedNpat: base,
+      deemedNpatUsed: baseMethod !== "actual",
+      method: baseMethod,
+      ...(params.priorYears.length === 0 ? { priorYearsMissing: true } : {}),
+    };
+  }
+
+  const qualifying = years
+    .filter((y) => y.revenue > 0)
+    .map((y) => ({ year: y, margin: y.npat / y.revenue }))
+    .filter((q) => q.margin > quarterNorm)
+    .sort((a, b) => a.margin - b.margin);
+  const smallest = qualifying[0];
+  const fromMargin = smallest ? smallest.margin * currentRevenue : 0;
+  const deemed = Math.max(fromMargin, indicative);
+  const usedMargin = smallest !== undefined && fromMargin >= indicative;
+  return {
+    effectiveNpat: deemed,
+    deemedNpat: deemed,
+    deemedNpatUsed: true,
+    method: usedMargin ? "leibrandt" : "industry-norm-deemed",
+    indicativeProfitMarginPercent: usedMargin ? smallest.margin * 100 : industryNormPercent / 4,
+    ...(usedMargin ? { qualifyingYearLabel: smallest.year.yearLabel } : {}),
+    ...(params.priorYears.length === 0 ? { priorYearsMissing: true } : {}),
+  };
+}
+
+/** The pre-toolkit rule, kept for Transport (certificate BE13609 practice). */
+function resolveNpatFullNormFallback(params: {
   currentRevenue: number;
   currentNpat: number;
   industryNormPercent: number;

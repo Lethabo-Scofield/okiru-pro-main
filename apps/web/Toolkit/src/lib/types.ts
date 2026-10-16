@@ -677,6 +677,8 @@ export interface ScorecardResult {
   total: PillarScore;
   achievedLevel: number;
   discountedLevel: number;
+  /** The discounted level before any YES uplift (toolkit Summary F75). */
+  preYesDiscountedLevel?: number;
   isDiscounted: boolean;
   recognitionLevel: string;
   /** Transport QSE: which elective pillar was auto-selected (highest score). */

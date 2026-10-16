@@ -75,8 +75,9 @@ export default function Financials() {
         currentNpat: client.npat,
         industryNormPercent: currentIndustryNorm,
         priorYears: priorYearsForNpat,
+        fallbackBasis: /transport/i.test(`${client.sectorCode ?? ''} ${client.industrySector ?? ''}`) ? 'fullNorm' : 'quarterNorm',
       }),
-    [client.revenue, client.npat, currentIndustryNorm, priorYearsForNpat],
+    [client.revenue, client.npat, currentIndustryNorm, priorYearsForNpat, client.sectorCode, client.industrySector],
   );
 
   const currentMargin = marginPercent(client.npat, client.revenue);

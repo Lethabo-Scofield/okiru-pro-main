@@ -980,7 +980,10 @@ export function calculateScorecard(
     + electiveScoreForTotal('managementControl', mgtScoreTotal)
     + (eeTarget > 0 ? electiveScoreForTotal('employmentEquity', eeScoreTotal) : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
-  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + efForTotal + yesScore.score + yesScore.yesBonusPoints;
+  // The B-BBEE total is the elements only. YES points are shown beside it and
+  // never move the level (toolkit Summary F69 = the seven elements; F71 adds
+  // the YES points for display).
+  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + efForTotal;
 
   const totalTarget = cfg?.totalMaxPoints ?? (
     ownTarget + mcTarget + eeTarget +
@@ -1024,9 +1027,17 @@ export function calculateScorecard(
     ? (!ownSubMinMet || !(skSubMinMet || esdElementSubMinMet))
     : (!ownSubMinMet || !skSubMinMet || !esdElementSubMinMet);
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
-  let discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
+  // One level down; a Level 8 that is discounted is Non-compliant (toolkit
+  // 'Scorecard Calculations'!C13:C14 drop to the next threshold, below 40 is 0).
+  let discountedLevel = isDiscounted ? (level >= 8 ? 9 : level + 1) : level;
+  const preYesDiscountedLevel = discountedLevel;
 
-  if (yesScore.yesBeeLevelIncrease > 0 && discountedLevel > 1) {
+  // YES lifts the level only for an entity whose prior-year level is known and
+  // whose measured level is no worse than it (toolkit YES!C19:C22). The current
+  // certificate level is that prior-year level.
+  const priorYearLevel = state.client.beeCertificateLevel;
+  const yesLevelGateMet = typeof priorYearLevel === 'number' && level <= priorYearLevel;
+  if (yesLevelGateMet && yesScore.yesBeeLevelIncrease > 0 && discountedLevel > 1) {
     discountedLevel = Math.max(1, discountedLevel - yesScore.yesBeeLevelIncrease);
   }
 
@@ -1147,6 +1158,7 @@ export function calculateScorecard(
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: finalAchievedLevel,
     discountedLevel: finalDiscountedLevel,
+    preYesDiscountedLevel,
     isDiscounted,
     recognitionLevel: levelToRecognition(finalDiscountedLevel),
     chosenElectivePillar: chosenElectiveKey ? ELECTIVE_CONFIG_TO_SCORECARD[chosenElectiveKey] : null,

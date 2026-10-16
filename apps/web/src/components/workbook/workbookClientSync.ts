@@ -141,6 +141,9 @@ function resolveEffectiveNpat(
     industryNormPercent,
     priorYears: extractPriorYearsFromMeta(finMeta),
     deemedNpatOverride: finMeta.deemedNpatOverride,
+    // Transport has no Empower toolkit; its verified certificates deem NPAT off
+    // the full industry norm. Every toolkit sector deems off a quarter of it.
+    fallbackBasis: /transport/i.test(s(companyMeta.industrySector)) ? "fullNorm" : "quarterNorm",
   });
   return {
     effectiveNpat: resolved.effectiveNpat,

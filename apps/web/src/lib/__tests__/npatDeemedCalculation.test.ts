@@ -6,10 +6,13 @@ import {
   isBelowIndustryNormQuarterThreshold,
 } from "../npatDeemedCalculation";
 
-describe("resolveNpatForTargets", () => {
-  const industryNorm = 8; // 8% industry norm → 25% threshold = 2%
+// The Empower toolkit's deemed NPAT ('Financials'!C11:C17): base = MAX(average
+// of current + up to 4 prior years, current); below revenue × norm/4 it becomes
+// MAX(smallest qualifying margin × revenue, revenue × norm/4).
+describe("resolveNpatForTargets — Empower toolkit rule", () => {
+  const industryNorm = 8; // 8% industry norm → quarter = 2% of revenue
 
-  it("uses actual NPAT when margin meets 25% of industry norm", () => {
+  it("uses actual NPAT when it reaches a quarter of the industry norm", () => {
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 500_000,
@@ -21,20 +24,52 @@ describe("resolveNpatForTargets", () => {
     expect(result.effectiveNpat).toBe(500_000);
   });
 
-  it("applies Leibrandt when current margin is low but a prior year qualifies", () => {
+  it("uses the average of the current and prior years when it is higher than the current NPAT", () => {
+    // average (50k + 400k) / 2 = 225k ≥ 200k (2% of 10M) → the average stands.
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 50_000,
       industryNormPercent: industryNorm,
       priorYears: [{ yearLabel: "2024", revenue: 8_000_000, npat: 400_000 }],
     });
-    expect(result.method).toBe("leibrandt");
-    expect(result.deemedNpatUsed).toBe(true);
-    expect(marginPercent(400_000, 8_000_000)).toBeGreaterThanOrEqual(industryNorm / 4);
-    expect(result.effectiveNpat).toBeCloseTo((400_000 / 8_000_000) * 10_000_000);
+    expect(result.method).toBe("five-year-average");
+    expect(result.effectiveNpat).toBeCloseTo(225_000);
   });
 
-  it("uses industry norm deemed when no qualifying year in 5-year history", () => {
+  it("averages at most the current year and four prior years", () => {
+    const result = resolveNpatForTargets({
+      currentRevenue: 10_000_000,
+      currentNpat: 1_000_000,
+      industryNormPercent: industryNorm,
+      priorYears: [
+        { revenue: 1, npat: 1_000_000 },
+        { revenue: 1, npat: 1_000_000 },
+        { revenue: 1, npat: 1_000_000 },
+        { revenue: 1, npat: 1_000_000 },
+        { revenue: 1, npat: 99_000_000 }, // year -5 is outside the toolkit's average
+      ],
+    });
+    expect(result.effectiveNpat).toBe(1_000_000);
+  });
+
+  it("deems NPAT from the SMALLEST margin strictly above a quarter of the norm", () => {
+    // base = MAX(avg(-1m, 400k, 180k) = -140k, -1m) = -140k < 200k.
+    // Qualifying margins 5% and 3% → smallest 3% × 10M = 300k.
+    const result = resolveNpatForTargets({
+      currentRevenue: 10_000_000,
+      currentNpat: -1_000_000,
+      industryNormPercent: industryNorm,
+      priorYears: [
+        { yearLabel: "2024", revenue: 8_000_000, npat: 400_000 },
+        { yearLabel: "2023", revenue: 6_000_000, npat: 180_000 },
+      ],
+    });
+    expect(result.method).toBe("leibrandt");
+    expect(result.effectiveNpat).toBeCloseTo(300_000);
+    expect(result.qualifyingYearLabel).toBe("2023");
+  });
+
+  it("falls back to revenue × a quarter of the norm when no year qualifies", () => {
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 50_000,
@@ -45,17 +80,10 @@ describe("resolveNpatForTargets", () => {
       ],
     });
     expect(result.method).toBe("industry-norm-deemed");
-    expect(result.effectiveNpat).toBe(10_000_000 * (industryNorm / 100));
+    expect(result.effectiveNpat).toBeCloseTo(200_000);
   });
 
-  it("applies the industry-norm indicative NPAT when there is no prior-year history", () => {
-    // A low-profit / loss-making entity with no 5-year AFS still deems its NPAT
-    // off the Stats SA industry norm (revenue × norm), per the Amended Codes,
-    // rather than using the actual sub-threshold NPAT — which would zero the
-    // SED/ED targets. priorYearsMissing is still flagged for review. (This is the
-    // same method already applied when prior years exist but none qualify; it must
-    // apply when there are no prior years too — certificate BE13609 deemed
-    // Thandanani's NPAT this way.)
+  it("applies the same quarter-norm floor with no prior-year history, flagged for review", () => {
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 50_000,
@@ -63,33 +91,67 @@ describe("resolveNpatForTargets", () => {
       priorYears: [],
     });
     expect(result.method).toBe("industry-norm-deemed");
-    expect(result.deemedNpatUsed).toBe(true);
+    expect(result.priorYearsMissing).toBe(true);
+    expect(result.effectiveNpat).toBeCloseTo(200_000);
+  });
+
+  it("always honours a manual deemed NPAT, with or without prior years", () => {
+    for (const priorYears of [[], [{ yearLabel: "2024", revenue: 1, npat: 1 }]]) {
+      const result = resolveNpatForTargets({
+        currentRevenue: 10_000_000,
+        currentNpat: 50_000,
+        industryNormPercent: industryNorm,
+        priorYears,
+        deemedNpatOverride: 900_000,
+      });
+      expect(result.method).toBe("override");
+      expect(result.effectiveNpat).toBe(900_000);
+    }
+  });
+});
+
+// Transport has no toolkit; its verified certificates deem NPAT off the FULL
+// industry norm (BE13609). That practice is kept behind fallbackBasis 'fullNorm'.
+describe("resolveNpatForTargets — full-norm fallback (Transport)", () => {
+  const industryNorm = 8;
+  const fullNorm = { fallbackBasis: "fullNorm" as const };
+
+  it("applies Leibrandt when current margin is low but a prior year qualifies", () => {
+    const result = resolveNpatForTargets({
+      currentRevenue: 10_000_000,
+      currentNpat: 50_000,
+      industryNormPercent: industryNorm,
+      priorYears: [{ yearLabel: "2024", revenue: 8_000_000, npat: 400_000 }],
+      ...fullNorm,
+    });
+    expect(result.method).toBe("leibrandt");
+    expect(result.effectiveNpat).toBeCloseTo((400_000 / 8_000_000) * 10_000_000);
+  });
+
+  it("deems revenue × the full norm when nothing qualifies or there is no history", () => {
+    const result = resolveNpatForTargets({
+      currentRevenue: 10_000_000,
+      currentNpat: 50_000,
+      industryNormPercent: industryNorm,
+      priorYears: [],
+      ...fullNorm,
+    });
+    expect(result.method).toBe("industry-norm-deemed");
     expect(result.priorYearsMissing).toBe(true);
     expect(result.effectiveNpat).toBe(10_000_000 * (industryNorm / 100));
   });
 
-  it("rejects deemed override without prior-year rows", () => {
+  it("rejects a deemed override without prior-year rows", () => {
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 50_000,
       industryNormPercent: industryNorm,
       priorYears: [],
       deemedNpatOverride: 800_000,
+      ...fullNorm,
     });
     expect(result.method).toBe("actual");
     expect(result.priorYearsMissing).toBe(true);
-  });
-
-  it("accepts deemed override when prior years exist", () => {
-    const result = resolveNpatForTargets({
-      currentRevenue: 10_000_000,
-      currentNpat: 50_000,
-      industryNormPercent: industryNorm,
-      priorYears: [{ yearLabel: "2024", revenue: 1, npat: 1 }],
-      deemedNpatOverride: 900_000,
-    });
-    expect(result.method).toBe("override");
-    expect(result.effectiveNpat).toBe(900_000);
   });
 });
 
@@ -113,5 +175,9 @@ describe("extractPriorYearsFromMeta", () => {
     });
     expect(years).toHaveLength(2);
     expect(years[0].revenue).toBe(5_000_000);
+  });
+
+  it("keeps marginPercent as NPAT over revenue", () => {
+    expect(marginPercent(400_000, 8_000_000)).toBe(5);
   });
 });

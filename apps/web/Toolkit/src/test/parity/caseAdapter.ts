@@ -11,6 +11,7 @@ import type {
   Client, OwnershipData, ManagementData, SkillsData, ProcurementData, ESDData, SEDData,
   AfsData, EmpowermentFinancingData, Employee, TrainingProgram, Supplier, Contribution, Shareholder,
 } from '../../lib/types';
+import { resolveNpatForTargets } from '@/lib/npatDeemedCalculation';
 
 export interface ToolkitCase {
   template: string;
@@ -86,6 +87,18 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     npat: num(cell(c, `Financials!C${r}`)),
   }));
 
+  // client.npat holds the NPAT the targets are set on: the app resolves the
+  // deemed NPAT when the workbook is submitted (workbookClientSync), so the
+  // adapter does the same from the case's financials.
+  const npatResolved = resolveNpatForTargets({
+    currentRevenue: num(C('C18')),
+    currentNpat: num(C('C19')),
+    industryNormPercent: num(C('C10')) * 100,
+    priorYears: history.filter((h) => h.revenue !== 0 || h.npat !== 0)
+      .map((h) => ({ yearLabel: h.year, revenue: h.revenue, npat: h.npat })),
+    deemedNpatOverride: C('C24'),
+  });
+
   const client: Client = {
     id: 'parity',
     name: String(C('C3') ?? 'Parity case'),
@@ -100,7 +113,7 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     measurementPeriodStart: String(C('C4') ?? ''),
     measurementPeriodEnd: String(C('D4') ?? ''),
     revenue: num(C('C18')),
-    npat: num(C('C19')),
+    npat: npatResolved.effectiveNpat,
     leviableAmount: leviable,
     companySize: 'Generic',
     scorecardType: 'Generic',
