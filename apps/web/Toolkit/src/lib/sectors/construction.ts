@@ -13,7 +13,7 @@
  * See docs/construction-wiring-spec.md for the full mapping blueprint.
  */
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { RCOGP_GENERIC_CALCULATOR_CONFIG } from './rcogp-generic';
+import { RCOGP_GENERIC_CALCULATOR_CONFIG, RCOGP_GENERIC_ORIGINAL_SKILLS_CONFIG } from './rcogp-generic';
 import {
   CONSTRUCTION_SCORECARDS,
   resolveConstructionEntityType,
@@ -62,6 +62,9 @@ export function buildConstructionCalculatorConfig(entityType: string): Calculato
     sectorCode: CONSTRUCTION_SECTOR_CODE,
     scorecardType: sc.scorecardType,
     totalMaxPoints: sc.totalMaxPoints,
+    // The construction mapper reads Skills rawStats in the original method's
+    // terms; RCOGP Generic's toolkit method must not leak in.
+    skills: RCOGP_GENERIC_ORIGINAL_SKILLS_CONFIG,
     pillarConfigs: {
       ...pc,
       ownership: withMax(pc.ownership, el.ownership),

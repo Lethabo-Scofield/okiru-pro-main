@@ -167,6 +167,21 @@ export interface CalculatorConfig {
      * ict/generic D-05.) QSE absorption keeps the all-learners basis (open item Q-E).
      */
     absorptionBasisUnemployedLAI?: boolean;
+    /**
+     * 'toolkit' scores Skills the way the Empower toolkit (RCOGP Generic) does:
+     * each spend and learnership line is split by effective EAP group and capped
+     * per group, bursaries are only Category A rows marked as bursaries (and are
+     * kept out of the other spend lines), F & G course costs and other costs are
+     * capped against all training spend, and training-admin costs are shared out
+     * by the black workforce mix. Unset keeps the original method.
+     */
+    method?: 'toolkit';
+    /**
+     * 'headcount': the absorption bonus measures absorbed learners against the
+     * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
+     * Empower toolkit does. Unset keeps the learner-based rate.
+     */
+    absorptionBasis?: 'headcount';
   };
   procurement: {
     baseMax: number;

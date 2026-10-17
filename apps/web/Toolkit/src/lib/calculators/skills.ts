@@ -2,10 +2,13 @@
  * @domain-rule pillar:skills_development, slides:84-94
  * @see docs/domain/pillars/03_skills_development.md
  */
-import type { SkillsData, TrainingProgram, TrainingCategoryCode } from '../types';
+import type { SkillsData, TrainingProgram, TrainingCategoryCode, Employee, ManagementData } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, normalizeSpendFraction, isBlackRace } from './shared';
-import { buildDemographicBreakdown, normalizeProvince, type DemographicBreakdown, type Province } from './eapTargets';
+import {
+  safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext, normalizeSpendFraction,
+  isBlackRace, normalizeRace, normalizeDesignationForScoring,
+} from './shared';
+import { buildDemographicBreakdown, getEffectiveEap, normalizeProvince, type DemographicBreakdown, type Province } from './eapTargets';
 
 /**
  * @domain-rule pillar:skills_development, slide:86
@@ -22,6 +25,8 @@ export interface SkillsSubLine {
   weighting: number;
   score: number;
   isBonus?: boolean;
+  /** The line's arithmetic in plain words, for the reviewer. */
+  note?: string;
 }
 
 export interface CategoryBreakdown {
@@ -109,6 +114,33 @@ function isUnemployed(prog: TrainingProgram): boolean {
   return prog.employmentStatus === 'Unemployed' || prog.isEmployed === false;
 }
 
+/**
+ * Toolkit "Employed?" = No: the learner was Unemployed or on a Fixed-Term
+ * contract when training started. Drives bursary stipends and absorption. The
+ * stated status wins; the legacy isEmployed flag is read only when no status is.
+ */
+export function isNotEmployed(prog: TrainingProgram): boolean {
+  const status = String(prog.employmentStatus ?? '').trim();
+  if (status) return status === 'Unemployed' || status === 'Fixed-Term';
+  return prog.isEmployed === false;
+}
+
+/**
+ * Toolkit "Bursary?": a Category A row marked as a higher-education bursary.
+ * Category A alone is a learning programme, not a bursary. A legacy 'bursary'
+ * row is a bursary by definition.
+ */
+export function isBursaryProgram(prog: TrainingProgram): boolean {
+  if (prog.category === 'bursary') return true;
+  const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
+  return catCode === 'A' && prog.isBursary === true;
+}
+
+/** Black for B-BBEE purposes: a black race and not a foreign national. */
+function isBlackLearner(prog: TrainingProgram): boolean {
+  return Boolean(prog.isBlack ?? isBlackRace(prog.race)) && !prog.isForeign;
+}
+
 function isLAIProgram(prog: TrainingProgram): boolean {
   const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
   return (
@@ -131,9 +163,9 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
   for (const prog of programs) {
     // Compute black-status from race when the flag isn't set (input layers don't
     // always write isBlack), and accept totalCost when cost wasn't populated —
-    // both previously caused silently-zero Skills scores.
-    const isBlack = prog.isBlack ?? isBlackRace(prog.race);
-    if (!isBlack) continue;
+    // both previously caused silently-zero Skills scores. A foreign national is
+    // never black for B-BBEE purposes.
+    if (!isBlackLearner(prog)) continue;
 
     const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
     // Itemized components must count when no explicit total exists — direct
@@ -149,7 +181,7 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     acc.blackPeople += cost;
     acc.totalBlackLearners++;
 
-    if (prog.category === 'bursary' || catCode === 'A') acc.bursary += cost;
+    if (isBursaryProgram(prog)) acc.bursary += cost;
     // All programs here are Black (non-black were `continue`d above), so a Female
     // learner's spend is Black-female spend — the QSE "Spend on Black women" line.
     if (prog.gender === 'Female') acc.blackFemaleSpend += cost;
@@ -162,9 +194,10 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
       acc.learnershipCount++;
     }
     if (isUnemployed(prog)) acc.unemployedCount++;
-    // Unemployed Black learner who completed an LAI — denominator for the ICT-Generic
-    // 2.1.3 absorption bonus (toolkit basis), used when absorptionBasisUnemployedLAI.
-    if (isLAIProgram(prog) && isUnemployed(prog) && prog.isCompleted) {
+    // Unemployed (or fixed-term) Black learner who completed an LAI — denominator for
+    // the ICT-Generic 2.1.3 absorption bonus (toolkit basis), used when
+    // absorptionBasisUnemployedLAI. The toolkit counts Fixed-Term as not employed.
+    if (isLAIProgram(prog) && isNotEmployed(prog) && prog.isCompleted) {
       acc.unemployedLAICompletedCount++;
     }
     // CRITICAL FIX: Use isAbsorbed (not isEmployed) for absorption count
@@ -222,11 +255,9 @@ function filterProgramsForSpendIndicator(
   programs: TrainingProgram[],
   indicatorIdx: number,
 ): TrainingProgram[] {
-  const black = programs.filter(p => (p.isBlack ?? isBlackRace(p.race)) && !p.isForeign);
+  const black = programs.filter(isBlackLearner);
   if (indicatorIdx === 0) return black;
-  if (indicatorIdx === 1) {
-    return black.filter(p => p.categoryCode === 'A' || p.category === 'bursary' || p.isBursary);
-  }
+  if (indicatorIdx === 1) return black.filter(isBursaryProgram);
   if (indicatorIdx === 2) return black.filter(p => p.isDisabled);
   return [];
 }
@@ -306,6 +337,331 @@ function applyAdminCosts(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Toolkit method (skills.method = 'toolkit') — the Empower toolkit's arithmetic
+// (RCOGP Generic template: tblSkillsData computed columns → 'Skills Calcs' →
+// 'Skills Toolkit'), verified line by line against the toolkit recalculated in
+// Excel. The original method below stays the default for every other sector.
+// ---------------------------------------------------------------------------
+
+const BLACK_DEMOS = ['AM', 'CM', 'IM', 'AF', 'CF', 'IF'] as const;
+type BlackDemo = (typeof BLACK_DEMOS)[number];
+
+const DEMO_LABEL: Record<BlackDemo, string> = {
+  AM: 'African male', CM: 'Coloured male', IM: 'Indian male',
+  AF: 'African female', CF: 'Coloured female', IF: 'Indian female',
+};
+
+/** Toolkit Race.calcs + Gender.calcs → one of the six black groups (null if either is unknown). */
+function blackDemographic(race: string | null | undefined, gender: string | null | undefined): BlackDemo | null {
+  const r = normalizeRace(race);
+  const prefix = r === 'African' ? 'A' : r === 'Coloured' ? 'C' : r === 'Indian' ? 'I' : '';
+  const g = String(gender ?? '').trim().toLowerCase();
+  const suffix = g === 'male' || g === 'm' ? 'M' : g === 'female' || g === 'f' ? 'F' : '';
+  return prefix && suffix ? (`${prefix}${suffix}` as BlackDemo) : null;
+}
+
+/**
+ * The toolkit's workforce figures for Skills, from the Management Control
+ * register: the headcount is every employee except non-executive directors;
+ * each black group's share is its black South African employees over that
+ * headcount (toolkit 'Employee Demographics' row 2), and PWD is the share of
+ * black employees with disabilities. Training-admin costs are shared out by these.
+ */
+export function skillsWorkforceFromManagement(
+  employees: ReadonlyArray<Employee> | undefined,
+): { headcount: number; shares: Record<string, number> } {
+  const staff = (employees ?? []).filter(e => normalizeDesignationForScoring(e.designation) !== 'Board');
+  const counts: Record<string, number> = { AM: 0, CM: 0, IM: 0, AF: 0, CF: 0, IF: 0, PWD: 0 };
+  for (const e of staff) {
+    if (e.isForeign || !isBlackRace(e.race)) continue;
+    const d = blackDemographic(e.race, e.gender);
+    if (d) counts[d]++;
+    if (e.isDisabled) counts.PWD++;
+  }
+  const n = staff.length;
+  const shares: Record<string, number> = {};
+  for (const k of Object.keys(counts)) shares[k] = n > 0 ? counts[k] / n : 0;
+  return { headcount: n, shares };
+}
+
+/**
+ * Skills input with the workforce filled in from Management Control: the
+ * headcount when none was entered, and the workforce shares when none were
+ * supplied. Whatever the client entered wins.
+ */
+export function withSkillsWorkforce(skills: SkillsData, management?: Pick<ManagementData, 'employees'> | null): SkillsData {
+  const wf = skillsWorkforceFromManagement(management?.employees);
+  return {
+    ...skills,
+    headcount: skills.headcount != null && skills.headcount > 0 ? skills.headcount : wf.headcount,
+    workforceShares: skills.workforceShares ?? wf.shares,
+  };
+}
+
+interface ToolkitRow {
+  /** '' when the row has no recognised category (it then counts in no category bucket). */
+  catCode: TrainingCategoryCode | '';
+  black: boolean;
+  demo: BlackDemo | null;
+  disabled: boolean;
+  bursary: boolean;
+  lai: boolean;
+  /** Learnership/apprenticeship/internship completed by an unemployed or fixed-term learner who was absorbed. */
+  absorbedLai: boolean;
+  /** Course cost, categories A–E (bursaries excluded). */
+  ae: number;
+  /** Course cost, categories F & G (bursaries excluded). */
+  fg: number;
+  /** Salary / stipend, categories B, C, D only (bursaries excluded). */
+  bcd: number;
+  /** Travel, accommodation, catering, stationery, facility and other costs (bursaries excluded). */
+  oth: number;
+  /** Bursary spend: course cost, the stipend of a learner who was not employed, and other costs. */
+  bursarySpend: number;
+}
+
+const ALL_CATEGORIES: TrainingCategoryCode[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+
+function toolkitRow(prog: TrainingProgram): ToolkitRow {
+  const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
+  const catCode: TrainingCategoryCode | '' = (ALL_CATEGORIES as string[]).includes(raw) ? (raw as TrainingCategoryCode) : '';
+  const other =
+    (prog.travelCost || 0) + (prog.accommodationCost || 0) + (prog.cateringCost || 0) +
+    (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
+  let course = prog.courseCost || 0;
+  const salary = prog.salaryCost || 0;
+  // A row that carries only a lump-sum cost (older records, summary imports) is
+  // read as its course cost — the toolkit has no column for an unsplit total.
+  if (course === 0 && salary === 0 && other === 0) {
+    const lump = prog.totalCost ?? prog.cost ?? 0;
+    if (lump > 0) course = lump;
+  }
+  const bursary = isBursaryProgram(prog);
+  const notEmployed = isNotEmployed(prog);
+  const black = isBlackLearner(prog);
+  const isBCD = catCode === 'B' || catCode === 'C' || catCode === 'D';
+  // Toolkit LAI: category B/C/D and not marked as a higher-education bursary.
+  const lai = isBCD && !prog.isBursary && prog.category !== 'bursary';
+  return {
+    catCode,
+    black,
+    demo: black ? blackDemographic(prog.race, prog.gender) : null,
+    disabled: Boolean(prog.isDisabled),
+    bursary,
+    lai,
+    absorbedLai: lai && notEmployed && Boolean(prog.isCompleted) && Boolean(prog.isAbsorbed),
+    ae: !bursary && catCode !== '' && catCode !== 'F' && catCode !== 'G' ? course : 0,
+    fg: !bursary && (catCode === 'F' || catCode === 'G') ? course : 0,
+    bcd: !bursary && isBCD ? salary : 0,
+    oth: !bursary ? other : 0,
+    bursarySpend: bursary ? course + (notEmployed ? salary : 0) + other : 0,
+  };
+}
+
+const fmtRand = (n: number): string => {
+  if (Math.abs(n) >= 1_000_000) return `R${(n / 1_000_000).toFixed(2)}m`;
+  return `R${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+const fmtNum = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+const fmtPct = (f: number): string => `${(f * 100).toFixed(1)}%`;
+
+/** min(actual ÷ target × max, max); 0 when the target is zero (the toolkit's IFERROR). */
+function cappedRatio(actual: number, target: number, max: number): number {
+  if (!(target > 0) || !(max > 0)) return 0;
+  return Math.min((actual / target) * max, max);
+}
+
+interface ToolkitParams {
+  leviable: number;
+  headcount: number;
+  province: Province;
+  eapYear?: number;
+  overallTargetPct: number;
+  bursaryTargetPct: number;
+  disabledTargetPct: number;
+  learningMaxPts: number;
+  bursaryMaxPts: number;
+  disabledMaxPts: number;
+  learnershipMaxPts: number;
+  absorptionMaxPts: number;
+  learnershipTargetPct: number;
+  absorptionTargetPct: number;
+  fgCap: number;
+  adminCap: number;
+}
+
+interface ToolkitOutcome {
+  learning: number;
+  bursary: number;
+  disabled: number;
+  learnerships: number;
+  absorption: number;
+  notes: [string, string, string, string, string];
+  categoryBreakdown: CategoryBreakdown[];
+  rawStats: Omit<SkillsResult['rawStats'], 'targetOverall' | 'targetBursaries' | 'targetDisabled'>;
+}
+
+function scoreToolkitMethod(data: SkillsData, p: ToolkitParams): ToolkitOutcome {
+  const programs = data.trainingPrograms || [];
+  const rows = programs.map(toolkitRow);
+  const eap = getEffectiveEap(p.province, p.eapYear);
+  const shares = data.workforceShares ?? {};
+  const adminCosts = (data.trainingManagerSalary ?? 0) + (data.trainingOverheadCost ?? 0);
+
+  // All training spend, every learner of every race (bursaries excluded) —
+  // the base the F & G and other-cost caps are measured against.
+  const allSpend = rows.reduce((a, r) => a + r.ae + r.fg + r.bcd + r.oth, 0);
+  const sum = (rs: ToolkitRow[], f: (r: ToolkitRow) => number) => rs.reduce((a, r) => a + f(r), 0);
+  const byDemo = (d: BlackDemo) => rows.filter(r => r.demo === d);
+
+  // Recognised share of each row's F&G and other costs once its group's caps
+  // apply — used to show the per-category view on the same footing as the score.
+  const fgFactor: Record<string, number> = {};
+  const othFactor: Record<string, number> = {};
+
+  // 2.1.1.1 Learning programmes — per black group, against its EAP share.
+  let learning = 0;
+  let learningRecognised = 0;
+  const learningParts: string[] = [];
+  for (const d of BLACK_DEMOS) {
+    const e = eap[d] ?? 0;
+    const g = byDemo(d);
+    const fg = sum(g, r => r.fg);
+    const oth = sum(g, r => r.oth);
+    const fgRecognised = Math.min(fg, allSpend * p.fgCap * e);
+    const othRecognised = Math.min(oth, allSpend * p.adminCap * e);
+    fgFactor[d] = fg > 0 ? fgRecognised / fg : 1;
+    othFactor[d] = oth > 0 ? othRecognised / oth : 1;
+    const admin = p.adminCap * adminCosts * (shares[d] ?? 0);
+    const recognised = sum(g, r => r.ae + r.bcd) + fgRecognised + admin + othRecognised;
+    const target = p.leviable * p.overallTargetPct * e;
+    const max = p.learningMaxPts * e;
+    const pts = cappedRatio(recognised, target, max);
+    learning += pts;
+    learningRecognised += recognised;
+    if (recognised > 0) {
+      learningParts.push(`${DEMO_LABEL[d]} ${fmtRand(recognised)} ÷ ${fmtRand(target)} → ${pts.toFixed(2)} of ${max.toFixed(2)}`);
+    }
+  }
+  const learningNote =
+    `Each black group is measured against its effective-EAP share of ${fmtPct(p.overallTargetPct)} × ${fmtRand(p.leviable)} leviable ` +
+    `and can earn up to its share of ${fmtNum(p.learningMaxPts)} points. ` +
+    (learningParts.length ? `${learningParts.join('; ')}. ` : 'No recognised spend on black learners. ') +
+    `Bursaries are scored on their own line. F & G course costs are capped at ${fmtPct(p.fgCap)} and other costs at ${fmtPct(p.adminCap)} ` +
+    `of all training spend (${fmtRand(allSpend)}), per group share` +
+    (adminCosts > 0 ? `; ${fmtPct(p.adminCap)} of training-admin costs (${fmtRand(adminCosts)}) is shared by the black workforce mix.` : '.');
+
+  // 2.1.1.2 Bursaries — black Category A bursary rows, per group; no caps.
+  let bursary = 0;
+  let bursaryRecognised = 0;
+  const bursaryParts: string[] = [];
+  for (const d of BLACK_DEMOS) {
+    const e = eap[d] ?? 0;
+    const spend = sum(byDemo(d), r => r.bursarySpend);
+    const target = p.leviable * p.bursaryTargetPct * e;
+    const max = p.bursaryMaxPts * e;
+    const pts = cappedRatio(spend, target, max);
+    bursary += pts;
+    bursaryRecognised += spend;
+    if (spend > 0) bursaryParts.push(`${DEMO_LABEL[d]} ${fmtRand(spend)} ÷ ${fmtRand(target)} → ${pts.toFixed(2)} of ${max.toFixed(2)}`);
+  }
+  const bursaryNote =
+    `Category A rows marked as higher-education bursaries for black students, each group against its EAP share of ` +
+    `${fmtPct(p.bursaryTargetPct)} × ${fmtRand(p.leviable)}: ` +
+    (bursaryParts.length ? `${bursaryParts.join('; ')}.` : 'none recorded.') +
+    ` A stipend counts only for a learner who was unemployed or on a fixed-term contract.`;
+
+  // 2.1.1.3 Disabled learners — one pool of black learners with disabilities, no EAP split.
+  const dis = rows.filter(r => r.black && r.disabled);
+  const disFg = Math.min(sum(dis, r => r.fg), allSpend * p.fgCap);
+  const disOth = Math.min(sum(dis, r => r.oth), allSpend * p.adminCap);
+  const disAdmin = p.adminCap * adminCosts * (shares.PWD ?? 0);
+  const disabledRecognised = sum(dis, r => r.ae + r.bcd) + disFg + disAdmin + disOth;
+  const disabledTarget = p.leviable * p.disabledTargetPct;
+  const disabled = cappedRatio(disabledRecognised, disabledTarget, p.disabledMaxPts);
+  const disabledNote =
+    `Black learners with disabilities: ${fmtRand(disabledRecognised)} recognised ÷ ${fmtRand(disabledTarget)} ` +
+    `(${fmtPct(p.disabledTargetPct)} × ${fmtRand(p.leviable)}) × ${fmtNum(p.disabledMaxPts)} = ${disabled.toFixed(2)} (max ${fmtNum(p.disabledMaxPts)}).`;
+
+  // 2.1.2.1 Learnerships, apprenticeships, internships — headcount per black group.
+  let learnerships = 0;
+  let learnershipCount = 0;
+  const laiParts: string[] = [];
+  for (const d of BLACK_DEMOS) {
+    const e = eap[d] ?? 0;
+    const k = byDemo(d).filter(r => r.lai).length;
+    const target = p.headcount * (p.learnershipTargetPct / 100) * e;
+    const max = p.learnershipMaxPts * e;
+    const pts = cappedRatio(k, target, max);
+    learnerships += pts;
+    learnershipCount += k;
+    if (k > 0) laiParts.push(`${DEMO_LABEL[d]} ${k} ÷ ${target.toFixed(2)} → ${pts.toFixed(2)} of ${max.toFixed(2)}`);
+  }
+  const learnershipNote = p.headcount > 0
+    ? `Black learners in categories B, C and D (employed or not), each group against its EAP share of ` +
+      `${fmtNum(p.learnershipTargetPct)}% × ${fmtNum(p.headcount)} headcount: ` +
+      (laiParts.length ? `${laiParts.join('; ')}.` : 'none recorded.')
+    : 'No headcount, so this line cannot score.';
+
+  // Absorption bonus — total level, no EAP split.
+  const absorbedCount = rows.filter(r => r.demo !== null && r.absorbedLai).length;
+  const absorptionRate = p.headcount > 0 ? absorbedCount / p.headcount : 0;
+  const absorption = cappedRatio(absorptionRate, p.absorptionTargetPct / 100, p.absorptionMaxPts);
+  const absorptionNote = p.headcount > 0
+    ? `${absorbedCount} unemployed or fixed-term black learner(s) completed a learnership, apprenticeship or internship and were absorbed: ` +
+      `${absorbedCount} ÷ ${fmtNum(p.headcount)} headcount = ${fmtPct(absorptionRate)} vs ${fmtNum(p.absorptionTargetPct)}% target ` +
+      `→ ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`
+    : 'No headcount, so this line cannot score.';
+
+  // Per-category view of black learners' spend, on the same footing as the score.
+  const spendByCat: Record<string, number> = {};
+  const recognisedByCat: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.black || !r.catCode) continue;
+    const spend = r.ae + r.fg + r.bcd + r.oth + r.bursarySpend;
+    const recognised = r.demo
+      ? r.ae + r.bcd + r.fg * fgFactor[r.demo] + r.oth * othFactor[r.demo] + r.bursarySpend
+      : 0;
+    spendByCat[r.catCode] = (spendByCat[r.catCode] ?? 0) + spend;
+    recognisedByCat[r.catCode] = (recognisedByCat[r.catCode] ?? 0) + recognised;
+  }
+  const categoryBreakdown: CategoryBreakdown[] = ALL_CATEGORIES.map(code => {
+    const spend = spendByCat[code] ?? 0;
+    const recognisedSpend = recognisedByCat[code] ?? 0;
+    const isFG = code === 'F' || code === 'G';
+    return {
+      code,
+      label: CATEGORY_LABELS[code].label,
+      examples: CATEGORY_LABELS[code].examples,
+      spend,
+      recognisedSpend,
+      cap: isFG ? p.fgCap : undefined,
+      capApplied: recognisedSpend < spend - 0.005,
+    };
+  });
+
+  return {
+    learning,
+    bursary,
+    disabled,
+    learnerships,
+    absorption,
+    notes: [learningNote, bursaryNote, disabledNote, learnershipNote, absorptionNote],
+    categoryBreakdown,
+    rawStats: {
+      blackSpend: round2(learningRecognised),
+      bursarySpend: round2(bursaryRecognised),
+      disabledSpend: round2(disabledRecognised),
+      learnershipCount,
+      absorbedCount,
+      totalBlackLearners: rows.filter(r => r.black).length,
+      absorptionRate,
+      totalRecognisedSpend: round2(learningRecognised),
+    },
+  };
+}
+
 export function calculateSkillsScore(
   data: SkillsData,
   config?: CalculatorConfig,
@@ -353,10 +709,60 @@ export function calculateSkillsScore(
   // ICT Generic: absorption denominator = unemployed-LAI completers, not all Black
   // learners (toolkit basis). QSE keeps the all-learners basis (open item Q-E). (ledger D-05)
   const absorptionBasisUnemployedLAI = (sc as any).absorptionBasisUnemployedLAI === true;
+  // Absorbed learners against the entity headcount (the Empower toolkit's basis).
+  const absorptionBasisHeadcount = sc.absorptionBasis === 'headcount';
 
   const TARGET_OVERALL = leviableAmount * overallTargetPct;
   const TARGET_BURSARIES = leviableAmount * bursaryTargetPct;
   const TARGET_DISABLED = leviableAmount * disabledTargetPct;
+
+  const subMinimumMetFor = (base: number) =>
+    subMinThreshold > 0 ? base >= (subMinThreshold / 100) * (learningMaxPts + bursaryMaxPts + disabledMaxPts + learnershipMaxPts) : true;
+  const province = normalizeProvince(eapProvince || 'National') as Province;
+  const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
+
+  if (sc.method === 'toolkit') {
+    // No fallbacks: a missing headcount or leviable amount scores the lines
+    // that depend on it 0, as the toolkit's IFERROR does.
+    const headcount = data.headcount != null && data.headcount > 0 ? data.headcount : 0;
+    const t = scoreToolkitMethod(data, {
+      leviable: leviableAmount > 0 ? leviableAmount : 0,
+      headcount,
+      province,
+      eapYear,
+      overallTargetPct, bursaryTargetPct, disabledTargetPct,
+      learningMaxPts, bursaryMaxPts, disabledMaxPts, learnershipMaxPts, absorptionMaxPts,
+      learnershipTargetPct, absorptionTargetPct,
+      fgCap, adminCap,
+    });
+    const base = t.learning + t.bursary + t.disabled + t.learnerships;
+    const lines: SkillsSubLine[] = [
+      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0] },
+      { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: t.bursary, note: t.notes[1] },
+      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[2] },
+      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.learnerships, note: t.notes[3] },
+      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% of headcount`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4] },
+    ];
+    return {
+      learningProgrammes: round2(t.learning),
+      bursaries: round2(t.bursary),
+      disabledLearning: round2(t.disabled),
+      learnerships: round2(t.learnerships),
+      absorption: round2(t.absorption),
+      total: round2(clampScore(base + t.absorption, maxPoints)),
+      subMinimumMet: subMinimumMetFor(base),
+      categoryBreakdown: t.categoryBreakdown,
+      subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
+      eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
+      eapProvince: province,
+      rawStats: {
+        ...t.rawStats,
+        targetOverall: round2(TARGET_OVERALL),
+        targetBursaries: round2(TARGET_BURSARIES),
+        targetDisabled: round2(TARGET_DISABLED),
+      },
+    };
+  }
 
   const spend = accumulateSpend(trainingPrograms);
   const uncappedProgrammeSpend = Object.values(spend.byCategory).reduce((a, b) => a + b, 0);
@@ -388,9 +794,11 @@ export function calculateSkillsScore(
   const learnershipTarget = Math.max(entityHeadcount * (learnershipTargetPct / 100), 1);
   const learnershipScore = clampScore(safeRatio(spend.learnershipCount, learnershipTarget, learnershipMaxPts), learnershipMaxPts);
 
-  const absorptionDenominator = absorptionBasisUnemployedLAI
-    ? spend.unemployedLAICompletedCount
-    : spend.totalBlackLearners;
+  const absorptionDenominator = absorptionBasisHeadcount
+    ? (data.headcount != null && data.headcount > 0 ? data.headcount : 0)
+    : absorptionBasisUnemployedLAI
+      ? spend.unemployedLAICompletedCount
+      : spend.totalBlackLearners;
   const absorptionRate = absorptionDenominator > 0
     ? spend.absorbedCount / absorptionDenominator
     : 0;
@@ -398,10 +806,6 @@ export function calculateSkillsScore(
 
   const baseScore = learningScore + bursaryScore + disabledScore + learnershipScore;
   const totalScore = clampScore(baseScore + absorptionScore, maxPoints);
-
-  // Sub-minimum excludes bonus points (absorption is bonus per RCOGP 2019)
-  const baseMaxPoints = (learningMaxPts + bursaryMaxPts + disabledMaxPts + learnershipMaxPts);
-  const subMinThresholdPoints = (subMinThreshold / 100) * baseMaxPoints;
 
   const subLines: SkillsSubLine[] = [
     { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: learningScore },
@@ -412,13 +816,11 @@ export function calculateSkillsScore(
         : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: bursaryScore },
     { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: disabledScore },
     { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: learnershipScore },
-    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% absorption`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },
+    { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% ${absorptionBasisHeadcount ? 'of headcount' : 'absorption'}`, weighting: absorptionMaxPts, score: absorptionScore, isBonus: true },
   ];
 
   const skillsTotal = round2(totalScore);
 
-  const province = normalizeProvince(eapProvince || 'National') as Province;
-  const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
   const eapBreakdowns = isQse
     ? {}
     : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear);
@@ -430,11 +832,10 @@ export function calculateSkillsScore(
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: skillsTotal,
-    // A sector with no sub-minimum has nothing to fail: `true`, never `false`
-    // (the old `false` marked every no-sub-minimum sector as failing, which the
-    // store then discounted).
-    subMinimumMet:
-      subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : true,
+    // Sub-minimum excludes the absorption bonus (RCOGP 2019). A sector with no
+    // sub-minimum has nothing to fail: `true`, never `false` (the old `false`
+    // marked every no-sub-minimum sector as failing, which the store then discounted).
+    subMinimumMet: subMinimumMetFor(baseScore),
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     eapBreakdowns,
