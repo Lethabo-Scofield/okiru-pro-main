@@ -1117,7 +1117,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         num((r as any).numberOfShares) > 0
           ? Math.round(num((r as any).numberOfShares))
           : Math.max(1, Math.round((sharePct > 0 ? sharePct : Math.max(votingPct, eiPct)) * 10_000)),
-      shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
+      // A blank share value stays 0: a placeholder of 1 faked a value split
+      // (ownership weighs holders by share value when every holder has one).
+      shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 0,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
         coerceYesNo((r as any).isDesignatedGroup) ||
@@ -1127,6 +1129,15 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         isFarmWorker,
       isFarmWorker,
       blackNewEntrant: isNewEntrant,
+      // BDG% / BNE% as the fractions the register states (share of THIS
+      // holder's stake), not only as yes/no: the toolkit scores the fraction.
+      // Blank cells state nothing, so the flags above remain the fallback.
+      ...(statedNumber((r as any).designatedGroupOwnership) !== null
+        ? { designatedGroupOwnership: pctToFraction((r as any).designatedGroupOwnership) }
+        : {}),
+      ...(statedNumber((r as any).blackNewEntrantOwnership) !== null
+        ? { blackNewEntrantOwnership: pctToFraction((r as any).blackNewEntrantOwnership) }
+        : {}),
       votingRightsPercent: votingPct,
       economicInterestPercent: eiPct,
       // Pass the workbook's stated type through — the ownership calculator

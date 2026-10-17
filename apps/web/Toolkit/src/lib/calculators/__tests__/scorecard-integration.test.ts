@@ -126,8 +126,11 @@ describe('B-BBEE Scorecard Integration', () => {
       // fraction of target — a known remaining discrepancy (2/8 for a
       // 100%-black debt-free entity on the direct path), flagged in the audit
       // as follow-up rather than silently re-derived here.
+      // No valuation on file is what sends it down that path: the original
+      // method reads a missing share value as the old R1 placeholder.
       const highOwnership = calculateOwnershipScore({
         ...makeOwnership(1.0),
+        companyValue: 0,
         shareholders: makeOwnership(1.0).shareholders.map((s) => ({ ...s, shareValue: 0 })),
       });
       expect(highOwnership.subMinimumMet).toBe(true);

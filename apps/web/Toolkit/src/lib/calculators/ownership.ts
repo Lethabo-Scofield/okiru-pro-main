@@ -6,7 +6,7 @@
  * Sector targets and max points come from CalculatorConfig (sectorConfigToCalculatorConfig).
  * Mirrors apps/api/pipeline/rules/pillarCalculators.ts::calcOwnership.
  */
-import type { OwnershipData } from '../types';
+import type { OwnershipData, Shareholder } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2 } from './shared';
 
@@ -65,6 +65,8 @@ export interface OwnershipSubLine {
    * not hardcoded here.
    */
   isBonus?: boolean;
+  /** The line's arithmetic in plain English, for the reviewer. */
+  note?: string;
 }
 
 export interface OwnershipResult {
@@ -144,8 +146,18 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
 }
 
 export function calculateOwnershipScore(data: OwnershipData, config: CalculatorConfig): OwnershipResult {
-  const shareholders = data.shareholders || [];
   const ot = resolveOwnershipTargets(config);
+  if (config?.ownership?.ownershipMethod === 'toolkit') {
+    return calculateToolkitOwnership(data, ot, config.ownership.netValueTarget);
+  }
+  // The original method was always fed a share value of R1 where none was on
+  // file: the store, the workbook import and the bulk import wrote that
+  // placeholder. The data now keeps the truth (0) so the toolkit method can
+  // tell a real value split from none, and the placeholder is applied here,
+  // for the original method only, so every sector not yet checked against
+  // its own toolkit scores exactly as it did.
+  const shareholders = (data.shareholders || []).map((sh) =>
+    (sh.shareValue > 0 ? sh : { ...sh, shareValue: 1 }));
 
 
   const { companyValue, outstandingDebt, yearsHeld } = data;
@@ -364,6 +376,251 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       designatedGroupPercentage: round2(totalDesignatedGroup),
       netValuePercentage: round2(netValuePointsAgg / ot.netValueMaxPts),
       newEntrantEIPercentage: round2(totalNewEntrantEI),
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Empower toolkit's ownership arithmetic (RCOGP Generic template), checked
+// line by line against the workbook recalculated by Excel. Selected by
+// CalculatorConfig.ownership.ownershipMethod === 'toolkit'; every other sector
+// keeps the calculation above until its own template has been checked.
+//
+// Where the spreadsheet's FORMULAS are mechanically broken they are not copied:
+//   - its target cells go through LEFT(E,3), which reads 3% and 2% as "0.0"
+//     (designated groups and new entrants can never score) and 25% as 0.2
+//     (economic interest full marks from 20%). The real targets are used;
+//   - its first indebted-shareholder row uses a different formula from the
+//     rows below it, so the result depended on row order. Every indebted
+//     shareholder is netted the same way here;
+//   - its later rows net a NON-black shareholder's debt as a negative stake,
+//     and ignore the indebted shareholder's black share. Only black
+//     shareholders' debt is netted, against their black share.
+// The graduation factor is computed by the toolkit and never used in its
+// score, so it plays no part here either.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const finitePositive = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+/** A fraction the record states (zero included), or null when it states none. */
+const statedFraction = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : null;
+
+export type OwnershipWeightBasis = 'value' | 'shares' | 'equal' | 'none';
+
+/**
+ * Each shareholder's weight: its share VALUE over the total share value, which
+ * is how the toolkit weighs holders (the number of shares never enters its
+ * score). When any holder has no value on file the value split is unknown, so
+ * holders are weighed by number of shares, and failing that equally.
+ */
+export function ownershipHolderWeights(
+  shareholders: ReadonlyArray<Pick<Shareholder, 'shares' | 'shareValue'>>,
+): { weights: number[]; basis: OwnershipWeightBasis } {
+  const n = shareholders.length;
+  if (n === 0) return { weights: [], basis: 'none' };
+  const values = shareholders.map((sh) => finitePositive(sh.shareValue));
+  if (values.every((v) => v > 0)) {
+    const total = values.reduce((a, v) => a + v, 0);
+    return { weights: values.map((v) => v / total), basis: 'value' };
+  }
+  const shares = shareholders.map((sh) => finitePositive(sh.shares));
+  const totalShares = shares.reduce((a, v) => a + v, 0);
+  if (totalShares > 0) return { weights: shares.map((v) => v / totalShares), basis: 'shares' };
+  return { weights: shareholders.map(() => 1 / n), basis: 'equal' };
+}
+
+const pctText = (f: number): string => `${Number((f * 100).toFixed(1))}%`;
+const randText = (v: number): string => `R${Math.round(v).toLocaleString('en-ZA')}`;
+
+/** "46.4% ÷ 25% × 4 = 7.43, capped at 4" — the line's points, worked. */
+function pointsWorking(measure: number, target: number, maxPts: number): string {
+  const raw = target > 0 ? (measure / target) * maxPts : 0;
+  const base = `${pctText(measure)} ÷ ${pctText(target)} × ${maxPts} = ${raw.toFixed(2)}`;
+  if (raw > maxPts) return `${base}, capped at ${maxPts}`;
+  if (raw < 0) return `${base}, floored at 0`;
+  return base;
+}
+
+function calculateToolkitOwnership(
+  data: OwnershipData,
+  ot: ReturnType<typeof resolveOwnershipTargets>,
+  netValueTargetCfg: number | undefined,
+): OwnershipResult {
+  const shareholders = data.shareholders || [];
+  const netValueTarget = typeof netValueTargetCfg === 'number' && netValueTargetCfg > 0 ? netValueTargetCfg : 1;
+  const companyValue = finitePositive(data.companyValue);
+  const { weights, basis } = ownershipHolderWeights(shareholders);
+
+  // Toolkit 'Ownership Data' W4..Z4 (whole register), W2/X2 (black holders
+  // carrying acquisition debt) and 'Oustanding Debts Calcs' H1/V1 (the net
+  // value of those holders' stakes).
+  let blackShare = 0;
+  let blackWomenShare = 0;
+  let designatedShare = 0;
+  let newEntrantShare = 0;
+  let indebtedBlack = 0;
+  let indebtedBlackWomen = 0;
+  let netIndebtedBlack = 0;
+  let netIndebtedBlackWomen = 0;
+  let indebtedHolders = 0;
+  let statedHolderDebt = 0;
+
+  shareholders.forEach((sh, i) => {
+    const w = weights[i] ?? 0;
+    const bo = statedFraction(sh.blackOwnership) ?? 0;
+    const bwo = statedFraction(sh.blackWomenOwnership) ?? 0;
+    const dg = statedFraction(sh.designatedGroupOwnership) ?? (sh.isDesignatedGroup ? bo : 0);
+    const ne = statedFraction(sh.blackNewEntrantOwnership) ?? (sh.blackNewEntrant ? bo : 0);
+    blackShare += w * bo;
+    blackWomenShare += w * bwo;
+    designatedShare += w * dg;
+    newEntrantShare += w * ne;
+
+    const debt = finitePositive(sh.outstandingDebt);
+    statedHolderDebt += debt;
+    if (bo > 0 && debt > 0) {
+      indebtedHolders += 1;
+      indebtedBlack += w * bo;
+      indebtedBlackWomen += w * bwo;
+      // Deemed net value of the stake: its share of the company's value less
+      // the debt, as a fraction of the company's value. With no valuation on
+      // file the stake cannot be netted and counts for nothing.
+      if (companyValue > 0) {
+        const deemed = (companyValue * w - debt) / companyValue;
+        netIndebtedBlack += deemed * bo;
+        netIndebtedBlackWomen += deemed * bwo;
+      }
+    }
+  });
+
+  const freeBlack = blackShare - indebtedBlack;
+  const freeBlackWomen = blackWomenShare - indebtedBlackWomen;
+  const eiBlack = freeBlack + netIndebtedBlack;
+  const eiBlackWomen = freeBlackWomen + netIndebtedBlackWomen;
+  // The toolkit's net value measure is the same debt-netted black economic
+  // interest, scored against its own target (Ownership Scorecard E13 = 100%).
+  const netValueMeasure = eiBlack;
+
+  const votingRightsBlack = safeRatio(blackShare, ot.votingRightsTarget, ot.votingRightsMaxPts);
+  const votingRightsBWO = safeRatio(blackWomenShare, ot.womenVotingTarget, ot.womenVotingMaxPts);
+  const economicInterestBlack = safeRatio(eiBlack, ot.economicInterestTarget, ot.economicInterestMaxPts);
+  const economicInterestBWO = safeRatio(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts);
+  const designatedGroups = safeRatio(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax);
+  const newEntrants = safeRatio(newEntrantShare, ot.newEntrantsTarget, ot.newEntrantsMaxPts);
+  const netValuePoints = safeRatio(netValueMeasure, netValueTarget, ot.netValueMaxPts);
+
+  const subMinimumMet = netValuePoints >= ot.subMinNetValue;
+  const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
+    + designatedGroups + newEntrants + netValuePoints;
+
+  // Plain-English working for the reviewer.
+  const basisText: Record<OwnershipWeightBasis, string> = {
+    value: 'Each shareholder counts by the value of their shares.',
+    shares: 'Not every shareholder has a share value on file, so each counts by number of shares.',
+    equal: 'No share values or share counts on file, so every shareholder counts equally.',
+    none: 'No shareholders on file.',
+  };
+  const eiWorking = (free: number, net: number, who: string): string => {
+    if (indebtedHolders === 0) return '';
+    if (companyValue <= 0) {
+      return ` ${pctText(free)} is held by ${who} without acquisition debt; with no company value on file, the stakes of the ${indebtedHolders} indebted black shareholder(s) cannot be netted and add nothing.`;
+    }
+    return ` That is ${pctText(free)} held by ${who} without acquisition debt + ${pctText(net)} net value of the indebted black shareholders' stakes (their share of the ${randText(companyValue)} company value less their debt).`;
+  };
+  const entityDebt = finitePositive(data.outstandingDebt);
+  const netValueNote = [
+    `Black economic interest after acquisition debt ${pointsWorking(netValueMeasure, netValueTarget, ot.netValueMaxPts)}.`,
+    `Sub-minimum ${round2(ot.subMinNetValue)} points: ${subMinimumMet ? 'met' : 'not met'}.`,
+    entityDebt > 0 && statedHolderDebt === 0
+      ? `An outstanding debt of ${randText(entityDebt)} is recorded for the company, but no shareholder states their own acquisition debt; debt is netted per shareholder, so it was not deducted.`
+      : '',
+  ].filter(Boolean).join(' ');
+
+  const subLines: OwnershipSubLine[] = [
+    {
+      name: 'Exercisable voting rights of black individuals',
+      target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`,
+      weighting: ot.votingRightsMaxPts,
+      score: votingRightsBlack,
+      note: `Black voting rights ${pointsWorking(blackShare, ot.votingRightsTarget, ot.votingRightsMaxPts)}. ${basisText[basis]}`,
+    },
+    {
+      name: 'Exercisable voting rights of black females',
+      target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`,
+      weighting: ot.womenVotingMaxPts,
+      score: votingRightsBWO,
+      isBonus: ot.womenVotingIsBonus || undefined,
+      note: `Black women's voting rights ${pointsWorking(blackWomenShare, ot.womenVotingTarget, ot.womenVotingMaxPts)}.`,
+    },
+    {
+      name: 'Economic interest of black individuals',
+      target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`,
+      weighting: ot.economicInterestMaxPts,
+      score: economicInterestBlack,
+      note: `Black economic interest ${pointsWorking(eiBlack, ot.economicInterestTarget, ot.economicInterestMaxPts)}.${eiWorking(freeBlack, netIndebtedBlack, 'black shareholders')}`,
+    },
+    ...(ot.womenEIMaxPts > 0
+      ? [{
+          name: 'Economic interest of black females',
+          target: `${(ot.womenEITarget * 100).toFixed(0)}%`,
+          weighting: ot.womenEIMaxPts,
+          score: economicInterestBWO,
+          isBonus: ot.womenEIIsBonus || undefined,
+          note: `Black women's economic interest ${pointsWorking(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts)}.${eiWorking(freeBlackWomen, netIndebtedBlackWomen, 'black women')}`,
+        }]
+      : []),
+    ...(ot.designatedGroupsMax > 0
+      ? [{
+          name: 'Economic interest of black designated groups or participants in ownership schemes',
+          target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`,
+          weighting: ot.designatedGroupsMax,
+          score: designatedGroups,
+          note: `Designated groups' economic interest ${pointsWorking(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax)}.`,
+        }]
+      : []),
+    ...(ot.newEntrantsMaxPts > 0
+      ? [{
+          name: 'Economic interest of black new entrants',
+          target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`,
+          weighting: ot.newEntrantsMaxPts,
+          score: newEntrants,
+          note: `Black new entrants' economic interest ${pointsWorking(newEntrantShare, ot.newEntrantsTarget, ot.newEntrantsMaxPts)}.`,
+        }]
+      : []),
+    {
+      name: 'Net value',
+      target: `≥ ${ot.subMinNetValue} pts`,
+      weighting: ot.netValueMaxPts,
+      score: netValuePoints,
+      note: netValueNote,
+    },
+  ];
+
+  return {
+    votingRightsBlack: round2(votingRightsBlack),
+    votingRightsBWO: round2(votingRightsBWO),
+    economicInterestBlack: round2(economicInterestBlack),
+    economicInterestBWO: round2(economicInterestBWO),
+    designatedGroups: round2(designatedGroups),
+    newEntrants: round2(newEntrants),
+    ownershipFulfilment: 0,
+    netValue: round2(netValuePoints),
+    total: round2(clampScore(totalPoints, ot.maxPts)),
+    subMinimumMet,
+    fullOwnershipAwarded: false,
+    subLines: subLines.map((l) => ({ ...l, score: round2(l.score) })),
+    rawStats: {
+      blackVotingPercentage: round2(blackShare),
+      blackWomenVotingPercentage: round2(blackWomenShare),
+      economicInterestPercentage: round2(eiBlack),
+      economicInterestBWOPercentage: round2(eiBlackWomen),
+      designatedGroupPercentage: round2(designatedShare),
+      netValuePercentage: round2(netValueMeasure),
+      newEntrantEIPercentage: round2(newEntrantShare),
     },
   };
 }
