@@ -4,7 +4,7 @@ import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
 import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
-import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/calculators/skills";
+import { calculateSkillsScore, resolveSkillsSpendTargets, withSkillsWorkforce } from "@toolkit/lib/calculators/skills";
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { getEAPTargets } from "@toolkit/lib/calculators/eapTargets";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
@@ -175,7 +175,7 @@ const SKILLS_EAP_LEVEL_LABELS: Record<string, string> = {
 };
 
 export default function SkillsDevelopment() {
-  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram, calculatorConfig, client } = useBbeeStore();
+  const { skills, addTrainingProgram, updateTrainingProgram, removeTrainingProgram, calculatorConfig, client, management } = useBbeeStore();
   const { leviableAmount, trainingPrograms, yesCandidatesCount, yesAbsorbedCount } = skills;
   const { toast } = useToast();
 
@@ -394,7 +394,8 @@ export default function SkillsDevelopment() {
   // eapYear MUST match what the store passes (see ManagementControl.tsx) — EAP
   // targets are year-dependent, so omitting it scored this page against a
   // different year's table than the scorecard.
-  const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince, client.eapYear);
+  // Same input the scorecard scores: headcount and workforce mix from Management Control.
+  const score = calculateSkillsScore(withSkillsWorkforce(skills, management), calculatorConfig, client.eapProvince, client.eapYear);
 
   const totalYesCount = trainingPrograms.filter(p => p.isYesEmployee).length;
   const completedYesCount = trainingPrograms.filter(p => p.isYesEmployee && p.isCompleted).length;

@@ -220,6 +220,9 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     // Toolkit headcount ('Client Information'!D14): every MC row in the period
     // except non-executive directors.
     headcount: employees.filter((e) => e.designation !== 'Board').length,
+    // 'Skills Toolkit'!D6 / D7: training-manager salary and training overhead.
+    trainingManagerSalary: num(cell(c, 'Skills Toolkit!D6')),
+    trainingOverheadCost: num(cell(c, 'Skills Toolkit!D7')),
   };
 
   // Procurement

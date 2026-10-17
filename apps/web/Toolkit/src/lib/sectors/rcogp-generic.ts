@@ -246,9 +246,33 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
   };
 }
 
-/** Complete RCOGP Generic config — use for scorecard, tests, and explicit sector wiring. */
-export const RCOGP_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToCalculatorConfig(RCOGP_GENERIC);
+const RCOGP_GENERIC_BASE = sectorConfigToCalculatorConfig(RCOGP_GENERIC);
+
+/**
+ * The RCOGP skills block WITHOUT the toolkit method. Construction borrows the
+ * RCOGP pillar config only to harvest the calculators' rawStats, and its mapper
+ * reads them in the original method's terms.
+ */
+export const RCOGP_GENERIC_ORIGINAL_SKILLS_CONFIG: CalculatorConfig['skills'] = RCOGP_GENERIC_BASE.skills;
+
+/**
+ * Complete RCOGP Generic config — use for scorecard, tests, and explicit sector wiring.
+ *
+ * Skills is scored the way the Empower toolkit (RCOGP Generic template) scores it,
+ * checked line by line against the toolkit recalculated in Excel. That includes
+ * the absorption bonus: absorbed learners against 5% of headcount, as the toolkit
+ * measures it (this replaces the 100%-of-learners basis from the July audit, item 2,
+ * for this sector only).
+ */
+export const RCOGP_GENERIC_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...RCOGP_GENERIC_BASE,
+  skills: {
+    ...RCOGP_GENERIC_BASE.skills,
+    method: 'toolkit',
+    absorptionBasis: 'headcount',
+    absorptionTargetPercent: 5,
+  },
+};
 
 export function isRcogpGenericSector(
   sectorCode: string,

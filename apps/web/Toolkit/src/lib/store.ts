@@ -63,7 +63,7 @@ import { calculateConstructionScorecard } from '../../../../api/pipeline/constru
 import { coerceYesNo, coerceYesNoOrUnset } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
-import { calculateSkillsScore } from './calculators/skills';
+import { calculateSkillsScore, withSkillsWorkforce } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
@@ -811,9 +811,12 @@ export function calculateScorecard(
 
   // Transport Large Skills is structurally different (5th indicator = black
   // women in B/C/D programmes, not absorption) — use the mirrored calculator.
+  // Skills reads its workforce from Management Control: the headcount when none
+  // was entered, and the black workforce mix the toolkit shares training-admin
+  // costs by (every employee except non-executive directors).
   const skillScore = transportLarge
     ? calculateTransportLargeSkills(state.skills, cfg)
-    : calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
+    : calculateSkillsScore(withSkillsWorkforce(state.skills, state.management), cfg, state.client.eapProvince, state.client.eapYear);
 
   const procScore = calculateProcurementScore(state.procurement, cfg);
 

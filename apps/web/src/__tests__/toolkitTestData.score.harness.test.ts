@@ -16,7 +16,7 @@ import { projectWorkbookToClient, type WorkbookData } from '../../server/workboo
 import type { CalculatorConfig } from '../../shared/schema';
 import { calculateOwnershipScore } from '@toolkit/lib/calculators/ownership';
 import { calculateManagementScore } from '@toolkit/lib/calculators/management';
-import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
+import { calculateSkillsScore, withSkillsWorkforce } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from '@toolkit/lib/calculators/esd-sed';
 import { calculateAfsScore } from '@toolkit/lib/calculators/afs';
@@ -176,7 +176,8 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           // expert-verified under the 25th CEE EAP dataset — pin the vintage so
           // the harness stays faithful to those workbooks (live default = 26th CEE, 2026).
           const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng', 2025).total;
-          const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
+          // The store fills Skills' headcount and workforce mix from the employee register.
+          const skills = calculateSkillsScore(withSkillsWorkforce({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, { employees: p.employees as any }), cfg, 'Gauteng', 2025).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, effNpat, cfg);
           // FSC "SED & CE Scorecard" adds Consumer Education + Fundisa lines
