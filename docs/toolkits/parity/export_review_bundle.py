@@ -68,10 +68,13 @@ def main():
             if e is not None:
                 cells["Summary Scorecard"][f"{col}{row}"] = {"v": e.get("v")}
     for sheet, ref in [("Ownership Scorecard", r) for r in ("I7", "I10", "I12", "J7", "J10", "J12")] + \
-                      [("Scorecard Calculations", r) for r in ("F6", "G6", "F7", "G7", "F8", "G8")]:
+                      [("Scorecard Calculations", r) for r in ("F6", "G6", "F7", "G7", "F8", "G8")] + \
+                      [("Ownership Data", "W3"), ("Ownership Scorecard", "D1"), ("ESD Scorecard", "D2")]:
         e = sheets.get(sheet, {}).get(ref)
         cells.setdefault(sheet, {})[ref] = {"v": e.get("v") if e else None}
-    json.dump({"template": case.get("template"), "lines": lines, "cells": cells, "sampleCase": sample},
+    # The rows the referee reworks the toolkit's faulty debt and ESD formulas from.
+    tables = {k: excel["tables"][k] for k in ("tblOwnershipData", "tblESDData") if k in excel["tables"]}
+    json.dump({"template": case.get("template"), "lines": lines, "cells": cells, "tables": tables, "sampleCase": sample},
               open(sys.argv[3], "w", encoding="utf-8"), indent=1, default=str)
     print("wrote", sys.argv[3], len(lines), "lines")
 

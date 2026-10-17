@@ -80,6 +80,8 @@ export interface OwnershipResult {
   ownershipFulfilment: number;
   netValue: number;
   total: number;
+  /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  exactTotal?: number;
   subMinimumMet: boolean;
   fullOwnershipAwarded: boolean;
   subLines: OwnershipSubLine[];
@@ -363,6 +365,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     ownershipFulfilment: round2(fulfilment),
     netValue: round2(netValuePoints),
     total,
+    exactTotal: clampScore(totalPoints, ot.maxPts),
     subMinimumMet,
     // Retained in the result shape for UI compatibility; permanently false now
     // that every indicator scores on its own measure (audit item 12a).
@@ -392,7 +395,9 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
 //     (economic interest full marks from 20%). The real targets are used;
 //   - its first indebted-shareholder row uses a different formula from the
 //     rows below it, so the result depended on row order. Every indebted
-//     shareholder is netted the same way here;
+//     shareholder is netted with the FIRST row's formula here (the stake counts
+//     in full once its net value reaches 40% of it) — the one a register with
+//     a single empowerment partner always meets;
 //   - its later rows net a NON-black shareholder's debt as a negative stake,
 //     and ignore the indebted shareholder's black share. Only black
 //     shareholders' debt is netted, against their black share.
@@ -491,7 +496,13 @@ function calculateToolkitOwnership(
       // file the stake cannot be netted and counts for nothing.
       if (companyValue > 0) {
         const deemed = (companyValue * w - debt) / companyValue;
-        netIndebtedBlack += deemed * bo;
+        // The toolkit's first indebted-shareholder row — the formula every
+        // register with a single empowerment partner meets: the stake counts in
+        // full once its net value reaches 40% of it, pro rata below that
+        // ('Oustanding Debts Calcs'!H3 = MIN(E×40%, deemed) ÷ (E×40%) × E).
+        // Its black-women twin (column V) nets plainly, as the toolkit does.
+        const credited = w > 0 ? w * Math.min(1, deemed / (0.4 * w)) : 0;
+        netIndebtedBlack += credited * bo;
         netIndebtedBlackWomen += deemed * bwo;
       }
     }
@@ -610,6 +621,7 @@ function calculateToolkitOwnership(
     ownershipFulfilment: 0,
     netValue: round2(netValuePoints),
     total: round2(clampScore(totalPoints, ot.maxPts)),
+    exactTotal: clampScore(totalPoints, ot.maxPts),
     subMinimumMet,
     fullOwnershipAwarded: false,
     subLines: subLines.map((l) => ({ ...l, score: round2(l.score) })),

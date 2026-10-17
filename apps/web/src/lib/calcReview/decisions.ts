@@ -68,8 +68,9 @@ export const RCOGP_GENERIC_DECISIONS: ReviewDecision[] = [
     kind: 'toolkit-fault',
     toolkit:
       'On the debt sheet, the first shareholder listed uses a different deemed-value formula from every other row, so the score depends on the order the shareholders are entered in.',
-    okiru: 'Uses one formula for every shareholder: (company value × stake − debt) ÷ company value, times their black share.',
-    question: 'Which of the two formulas does Empower use?',
+    okiru:
+      "Uses the first row's formula for every shareholder — the one a register with a single empowerment partner always meets: the stake counts in full once its net value (its share of the company value less the debt) reaches 40% of it, and pro rata below that. Only the black share of the stake counts.",
+    question: 'Which of the two formulas does Empower use when there are two or more shareholders with acquisition debt?',
   },
   {
     id: 'board-headcount',

@@ -60,6 +60,9 @@ export interface EsdResult {
   stockbrokerBonus: number;
   sdTotal: number;
   edTotal: number;
+  /** SD and ED before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  sdExactTotal?: number;
+  edExactTotal?: number;
   total: number;
   sdSubMinimumMet: boolean;
   edSubMinimumMet: boolean;
@@ -82,6 +85,8 @@ export interface SedResult {
   unrecognisedTypes: string[];
   excludedSpend: number;
   total: number;
+  /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  exactTotal?: number;
   subMinimumMet: boolean;
   actualSpend: number;
   target: number;
@@ -486,11 +491,13 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     jobsCreatedBonus: round2(jobsCreatedBonusScore),
     stockbrokerBonus: round2(stockbrokerBonusScore),
     sdTotal: round2(sdTotal),
+    sdExactTotal: sdTotal,
     unrecognisedTypes,
     excludedSpend: round2(excludedSpend),
     nonQualifyingSpend: round2(nonQualifying.sd + nonQualifying.ed),
     nonQualifyingCount: nonQualifying.count,
     edTotal: round2(edTotal),
+    edExactTotal: edTotal,
     total: round2(sdTotal + edTotal),
     sdSubMinimumMet,
     edSubMinimumMet,
@@ -588,6 +595,7 @@ export function calculateSedScore(
     unrecognisedTypes: Array.from(unrecognisedTypes),
     excludedSpend: round2(excludedSpend),
     total,
+    exactTotal: clampScore(score, maxPoints),
     subMinimumMet: true,
     actualSpend: round2(totalSpend),
     target: round2(target),

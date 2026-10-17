@@ -21,6 +21,7 @@ import {
   referee,
   summaryValue,
   type ToolkitSheets,
+  type ToolkitTables,
 } from '@toolkit/lib/parity/toolkitParity';
 import type { BreakdownLine, ScorecardResult } from '@toolkit/lib/types';
 
@@ -91,6 +92,7 @@ const TOLERANCE = 0.005;
 interface ReferenceFile {
   lines: Record<string, { label: string | null; weighting: number | null; chain: ToolkitStep[] }>;
   cells: ToolkitSheets;
+  tables?: ToolkitTables;
   sampleCase: ToolkitCase;
 }
 
@@ -116,7 +118,7 @@ export function buildWorkedScorecard(): WorkedScorecard {
     scorecard: {} as ScorecardResult,
     calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG,
   });
-  const verdict = referee(ref.cells);
+  const verdict = referee(ref.cells, ref.tables);
   const toolkitAt = (row: number) => verdict.lines.get(row)?.value ?? summaryValue(ref.cells, row);
 
   const pillars: WorkedPillar[] = RCOGP_GENERIC_TOTAL_ROWS.filter((t) => t.pillar !== 'total').map((t) => {

@@ -132,23 +132,35 @@ describe('acquisition debt', () => {
     holder({ name: 'B', blackOwnership: 0, shareValue: 60, outstandingDebt: 20_000_000 }),
   ]);
 
-  it('nets a black holder\'s debt into economic interest and net value; non-black debt is not netted', () => {
+  it('counts an indebted black holder\'s stake in full once its net value reaches 40% of it; non-black debt is not netted', () => {
     const r = calculateOwnershipScore(indebted(), CFG);
     expect(r.rawStats.blackVotingPercentage).toBeCloseTo(0.4, 6); // voting is never netted
-    expect(r.rawStats.economicInterestPercentage).toBeCloseTo(0.3, 6);
-    expect(r.rawStats.economicInterestBWOPercentage).toBeCloseTo(0.15, 6);
-    expect(r.rawStats.netValuePercentage).toBeCloseTo(0.3, 6);
-    expect(r.economicInterestBlack).toBe(4); // 30% ÷ 25% × 4, capped
-    expect(r.netValue).toBeCloseTo(2.4, 6); // 30% ÷ 100% × 8
+    // Net value 30% ≥ 40% × 40% stake → the whole 40% stake counts
+    // (toolkit 'Oustanding Debts Calcs'!H3, its first debt row).
+    expect(r.rawStats.economicInterestPercentage).toBeCloseTo(0.4, 6);
+    expect(r.rawStats.economicInterestBWOPercentage).toBeCloseTo(0.15, 6); // black women: netted plainly, 30% × 50%
+    expect(r.rawStats.netValuePercentage).toBeCloseTo(0.4, 6);
+    expect(r.economicInterestBlack).toBe(4); // 40% ÷ 25% × 4, capped
+    expect(r.netValue).toBeCloseTo(3.2, 6); // 40% ÷ 100% × 8
     expect(line(r, 'Economic interest of black individuals').note)
       .toContain('net value of the indebted black shareholders');
   });
 
-  it('nets against the holder\'s black share only', () => {
+  it('credits a stake pro rata when its net value is below 40% of it', () => {
+    const r = calculateOwnershipScore(own([
+      holder({ name: 'A', blackOwnership: 1, shareValue: 40, outstandingDebt: 36_000_000 }),
+      holder({ name: 'B', blackOwnership: 0, shareValue: 60 }),
+    ]), CFG);
+    // Net value (40m − 36m) ÷ 100m = 4% against 40% × 40% = 16% → a quarter of the stake: 10%.
+    expect(r.rawStats.economicInterestPercentage).toBeCloseTo(0.1, 6);
+    expect(r.netValue).toBeCloseTo(0.8, 6);
+  });
+
+  it('credits only the black share of an indebted holder\'s stake (the toolkit credits the whole stake)', () => {
     const r = calculateOwnershipScore(indebted(0.5), CFG);
-    // W4 = 40% × 50% = 20%, all of it indebted; netted: 30% × 50% = 15%.
-    expect(r.rawStats.economicInterestPercentage).toBeCloseTo(0.15, 6);
-    expect(r.netValue).toBeCloseTo(1.2, 6);
+    // W4 = 40% × 50% = 20%, all of it indebted; credited in full, for its black half: 20%.
+    expect(r.rawStats.economicInterestPercentage).toBeCloseTo(0.2, 6);
+    expect(r.netValue).toBeCloseTo(1.6, 6);
   });
 
   it('with no valuation, the indebted holders\' stakes add nothing', () => {
@@ -240,7 +252,13 @@ describe('a case Excel scored (synthetic parity case gen_1)', () => {
     expect(r.votingRightsBWO).toBe(2);
     expect(r.economicInterestBlack).toBe(4);
     expect(r.economicInterestBWO).toBe(2);
-    expect(r.netValue).toBeCloseTo(2.4659282518058507, 2);
-    expect(r.subLines.find((l) => l.name === 'Net value')!.score).toBeCloseTo(2.47, 2);
+  });
+
+  it('nets holder 3 by the toolkit\'s first-row formula, which the toolkit skips here only because holder 2 is listed first', () => {
+    // Excel shows 2.47: holder 2 (not black, indebted) takes its first debt row,
+    // so holder 3 falls to the plain formula. Holder 3's net value 14.7% is at
+    // least 40% of its 30.3% stake, so the stake counts in full:
+    // 16.1% free + 30.3% = 46.4% → × 8 = 3.72.
+    expect(r.netValue).toBeCloseTo(3.72, 2);
   });
 });

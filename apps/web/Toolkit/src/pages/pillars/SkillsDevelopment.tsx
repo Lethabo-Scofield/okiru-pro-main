@@ -121,6 +121,8 @@ interface InterventionFormState {
   // Flags
   isAbet: boolean;
   isMandatory: boolean;
+  /** Category A only: a bursary at a higher-education institution. */
+  isBursary: boolean;
 }
 
 const defaultFormState: InterventionFormState = {
@@ -151,6 +153,7 @@ const defaultFormState: InterventionFormState = {
   otherCosts: 0,
   isAbet: false,
   isMandatory: false,
+  isBursary: false,
 };
 
 // Calculate total cost
@@ -277,7 +280,7 @@ export default function SkillsDevelopment() {
       otherCosts: formState.otherCosts,
       isAbet: formState.isAbet,
       isMandatory: formState.isMandatory,
-      isBursary: formState.categoryCode === 'A',
+      isBursary: formState.categoryCode === 'A' && formState.isBursary,
       totalCost,
       // Legacy fields for compatibility
       name: formState.programName,
@@ -328,6 +331,7 @@ export default function SkillsDevelopment() {
       otherCosts: prog.otherCosts || 0,
       isAbet: prog.isAbet || false,
       isMandatory: prog.isMandatory || false,
+      isBursary: prog.categoryCode === 'A' && (prog.isBursary ?? true),
     });
     setMunicipalityIsOther(!!prog.municipality && !MUNICIPALITY_OPTIONS.includes(prog.municipality));
     setIsEditOpen(true);
@@ -374,7 +378,7 @@ export default function SkillsDevelopment() {
       otherCosts: formState.otherCosts,
       isAbet: formState.isAbet,
       isMandatory: formState.isMandatory,
-      isBursary: formState.categoryCode === 'A',
+      isBursary: formState.categoryCode === 'A' && formState.isBursary,
       totalCost,
       // Legacy fields
       name: formState.programName,
@@ -473,6 +477,16 @@ export default function SkillsDevelopment() {
               />
               <Label htmlFor="mandatory" className="text-sm cursor-pointer">Mandatory/Compulsory Training</Label>
             </div>
+            {formState.categoryCode === 'A' && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="bursary"
+                  checked={formState.isBursary}
+                  onCheckedChange={(checked) => setFormState({ ...formState, isBursary: checked === true })}
+                />
+                <Label htmlFor="bursary" className="text-sm cursor-pointer">Bursary at a higher-education institution</Label>
+              </div>
+            )}
           </div>
         </div>
       </TabsContent>

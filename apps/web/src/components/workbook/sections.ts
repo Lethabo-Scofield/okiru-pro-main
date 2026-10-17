@@ -1201,6 +1201,14 @@ export const SKILLS_META: ColumnDef[] = [
 export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "programName", label: "Training Program", type: "text", required: true, width: 200, aliases: ["Training Program Name", "Program Name", "Programme Name", "Course", "Course Name", "Intervention"] },
   { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
+  // The Empower toolkit's "Bursary – Higher Education?": a category A row is a
+  // bursary only when this says Yes. Left blank, a category A row is still read
+  // as a bursary (how every register was read before the column existed).
+  yesNoColumn("isBursary", "Bursary (higher education)?", {
+    width: 160,
+    aliases: ["Bursary - Higher Education?", "Bursary – Higher Education?", "Bursary - Higher Education", "Higher Education Bursary"],
+    guidance: "Category A only. Yes for a bursary at a higher-education institution; No for other category A programmes.",
+  }),
   { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
   { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150, validationMessage: "Select a South African province from the dropdown" },
   {

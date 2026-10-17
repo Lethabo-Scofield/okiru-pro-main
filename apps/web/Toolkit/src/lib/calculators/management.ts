@@ -101,6 +101,8 @@ export interface ManagementResult {
   skilledTechnicalBWO: number;
   disabled: number;
   total: number;
+  /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  exactTotal?: number;
   subMinimumMet: boolean;
   subLines: ManagementSubLine[];
   eapBreakdowns: Record<string, EAPGroupBreakdown[]>;
@@ -545,6 +547,7 @@ export function calculateManagementScore(
     skilledTechnicalBWO: round2(skilledTechnicalBWOScore),
     disabled: round2(disabledScore),
     total: finalTotal,
+    exactTotal: clampScore(totalPoints, maxTotal),
     subMinimumMet: totalPoints >= (subMinPercent / 100) * maxTotal,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     eapBreakdowns: {

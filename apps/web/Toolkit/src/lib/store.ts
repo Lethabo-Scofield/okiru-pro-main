@@ -703,7 +703,7 @@ export function calculateScorecard(
     eeSubLines = tlEe.subLines;
   } else {
     const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
-    mgtScoreTotal = mgtScore.total;
+    mgtScoreTotal = mgtScore.exactTotal ?? mgtScore.total;
     // Generic sectors: the breakdown is this SAME calculator's own lines, plus
     // its per-demographic effective-EAP detail rows — carried on the scorecard
     // so the page renders the scored lines, never a re-run.
@@ -722,9 +722,19 @@ export function calculateScorecard(
     ? calculateTransportLargeSkills(state.skills, cfg)
     : calculateSkillsScore(withSkillsWorkforce(state.skills, state.management), cfg, state.client.eapProvince, state.client.eapYear);
 
-  const procScore = calculateProcurementScore(state.procurement, cfg);
+  // The measurement period's end dates the time-bound rules (a graduated
+  // supplier's five years; the ESD "years since first assistance").
+  const periodEnd = state.client.measurementPeriodEnd;
+  const procScore = calculateProcurementScore(
+    { ...state.procurement, measurementPeriodEnd: state.procurement.measurementPeriodEnd ?? periodEnd },
+    cfg,
+  );
 
-  const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
+  const esdScore = calculateEsdScore(
+    { ...state.esd, measurementPeriodEnd: state.esd.measurementPeriodEnd ?? periodEnd },
+    state.client.npat,
+    cfg,
+  );
   const sedScore = calculateSedScore(state.sed, state.client.npat, cfg, {
     isReinsurer: Boolean(state.client.fscReinsurer),
   });
@@ -870,12 +880,15 @@ export function calculateScorecard(
     return activeElectiveKeys.has(key) ? score : 0;
   };
 
-  const skillsForTotal = electiveScoreForTotal('skillsDevelopment', skillScore.total);
-  const procForTotal = electiveScoreForTotal('preferentialProcurement', procScore.total);
-  const edForTotal = electiveScoreForTotal('enterpriseDevelopment', esdScore.edTotal);
-  const sedForTotal = electiveScoreForTotal('socioEconomicDevelopment', sedScore.total);
+  // The grand total adds each element before rounding, as the toolkit does;
+  // every element is still shown rounded to the cent.
+  const exact = (r: { total: number; exactTotal?: number }) => r.exactTotal ?? r.total;
+  const skillsForTotal = electiveScoreForTotal('skillsDevelopment', exact(skillScore));
+  const procForTotal = electiveScoreForTotal('preferentialProcurement', exact(procScore));
+  const edForTotal = electiveScoreForTotal('enterpriseDevelopment', esdScore.edExactTotal ?? esdScore.edTotal);
+  const sedForTotal = electiveScoreForTotal('socioEconomicDevelopment', exact(sedScore));
 
-  const sdForTotal = sdTarget > 0 ? esdScore.sdTotal : 0;
+  const sdForTotal = sdTarget > 0 ? (esdScore.sdExactTotal ?? esdScore.sdTotal) : 0;
   const afsForTotal = afsScore?.total ?? 0;
   const efForTotal = efScore?.total ?? 0;
 
@@ -883,7 +896,7 @@ export function calculateScorecard(
   // them electives. Transport QSE does, so an unelected element contributes 0 —
   // which is how a real certificate shows Employment Equity 0.00 without that
   // zero dragging the entity's level down.
-  const compulsoryTotal = electiveScoreForTotal('ownership', ownScore.total)
+  const compulsoryTotal = electiveScoreForTotal('ownership', exact(ownScore))
     + electiveScoreForTotal('managementControl', mgtScoreTotal)
     + (eeTarget > 0 ? electiveScoreForTotal('employmentEquity', eeScoreTotal) : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
@@ -979,14 +992,17 @@ export function calculateScorecard(
     : sedTarget;
 
   // Every pillar carries the breakdown from the calculator that SCORED it — the
-  // page renders these, never a re-run. SED is a single-line pillar.
-  const sedBreakdown: BreakdownLine[] = [{
-    name: 'Annual value of all SED contributions',
-    target: `${((cfg.sed?.npatTarget ?? 0.01) * 100).toFixed(0)}% of NPAT`,
-    weighting: sedTarget,
-    score: round2(sedScore.total),
-    note: `SED spend R${round2(sedScore.actualSpend).toLocaleString()} / target R${round2(sedScore.target).toLocaleString()}`,
-  }];
+  // page renders these, never a re-run. SED is a single-line pillar; the
+  // calculator writes the line with its own arithmetic.
+  const sedBreakdown: BreakdownLine[] = sedScore.subLines?.length
+    ? toBreakdownLines(sedScore.subLines).map((l) => ({ ...l, weighting: sedTarget }))
+    : [{
+        name: 'Annual value of all SED contributions',
+        target: `${((cfg.sed?.npatTarget ?? 0.01) * 100).toFixed(0)}% of NPAT`,
+        weighting: sedTarget,
+        score: round2(sedScore.total),
+        note: `SED spend R${round2(sedScore.actualSpend).toLocaleString()} / target R${round2(sedScore.target).toLocaleString()}`,
+      }];
 
   return {
     ownership: {
@@ -1146,7 +1162,11 @@ export function hydrateTrainingProgramFromApi(tp: any) {
     isYesEmployee: coerceYesNo(tp.isYesEmployee),
     isCompleted: coerceYesNo(tp.isCompleted),
     isAbsorbed: coerceYesNo(tp.isAbsorbed),
-    isBursary: coerceYesNo(tp.isBursary) || tp.category === 'bursary' || tp.categoryCode === 'A',
+    // A stated Yes/No wins (toolkit "Bursary – Higher Education?"); unstated, a
+    // category A row stays a bursary, as every register was read before.
+    isBursary: tp.isBursary === undefined || tp.isBursary === null || String(tp.isBursary).trim() === ''
+      ? tp.category === 'bursary' || tp.categoryCode === 'A'
+      : coerceYesNo(tp.isBursary) || tp.category === 'bursary',
     isAbet: coerceYesNo(tp.isAbet),
     isMandatory: coerceYesNo(tp.isMandatory),
     // Location & dates
@@ -1355,7 +1375,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           data.ownership?.companyValue ||
           data.client.companyValue ||
           (finExtras.companyValue as number | undefined) ||
-          clientData.revenue ||
+          // Revenue stands in for a missing valuation only under the original
+          // ownership method. The toolkit method (RCOGP Generic) treats a
+          // missing valuation as missing, as the Empower toolkit does: netting
+          // shareholders' debt against revenue is no figure the toolkit makes.
+          (isRcogpGenericSector(String(clientData.sectorCode ?? ''), String(clientData.scorecardType ?? '')) ? 0 : clientData.revenue) ||
           0,
         outstandingDebt:
           data.ownership?.outstandingDebt ||

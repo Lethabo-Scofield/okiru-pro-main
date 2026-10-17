@@ -37,6 +37,13 @@ describe("the Calculation Review's worked scorecard", () => {
     expect(new Set(anchors).size).toBe(anchors.length);
   });
 
+  it("shows every line, the total and both levels the same as the toolkit", () => {
+    expect(lines.filter((l) => l.status !== "match").map((l) => l.label)).toEqual([]);
+    expect(worked.total.status).toBe("match");
+    expect(worked.achieved.status).toBe("match");
+    expect(worked.discounted.status).toBe("match");
+  });
+
   it("states the sample is invented, never a client", () => {
     expect(worked.sample.employees).toBeGreaterThan(0);
     expect(worked.sample.suppliers).toBeGreaterThan(0);

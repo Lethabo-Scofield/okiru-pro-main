@@ -1266,7 +1266,10 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       isCompleted: coerceYesNo((r as any).completed),
       absorbed,
       isAbsorbed: absorbed,
-      isBursary: coerceYesNo((r as any).isBursary) || categoryCode === "A",
+      // A stated Yes/No wins; left blank, a category A row stays a bursary.
+      isBursary: (r as any).isBursary === undefined || (r as any).isBursary === null || String((r as any).isBursary).trim() === ""
+        ? categoryCode === "A"
+        : coerceYesNo((r as any).isBursary),
       courseCost: num((r as any).courseCost),
       travelCost: num((r as any).travelCost),
       accommodationCost: num((r as any).accommodationCost),

@@ -46,6 +46,8 @@ export interface SkillsResult {
   learnerships: number;
   absorption: number;
   total: number;
+  /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  exactTotal?: number;
   subMinimumMet: boolean;
   categoryBreakdown: CategoryBreakdown[];
   subLines: SkillsSubLine[];
@@ -750,6 +752,7 @@ export function calculateSkillsScore(
       learnerships: round2(t.learnerships),
       absorption: round2(t.absorption),
       total: round2(clampScore(base + t.absorption, maxPoints)),
+      exactTotal: clampScore(base + t.absorption, maxPoints),
       subMinimumMet: subMinimumMetFor(base),
       categoryBreakdown: t.categoryBreakdown,
       subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
@@ -832,6 +835,7 @@ export function calculateSkillsScore(
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: skillsTotal,
+    exactTotal: totalScore,
     // Sub-minimum excludes the absorption bonus (RCOGP 2019). A sector with no
     // sub-minimum has nothing to fail: `true`, never `false` (the old `false`
     // marked every no-sub-minimum sector as failing, which the store then discounted).

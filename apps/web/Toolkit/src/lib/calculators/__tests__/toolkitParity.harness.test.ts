@@ -19,7 +19,7 @@ import { calculateScorecard } from '../../store';
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '../../sectors/rcogp-generic';
 import { adaptToolkitCase, type ToolkitCase } from '../../../test/parity/caseAdapter';
 import {
-  RCOGP_GENERIC_LINES, RCOGP_GENERIC_TOTAL_ROWS, referee, summaryValue, type ToolkitSheets,
+  RCOGP_GENERIC_LINES, RCOGP_GENERIC_TOTAL_ROWS, referee, summaryValue, type ToolkitSheets, type ToolkitTables,
 } from '../../parity/toolkitParity';
 import type { ScorecardResult, BreakdownLine } from '../../types';
 
@@ -37,7 +37,7 @@ function findLine(lines: BreakdownLine[] | undefined, names: string[]): Breakdow
   return (lines ?? []).find((l) => names.includes(l.name));
 }
 
-function loadCases(): Array<{ id: string; kase: ToolkitCase; sheets: ToolkitSheets }> {
+function loadCases(): Array<{ id: string; kase: ToolkitCase; sheets: ToolkitSheets; tables: ToolkitTables }> {
   const caseDir = path.join(PARITY_DIR, 'cases');
   const outDir = path.join(PARITY_DIR, 'out');
   if (!existsSync(caseDir)) return [];
@@ -50,10 +50,10 @@ function loadCases(): Array<{ id: string; kase: ToolkitCase; sheets: ToolkitShee
       return {
         id,
         kase: JSON.parse(readFileSync(path.join(caseDir, f), 'utf8')) as ToolkitCase,
-        sheets: (JSON.parse(readFileSync(excelPath, 'utf8')) as { sheets: ToolkitSheets }).sheets,
+        ...(JSON.parse(readFileSync(excelPath, 'utf8')) as { sheets: ToolkitSheets; tables: ToolkitTables }),
       };
     })
-    .filter((x): x is { id: string; kase: ToolkitCase; sheets: ToolkitSheets } => x !== null);
+    .filter((x): x is { id: string; kase: ToolkitCase; sheets: ToolkitSheets; tables: ToolkitTables } => x !== null);
 }
 
 describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic', () => {
@@ -65,7 +65,7 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic',
 
     const all: LineResult[] = [];
     const unrepresented: Record<string, string[]> = {};
-    for (const { id, kase, sheets } of cases) {
+    for (const { id, kase, sheets, tables } of cases) {
       const { state, unrepresented: gaps } = adaptToolkitCase(kase);
       unrepresented[id] = gaps;
       const result = calculateScorecard({
@@ -73,7 +73,7 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — RCOGP Generic',
         scorecard: {} as ScorecardResult,
         calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG,
       });
-      const ref = referee(sheets);
+      const ref = referee(sheets, tables);
       for (const spec of RCOGP_GENERIC_LINES) {
         const fix = ref.lines.get(spec.row);
         const ex = fix ? fix.value : summaryValue(sheets, spec.row);

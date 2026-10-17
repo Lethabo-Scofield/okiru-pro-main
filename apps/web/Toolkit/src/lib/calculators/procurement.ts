@@ -63,6 +63,8 @@ export interface ProcurementResult {
   blackFemaleOwned30: number;
   designatedGroup: number;
   total: number;
+  /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
+  exactTotal?: number;
   subMinimumMet: boolean;
   /**
    * Data-integrity findings that changed how the pillar scored — e.g. a TMPS
@@ -463,6 +465,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     blackFemaleOwned30: round2(blackFemaleOwned30Score),
     designatedGroup: round2(designatedGroupScore),
     total: procTotal,
+    exactTotal: totalScore,
     subMinimumMet:
       alwaysPassSubMin || (subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : true),
     recognisedSpend: round2(recognisedSpend),
