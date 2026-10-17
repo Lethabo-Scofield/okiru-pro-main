@@ -87,6 +87,12 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
       newEntrantsMax: own.newEntrantsMaxPts,
       designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
       designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
+      // Only the RCOGP Generic template has been checked line by line against
+      // the Empower toolkit, so only it scores ownership the toolkit's way.
+      // Every other sector built through here (MAC) keeps the original method.
+      ...(isRcogpGenericSector(sc.sectorCode, sc.scorecardType)
+        ? { ownershipMethod: 'toolkit' as const, netValueTarget: 1 }
+        : {}),
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,

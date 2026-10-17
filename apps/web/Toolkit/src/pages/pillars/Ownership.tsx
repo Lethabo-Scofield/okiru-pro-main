@@ -210,7 +210,17 @@ export default function Ownership() {
     const votingRights = editSh.votingRightsPercent > 0 ? editSh.votingRightsPercent : editSh.blackOwnership;
     const economicInterest = editSh.economicInterestPercent > 0 ? editSh.economicInterestPercent : editSh.blackOwnership;
 
+    // A register's BDG% / BNE% share outranks the yes/no flag when scoring.
+    // This dialog only edits the flag, so keep a stated share only while the
+    // flag still agrees with it; otherwise clear it (null, so the server
+    // forgets it too) and let the flag decide.
+    const before = ownership.shareholders.find((s) => s.id === editingId);
+    const keepShare = (flag: boolean, share: number | null | undefined) =>
+      flag && typeof share === 'number' && share > 0 ? share : null;
+
     updateShareholder(editingId, {
+      designatedGroupOwnership: keepShare(editSh.isDesignatedGroup, before?.designatedGroupOwnership),
+      blackNewEntrantOwnership: keepShare(editSh.blackNewEntrant, before?.blackNewEntrantOwnership),
       name: editSh.name,
       shareholderId: editSh.shareholderId,
       ownershipType: editSh.ownershipType,

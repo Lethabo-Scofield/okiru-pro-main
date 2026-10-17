@@ -149,4 +149,63 @@ describe('new fields hydrate back from the API (feedback #5)', () => {
     expect(st.skills.trainingPrograms[0].municipality).toBe('Greater Tzaneen (custom)');
     expect(st.procurement.suppliers[0].registrationNumber).toBe('2019/123456/07');
   });
+
+  it('loadClientData keeps stated BDG% / BNE% shares and leaves a missing share value at 0', async () => {
+    (api.getClientData as any).mockResolvedValue({
+      client: { id: 'client-1', name: 'Test Co', sectorCode: 'RCOGP', companySize: 'Generic' },
+      financialYears: [],
+      ownership: {
+        shareholders: [
+          // Fractions (as the workbook submit stores them) and a percent (as an
+          // older record might): both read as fractions of the holder's stake.
+          { id: 'sh1', name: 'Holder A', blackOwnership: 1, shares: 60, shareValue: 6_000_000, isDesignatedGroup: true, designatedGroupOwnership: 0.1, blackNewEntrantOwnership: 25 },
+          // An older record: flags only, no share value on file.
+          { id: 'sh2', name: 'Holder B', blackOwnership: 1, shares: 40, isDesignatedGroup: true, blackNewEntrant: false },
+          // A share the Ownership page cleared (null) is the same as none.
+          { id: 'sh3', name: 'Holder C', blackOwnership: 0, shares: 10, shareValue: 0, designatedGroupOwnership: null },
+        ],
+      },
+      management: { employees: [] },
+      skills: { leviableAmount: 0, trainingPrograms: [] },
+      procurement: { suppliers: [] },
+      esd: { contributions: [] },
+      sed: { contributions: [] },
+      scenarios: [],
+    });
+
+    await useBbeeStore.getState().loadClientData('client-1');
+    const [a, b, c] = useBbeeStore.getState().ownership.shareholders;
+
+    expect(a.designatedGroupOwnership).toBeCloseTo(0.1, 6);
+    expect(a.blackNewEntrantOwnership).toBeCloseTo(0.25, 6);
+    expect(a.isDesignatedGroup).toBe(true);
+    expect(a.shareValue).toBe(6_000_000);
+    expect('designatedGroupOwnership' in b).toBe(false);
+    expect('blackNewEntrantOwnership' in b).toBe(false);
+    expect(b.isDesignatedGroup).toBe(true);
+    expect(b.shareValue).toBe(0);
+    expect('designatedGroupOwnership' in c).toBe(false);
+  });
+
+  it('loadClientData reads an old register with the placeholder value 1 on every holder as no values on file', async () => {
+    (api.getClientData as any).mockResolvedValue({
+      client: { id: 'client-1', name: 'Test Co', sectorCode: 'RCOGP', companySize: 'Generic' },
+      financialYears: [],
+      ownership: {
+        shareholders: [
+          { id: 'sh1', name: 'Holder A', blackOwnership: 1, shares: 63, shareValue: 1 },
+          { id: 'sh2', name: 'Holder B', blackOwnership: 0, shares: 37, shareValue: 1 },
+        ],
+      },
+      management: { employees: [] },
+      skills: { leviableAmount: 0, trainingPrograms: [] },
+      procurement: { suppliers: [] },
+      esd: { contributions: [] },
+      sed: { contributions: [] },
+      scenarios: [],
+    });
+
+    await useBbeeStore.getState().loadClientData('client-1');
+    expect(useBbeeStore.getState().ownership.shareholders.map((s) => s.shareValue)).toEqual([0, 0]);
+  });
 });

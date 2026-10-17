@@ -140,6 +140,14 @@ const shareholderSchema = new Schema({
   isDesignatedGroup: { type: Boolean, default: false },
   designatedGroupType: { type: String, default: '' },
   blackNewEntrant: { type: Boolean, default: false },
+  // The share of this holder's stake held by black designated groups / black
+  // new entrants (register BDG% / BNE%, fractions), and the holder's own
+  // acquisition debt. No defaults on purpose: absent means "not stated", and
+  // the ownership calculator falls back to the yes/no flags. The strict schema
+  // used to drop all three on every save.
+  designatedGroupOwnership: { type: Number },
+  blackNewEntrantOwnership: { type: Number },
+  outstandingDebt: { type: Number },
   yearsHeld: { type: Number, default: 0 },
   graduationFactor: { type: Number, default: 0 },
   workbookRowId: { type: String, default: null, index: true, sparse: true },

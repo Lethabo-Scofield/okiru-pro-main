@@ -216,6 +216,13 @@ function normalizeFraction(v: unknown): number {
   return Math.max(0, n);
 }
 
+/** A share fraction the record STATES (zero included), or null when it states none. */
+function statedShareFraction(v: unknown): number | null {
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? normalizeFraction(n) : null;
+}
+
 /** Fetch sector-specific calculator config from API (authoritative pillar weightings).
  * Returns a tagged result so callers can distinguish network failures from
  * server-side 404/5xx (Q4 verification: previously a bare null swallowed both
@@ -1382,10 +1389,18 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // votingRightsPercent, economicInterestPercent. Without these the
       // calculator can't award Designated Groups / New Entrants / graduation.
 
+      // Records saved before share values were kept truthfully carry the old
+      // placeholder of 1 on EVERY holder. That is no value split at all, so it
+      // is read as "no share values on file" (holders then weigh by shares).
+      // The original ownership method still reads a missing value as R1.
+      const rawShareholders: any[] = data.ownership?.shareholders || [];
+      const placeholderShareValues =
+        rawShareholders.length > 0 && rawShareholders.every((sh: any) => Number(sh?.shareValue) === 1);
+
       const ownershipState: OwnershipData = {
         id: data.ownership?.id || '',
         clientId,
-        shareholders: (data.ownership?.shareholders || []).map((sh: any) => {
+        shareholders: rawShareholders.map((sh: any) => {
           const blackOwnership = normalizeFraction(sh.blackOwnership);
           const sharePct = normalizeFraction(
             sh.shareholding ?? sh.votingRightsPercent ?? sh.votingRights ?? sh.blackOwnership,
@@ -1398,11 +1413,23 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           blackOwnership,
           blackWomenOwnership: normalizeFraction(sh.blackWomenOwnership),
           shares: derivedShares,
-          shareValue: sh.shareValue || 1,
+          // A missing share value stays 0. Defaulting it to 1 faked a value
+          // split: the ownership calculator weighs holders by share value when
+          // every holder has one, and falls back to share counts otherwise.
+          shareValue: !placeholderShareValues && Number(sh.shareValue) > 0 ? Number(sh.shareValue) : 0,
           yearsHeld: sh.yearsHeld || 0,
           isDesignatedGroup: coerceYesNo(sh.isDesignatedGroup),
           designatedGroupType: sh.designatedGroupType,
           blackNewEntrant: coerceYesNo(sh.blackNewEntrant),
+          // The register's BDG% / BNE%: the share of THIS holder's stake held
+          // by black designated groups / black new entrants. Carried only when
+          // stated; the yes/no flags above remain the fallback for older data.
+          ...(statedShareFraction(sh.designatedGroupOwnership) !== null
+            ? { designatedGroupOwnership: statedShareFraction(sh.designatedGroupOwnership) as number }
+            : {}),
+          ...(statedShareFraction(sh.blackNewEntrantOwnership) !== null
+            ? { blackNewEntrantOwnership: statedShareFraction(sh.blackNewEntrantOwnership) as number }
+            : {}),
           votingRightsPercent:
             normalizeFraction(sh.votingRightsPercent ?? sh.blackOwnership ?? 0),
           economicInterestPercent:

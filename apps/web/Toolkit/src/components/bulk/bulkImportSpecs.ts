@@ -288,9 +288,18 @@ const ownership: BulkImportSpec<Shareholder> = {
         bool(row.isYouth) || bool(row.isDisabled) || pct(row.designatedGroupOwnership) > 0,
       designatedGroupType: bool(row.isYouth) ? "youth" : bool(row.isDisabled) ? "disabled" : undefined,
       blackNewEntrant: pct(row.blackNewEntrantOwnership) > 0,
+      // ...and the percentages themselves, as fractions of this holder's
+      // stake, when the register states them (the toolkit scores the share).
+      ...(row.designatedGroupOwnership != null && str(row.designatedGroupOwnership) !== ""
+        ? { designatedGroupOwnership: pct(row.designatedGroupOwnership) }
+        : {}),
+      ...(row.blackNewEntrantOwnership != null && str(row.blackNewEntrantOwnership) !== ""
+        ? { blackNewEntrantOwnership: pct(row.blackNewEntrantOwnership) }
+        : {}),
       yearsHeld: num(row.yearsHeld) || undefined,
       shares: Math.max(1, Math.round(holding * 100)),
-      shareValue: num(row.shareValue) || 1,
+      // Blank stays 0: a placeholder 1 would fake a share-value split.
+      shareValue: Math.max(0, num(row.shareValue)),
     };
   },
   identity: (s) => s.name.toLowerCase(),

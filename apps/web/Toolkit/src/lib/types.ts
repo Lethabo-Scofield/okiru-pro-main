@@ -108,9 +108,10 @@ export interface Shareholder {
    * Share of THIS holder's stake held by black designated groups / black new
    * entrants, as a fraction like blackOwnership (toolkit BDG% / BNE%). When
    * present they are scored as given; the yes/no flags are the fallback.
+   * null = cleared (an edit that switched the flag off), same as absent.
    */
-  designatedGroupOwnership?: number;
-  blackNewEntrantOwnership?: number;
+  designatedGroupOwnership?: number | null;
+  blackNewEntrantOwnership?: number | null;
 
   // Graduation tracking
   blackNewEntrant?: boolean;

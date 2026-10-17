@@ -186,6 +186,20 @@ describe("Ownership", () => {
     const { entities } = importRows(spec, buffer);
     expect(entities[0].votingRightsPercent).toBeCloseTo(0.63, 5);
   });
+
+  it("keeps the stated BDG% / BNE% shares, and a blank share value stays 0", () => {
+    const buffer = sheet("Ownership", [
+      ["Shareholder", "Race", "Gender", "Voting Rights (%)", "BDG%", "BNE%"],
+      ["Holder A", "African", "Female", 60, 10, 25],
+      ["Holder B", "African", "Male", 40, "", ""],
+    ]);
+    const { entities } = importRows(spec, buffer);
+    expect(entities[0].designatedGroupOwnership).toBeCloseTo(0.1, 6);
+    expect(entities[0].blackNewEntrantOwnership).toBeCloseTo(0.25, 6);
+    expect(entities[0].isDesignatedGroup).toBe(true);
+    expect("designatedGroupOwnership" in entities[1]).toBe(false);
+    expect(entities[0].shareValue).toBe(0);
+  });
 });
 
 describe("Procurement", () => {

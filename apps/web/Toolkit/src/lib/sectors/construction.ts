@@ -59,6 +59,9 @@ export function buildConstructionCalculatorConfig(entityType: string): Calculato
 
   return {
     ...base,
+    // The ownership rawStats the construction mapper harvests stay on the
+    // original method: only RCOGP Generic was checked against its toolkit.
+    ownership: { ...base.ownership, ownershipMethod: 'legacy' },
     sectorCode: CONSTRUCTION_SECTOR_CODE,
     scorecardType: sc.scorecardType,
     totalMaxPoints: sc.totalMaxPoints,

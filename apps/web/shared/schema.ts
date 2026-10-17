@@ -64,6 +64,20 @@ export interface CalculatorConfig {
      * (TOOLKIT-RESOLVED.md Q8; RCOGP QSE / ICT QSE Ownership Scorecard r9.)
      */
     combinedNewEntrantsDesignated?: boolean;
+    /**
+     * Which ownership arithmetic scores this sector. 'toolkit' is the Empower
+     * toolkit's (RCOGP Generic template, checked line by line against Excel):
+     * holders weighed by share value, designated-group / new-entrant shares
+     * read per holder, each black holder's acquisition debt netted against the
+     * company value. Absent or 'legacy' keeps the original calculation, for
+     * sectors whose own template has not been checked yet.
+     */
+    ownershipMethod?: 'toolkit' | 'legacy';
+    /**
+     * Net value target as a fraction of debt-netted black economic interest.
+     * Read by the 'toolkit' method only (toolkit Ownership Scorecard E13 = 1).
+     */
+    netValueTarget?: number;
   };
   management: {
     boardBlackTarget: number;

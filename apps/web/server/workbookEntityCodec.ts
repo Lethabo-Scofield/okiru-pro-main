@@ -32,6 +32,10 @@ export const ENTITY_TYPE_TO_SECTION: Record<WorkbookEntityType, string> = {
   sedContribution: 'sed',
 };
 
+function isStatedNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 /** Inverse of pctToFraction: fraction (0..1) → percent (0..100), rounded. */
 function fracToPct(v: unknown): number {
   const n = Number(v);
@@ -71,8 +75,14 @@ export function shareholderToWorkbookRow(sh: any): any {
     ownershipType: sh.ownershipType ?? 'shareholder',
     blackOwnership: blackOwnPct,
     blackWomenOwnership: blackWomenPct,
-    designatedGroupOwnership: sh.isDesignatedGroup ? blackOwnPct : 0,
-    blackNewEntrantOwnership: sh.blackNewEntrant ? blackOwnPct : 0,
+    // The stated BDG% / BNE% fractions round-trip as given; only a record
+    // that never had them falls back to the yes/no flag (all of BO%).
+    designatedGroupOwnership: isStatedNumber(sh.designatedGroupOwnership)
+      ? fracToPct(sh.designatedGroupOwnership)
+      : sh.isDesignatedGroup ? blackOwnPct : 0,
+    blackNewEntrantOwnership: isStatedNumber(sh.blackNewEntrantOwnership)
+      ? fracToPct(sh.blackNewEntrantOwnership)
+      : sh.blackNewEntrant ? blackOwnPct : 0,
     numberOfShares: sh.shares ?? 0,
     shareValue: sh.shareValue ?? 0,
     votingRights: fracToPct(sh.votingRightsPercent ?? sh.votingRights),
