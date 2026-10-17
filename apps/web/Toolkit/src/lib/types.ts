@@ -404,6 +404,12 @@ export interface ProcurementData {
   tmpsBuffer?: number;
   /** Why the documents' TMPS could not be read (contested / withdrawn), or null. */
   statedTmpsHeld?: string | null;
+  /**
+   * End of the measurement period (ISO). Anchors "within five years of first
+   * procurement" for a supplier that has grown out of QSE/EME; absent, that
+   * graduation clause cannot be judged and does not apply.
+   */
+  measurementPeriodEnd?: string;
   suppliers: Supplier[];
   // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }
@@ -476,7 +482,7 @@ export interface Contribution {
    * current size + black ownership, size + black ownership when first
    * assisted, flow-through black ownership, and the dates/rates the
    * lower-interest and shorter-payment factors are computed from.
-   * Ownership values are fractions; dates ISO.
+   * Ownership values and rates are fractions (prime 0.1175 = 11.75%); dates ISO.
    */
   beneficiaryCurrentSize?: 'eme' | 'qse' | 'generic';
   beneficiaryBlackOwnership?: number;
@@ -516,6 +522,11 @@ export interface ESDData {
    * for the separate 2-pt FSC stockbroker bonus.
    */
   stockbrokerSpend?: number;
+  /**
+   * End of the measurement period (ISO): the date "years since first
+   * assistance" is counted to. Absent, each row's transaction date is used.
+   */
+  measurementPeriodEnd?: string;
 }
 
 export interface SEDData {

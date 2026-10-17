@@ -10,9 +10,12 @@ import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
 import {
   benefitFactorFor,
+  canonicalContributionType,
   TOOLKIT_BENEFIT_FACTORS_ESD as ESD_BENEFIT_FACTORS,
   TOOLKIT_BENEFIT_FACTORS_SED as SED_BENEFIT_FACTORS,
 } from '../../../../../api/pipeline/rules/benefitFactors';
+import { daysBetween, parseCalcDate, yearFrac30360US } from './toolkitDates';
+import { formatRand, ratioLineNote } from './calcNotes';
 
 // ESD (RCOGP slides 79-80) and SED (RCOGP slide 52) benefit factors now live in
 // pipeline/rules/benefitFactors.ts, imported above under their original names.
@@ -29,6 +32,8 @@ export interface EsdSubLine {
   weighting: number;
   score: number;
   isBonus?: boolean;
+  /** The line's arithmetic in plain English. */
+  note?: string;
 }
 
 export interface EsdResult {
@@ -39,6 +44,14 @@ export interface EsdResult {
    */
   unrecognisedTypes: string[];
   excludedSpend: number;
+  /**
+   * ESD rows whose beneficiary does not qualify (not an EME/QSE ≥51% black
+   * owned, nor a graduated one ≥51% black and flow-through black owned): a
+   * determined zero under the toolkit's rule, not an unknown. Rand value and
+   * count, so the gap is visible.
+   */
+  nonQualifyingSpend: number;
+  nonQualifyingCount: number;
   supplierDev: number;
   enterpriseDev: number;
   graduationBonus: number;
@@ -72,6 +85,8 @@ export interface SedResult {
   subMinimumMet: boolean;
   actualSpend: number;
   target: number;
+  /** The single SED line with its arithmetic note (the scorecard can render it verbatim). */
+  subLines: EsdSubLine[];
   rawStats: {
     spendSED: number;
   };
@@ -95,50 +110,197 @@ export interface SedResult {
  */
 export { benefitFactorFor };
 
-function buildBenefitFactors(
-  pillar: 'esd' | 'sed',
-  config?: CalculatorConfig
-): Record<string, number> {
-  const factors = { ...(pillar === 'sed' ? SED_BENEFIT_FACTORS : ESD_BENEFIT_FACTORS) };
+/**
+ * The ESD factor table for a sector: the toolkit table, then the sector's own
+ * CalculatorConfig.benefitFactors (e.g. RCOGP Generic's 50% guarantees).
+ *
+ * Only a CANONICAL key may override. The bundled sector lists still carry
+ * legacy aliases with placeholder values — `equity_investment: 0.0`,
+ * `lower_interest_rate: 0.0` — and resolving those through the alias table
+ * would zero minority investment and the computed lower-interest factor.
+ *
+ * SED never reads the sector list: it was built as ESD factors (sdFactor) and,
+ * applied to SED, turned the SED table's 80% rows into ESD's 60/70%.
+ */
+function buildEsdBenefitFactors(config?: CalculatorConfig): Record<string, number> {
+  const factors = { ...ESD_BENEFIT_FACTORS };
   if (config?.benefitFactors && Array.isArray(config.benefitFactors)) {
     for (const bf of config.benefitFactors) {
-      factors[bf.type] = bf.factor;
+      const key = String(bf.type ?? '').trim();
+      if (canonicalContributionType(key) !== key) continue;
+      if (!Object.prototype.hasOwnProperty.call(ESD_BENEFIT_FACTORS, key)) continue;
+      if (!Number.isFinite(bf.factor)) continue;
+      factors[key] = bf.factor;
     }
   }
   return factors;
 }
 
+const OWNED_51 = 0.51;
+/** 'ESD Data'[Qualify?]: a graduated beneficiary qualifies within 5 years of first assistance. */
+const FIRST_ASSISTANCE_WINDOW_YEARS = 5;
+/** 'ESD Data'[Benefit Factor [Shorter payments]]: 15%, less 1 point per day to pay. */
+const SHORTER_PAYMENT_BASE = 0.15;
+const SHORTER_PAYMENT_MAX_DAYS = 14;
+
+const isSmall = (size: unknown) => size === 'eme' || size === 'qse';
+
+/** True when the row carries the beneficiary facts the toolkit qualifies on. */
+function hasBeneficiaryFacts(c: Contribution): boolean {
+  return c.beneficiaryCurrentSize != null || c.beneficiaryBlackOwnership != null;
+}
+
+/**
+ * 'ESD Data'[Recognised Amount]: a contribution counts only when the
+ * beneficiary is an EME/QSE at least 51% black owned, or was an EME/QSE when
+ * first assisted and — now Generic — is still ≥51% black owned and ≥51%
+ * flow-through black owned. (The toolkit's two employee-time branches after
+ * these can never be reached and are not ported.)
+ */
+export function esdBeneficiaryCounts(c: Contribution): boolean {
+  const bo = Number(c.beneficiaryBlackOwnership) || 0;
+  if (isSmall(c.beneficiaryCurrentSize) && bo >= OWNED_51) return true;
+  return isSmall(c.beneficiarySizeWhenFirstAssisted)
+    && c.beneficiaryCurrentSize === 'generic'
+    && bo >= OWNED_51
+    && (Number(c.beneficiaryFlowThroughOwnership) || 0) >= OWNED_51;
+}
+
+/**
+ * 'ESD Data'[Qualify?] — stricter than recognition for a graduated
+ * beneficiary: it must also have been ≥51% black owned when first assisted,
+ * and first assisted no more than five years before the data date. Decides
+ * whether the computed lower-interest / shorter-payment factors apply.
+ */
+function esdBeneficiaryQualifies(c: Contribution, asOf: Date | null): boolean {
+  const bo = Number(c.beneficiaryBlackOwnership) || 0;
+  if (isSmall(c.beneficiaryCurrentSize) && bo >= OWNED_51) return true;
+  const first = parseCalcDate(c.firstAssistanceDate);
+  const asOfRow = asOf ?? parseCalcDate(c.transactionDate);
+  if (!first || !asOfRow || first.getTime() > asOfRow.getTime()) return false;
+  const years = yearFrac30360US(first, asOfRow);
+  return isSmall(c.beneficiarySizeWhenFirstAssisted)
+    && years > 0 && years <= FIRST_ASSISTANCE_WINDOW_YEARS
+    && c.beneficiaryCurrentSize === 'generic'
+    && (Number(c.beneficiaryBlackOwnershipWhenFirstAssisted) || 0) >= OWNED_51
+    && bo >= OWNED_51
+    && (Number(c.beneficiaryFlowThroughOwnership) || 0) >= OWNED_51;
+}
+
+/** 15% − days/100 for an invoice paid within 14 days; 0 later, or without both dates. */
+function shorterPaymentFactor(c: Contribution): number {
+  const invoice = parseCalcDate(c.invoiceDate);
+  const payment = parseCalcDate(c.paymentDate);
+  if (!invoice || !payment) return 0;
+  const days = daysBetween(invoice, payment);
+  if (days < 0 || days > SHORTER_PAYMENT_MAX_DAYS) return 0;
+  return Math.max(0, SHORTER_PAYMENT_BASE - days / 100);
+}
+
+/** (prime − actual) from the row's rates; 0 without both, never negative. */
+function lowerInterestFactor(c: Contribution): number {
+  const prime = Number(c.primeRate);
+  const actual = Number(c.actualInterestRate);
+  if (c.primeRate == null || c.actualInterestRate == null || !Number.isFinite(prime) || !Number.isFinite(actual)) return 0;
+  return Math.max(0, prime - actual);
+}
+
+interface EsdRowReading {
+  recognised: boolean;
+  /** False when the beneficiary does not qualify under the toolkit's rule. */
+  beneficiaryCounts: boolean;
+  factor: number;
+}
+
+/**
+ * One ESD row's benefit factor and whether it counts at all.
+ *
+ * The beneficiary rule applies only where the sector's toolkit gates on it
+ * (RCOGP Generic: esd.applyBeneficiaryQualification) and the row carries the
+ * beneficiary's size or black ownership; older rows without them keep scoring
+ * on the factor alone, as they always have.
+ */
+function readEsdRow(
+  c: Contribution,
+  table: Record<string, number>,
+  asOf: Date | null,
+  applyQualification: boolean,
+): EsdRowReading {
+  const key = canonicalContributionType(c.type);
+  const declared = benefitFactorFor(key, table);
+  if (!declared.recognised) return { recognised: false, beneficiaryCounts: true, factor: 0 };
+
+  const factsPresent = applyQualification && hasBeneficiaryFacts(c);
+  const beneficiaryCounts = factsPresent ? esdBeneficiaryCounts(c) : true;
+  // Without beneficiary facts, the computed factors still apply where the row
+  // carries what they are computed from.
+  const qualifies = factsPresent ? esdBeneficiaryQualifies(c, asOf) : true;
+
+  let factor = declared.factor;
+  if (key === 'lower_interest_loan' || key === 'lower_dividend_investment') {
+    factor = qualifies ? lowerInterestFactor(c) : declared.factor;
+  } else if (key === 'shorter_payment_terms') {
+    const hasDates = c.invoiceDate != null && c.invoiceDate !== '' && c.paymentDate != null && c.paymentDate !== '';
+    if (factsPresent ? qualifies : hasDates) factor = shorterPaymentFactor(c);
+  }
+  return { recognised: true, beneficiaryCounts, factor };
+}
+
+interface CategorizedEsd {
+  sdSpend: number;
+  edSpend: number;
+  unrecognisedTypes: string[];
+  excludedSpend: number;
+  nonQualifying: { sd: number; ed: number; count: number; sdCount: number; edCount: number };
+}
+
 function categorizeContributions(
   contributions: Contribution[],
   benefitFactors: Record<string, number>,
-): { sdSpend: number; edSpend: number; unrecognisedTypes: string[]; excludedSpend: number } {
+  asOf: Date | null,
+  applyQualification: boolean,
+): CategorizedEsd {
   let sdSpend = 0;
   let edSpend = 0;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
+  const nonQualifying = { sd: 0, ed: 0, count: 0, sdCount: 0, edCount: 0 };
 
   for (const c of contributions) {
-    const { factor, recognised } = benefitFactorFor(c.type, benefitFactors);
-    if (!recognised) {
+    const amount = Number(c.amount) || 0;
+    const row = readEsdRow(c, benefitFactors, asOf, applyQualification);
+    if (!row.recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
-      excludedSpend += c.amount;
+      excludedSpend += amount;
       continue;
     }
-    const value = c.amount * factor;
-
-    if (c.category === 'supplier_development') sdSpend += value;
-    else if (c.category === 'enterprise_development') edSpend += value;
-    else {
+    if (c.category !== 'supplier_development' && c.category !== 'enterprise_development') {
       // The row is an ESD contribution, but nobody has said whether it is
       // Supplier or Enterprise Development — and the split decides a
       // sub-minimum, so it may not be guessed. Excluded and reported.
       const rawCategory = String(c.category ?? '').trim();
       unrecognisedTypes.add(rawCategory ? 'category "' + rawCategory + '"' : 'category (blank)');
-      excludedSpend += c.amount;
+      excludedSpend += amount;
+      continue;
     }
+    const isSd = c.category === 'supplier_development';
+    if (!row.beneficiaryCounts) {
+      nonQualifying.count += 1;
+      if (isSd) { nonQualifying.sd += amount; nonQualifying.sdCount += 1; }
+      else { nonQualifying.ed += amount; nonQualifying.edCount += 1; }
+      continue;
+    }
+    const value = amount * row.factor;
+    if (isSd) sdSpend += value;
+    else edSpend += value;
   }
 
-  return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend };
+  return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend, nonQualifying };
+}
+
+function nonQualifyingClause(amount: number, count: number): string {
+  if (count <= 0) return '';
+  return `; not counted: ${formatRand(amount)} across ${count} contribution${count === 1 ? '' : 's'} whose beneficiary is not an EME/QSE ≥51% black owned (or a graduate of one still ≥51% black and flow-through black owned)`;
 }
 
 /**
@@ -202,8 +364,13 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const sdTarget = npat * supplierDevTargetPct;
   const edTarget = npat * enterpriseDevTargetPct;
 
-  const esdFactors = buildBenefitFactors('esd', config);
-  const { sdSpend, edSpend, unrecognisedTypes, excludedSpend } = categorizeContributions(contributions, esdFactors);
+  const esdFactors = buildEsdBenefitFactors(config);
+  const { sdSpend, edSpend, unrecognisedTypes, excludedSpend, nonQualifying } = categorizeContributions(
+    contributions,
+    esdFactors,
+    parseCalcDate(data.measurementPeriodEnd),
+    ec.applyBeneficiaryQualification === true,
+  );
 
   const sdScore = safeRatio(sdSpend, sdTarget, supplierDevMax);
   const edScore = safeRatio(edSpend, edTarget, enterpriseDevMax);
@@ -256,12 +423,15 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent
     ?? config?.pillarConfigs?.enterpriseDevelopment?.subMinimumPercent
     ?? 0;
+  // Both sub-minimums are measured on the BASE line, bonuses excluded — the
+  // toolkit's Summary Scorecard tests F59 ≥ 40% × C59 and F62 ≥ 40% × C62, the
+  // same way the PP and Skills sub-minimums leave their bonus rows out.
   const sdSubMinimumMet =
     supplierDevMax <= 0 || sdSubMinPct <= 0 ||
-    sdTotal >= (supplierDevMax * sdSubMinPct / 100);
+    sdScore >= (supplierDevMax * sdSubMinPct / 100);
   const edSubMinimumMet =
     enterpriseDevMax <= 0 || edSubMinPct <= 0 ||
-    edTotal >= (enterpriseDevMax * edSubMinPct / 100);
+    edScore >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [
     {
@@ -269,6 +439,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
       target: formatNpatTargetLabel(supplierDevTargetPct),
       weighting: supplierDevMax,
       score: sdScore,
+      note: ratioLineNote({ spend: sdSpend, denominator: npat, denominatorLabel: 'NPAT', target: supplierDevTargetPct, maxPoints: supplierDevMax })
+        + nonQualifyingClause(nonQualifying.sd, nonQualifying.sdCount),
     },
   ];
 
@@ -278,9 +450,21 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
       target: formatNpatTargetLabel(enterpriseDevTargetPct),
       weighting: enterpriseDevMax,
       score: edScore,
+      note: ratioLineNote({ spend: edSpend, denominator: npat, denominatorLabel: 'NPAT', target: enterpriseDevTargetPct, maxPoints: enterpriseDevMax })
+        + nonQualifyingClause(nonQualifying.ed, nonQualifying.edCount),
     },
-    { name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: edGraduationBonusMax, score: graduationBonusScore, isBonus: true },
-    { name: "Jobs created from ED & SD initiatives", target: edJobsBonusMax >= 2 ? "≤10% → 1pt / ≥11% → 2pts" : "Tick-box", weighting: edJobsBonusMax, score: jobsCreatedBonusScore, isBonus: true },
+    {
+      name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: edGraduationBonusMax, score: graduationBonusScore, isBonus: true,
+      note: data.graduationBonus
+        ? `At least one ESD beneficiary graduated from Enterprise to Supplier Development: ${graduationBonusScore} of ${edGraduationBonusMax}.`
+        : 'No ESD beneficiary is marked as graduated to Supplier Development.',
+    },
+    {
+      name: "Jobs created from ED & SD initiatives", target: edJobsBonusMax >= 2 ? "≤10% → 1pt / ≥11% → 2pts" : "Tick-box", weighting: edJobsBonusMax, score: jobsCreatedBonusScore, isBonus: true,
+      note: data.jobsCreatedBonus
+        ? `At least one job was created through ESD initiatives: ${jobsCreatedBonusScore} of ${edJobsBonusMax}.`
+        : 'No ESD initiative is marked as having created a job.',
+    },
   ];
   if (edStockbrokerBonusMax > 0) {
     edSubLines.push({
@@ -289,6 +473,7 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
       weighting: edStockbrokerBonusMax,
       score: stockbrokerBonusScore,
       isBonus: true,
+      note: ratioLineNote({ spend: stockbrokerSpend, denominator: npat, denominatorLabel: 'NPAT', target: edStockbrokerTargetPct, maxPoints: edStockbrokerBonusMax }),
     });
   }
 
@@ -303,6 +488,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     sdTotal: round2(sdTotal),
     unrecognisedTypes,
     excludedSpend: round2(excludedSpend),
+    nonQualifyingSpend: round2(nonQualifying.sd + nonQualifying.ed),
+    nonQualifyingCount: nonQualifying.count,
     edTotal: round2(edTotal),
     total: round2(sdTotal + edTotal),
     sdSubMinimumMet,
@@ -337,17 +524,22 @@ export function calculateSedScore(
   const maxPoints = sc.maxPoints ?? SED_DEFAULTS.maxPoints;
   const npatTargetPct = sc.npatTarget ?? SED_DEFAULTS.npatTarget;
 
-  const sedFactors = buildBenefitFactors('sed', config);
+  // SED's own table ('ESD and SED Calcs' A37:D43), never the sector's ESD list.
+  // The toolkit ignores "% of spend benefiting black individuals" when it
+  // scores SED (SED Data[Recognised Amount] = Amount × Benefit Factor), and so
+  // does this.
+  const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
   const rowSpend = contributions.reduce((acc, c) => {
-    const { factor, recognised } = benefitFactorFor(c.type, sedFactors);
+    const amount = Number(c.amount) || 0;
+    const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
     if (!recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
-      excludedSpend += c.amount;
+      excludedSpend += amount;
       return acc;
     }
-    return acc + c.amount * factor;
+    return acc + amount * factor;
   }, 0);
 
   // FSC SED+CE split model: row spend → SED base; meta fields → CE + bonuses.
@@ -388,6 +580,9 @@ export function calculateSedScore(
 
   const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
   const total = round2(clampScore(score, maxPoints));
+  const excludedClause = excludedSpend > 0
+    ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
+    : '';
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),
@@ -396,6 +591,15 @@ export function calculateSedScore(
     subMinimumMet: true,
     actualSpend: round2(totalSpend),
     target: round2(target),
+    subLines: [{
+      name: 'Annual value of all SED contributions',
+      target: formatNpatTargetLabel(npatTargetPct),
+      weighting: maxPoints,
+      score: total,
+      note: (usesSplitModel
+        ? `SED and consumer-education lines together: ${total.toFixed(2)} of ${maxPoints}.`
+        : ratioLineNote({ spend: rowSpend, denominator: npat, denominatorLabel: 'NPAT', target: npatTargetPct, maxPoints })) + excludedClause,
+    }],
     rawStats: { spendSED: round2(totalSpend) },
   };
 }

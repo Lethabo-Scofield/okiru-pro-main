@@ -82,14 +82,22 @@ describe('calculateProcurementScore', () => {
       expect(Number.isFinite(result.total)).toBe(true);
     });
 
-    it('should handle zero TMPS', () => {
-      const result = calculateProcurementScore(makeProcurementData({
+    it('measures a zero TMPS against the supplier listing, as the toolkit does', () => {
+      // 'Procurement Scorecard' divides by MAX(TMPS, supplier listing): with no
+      // TMPS the listing is the denominator, so a captured schedule still scores.
+      const zero = calculateProcurementScore(makeProcurementData({
         tmps: 0,
         suppliers: [makeSupplier()],
       }));
+      const asListing = calculateProcurementScore(makeProcurementData({
+        tmps: 1_000_000,
+        suppliers: [makeSupplier()],
+      }));
 
-      expect(result.total).toBe(0);
-      expect(Number.isFinite(result.total)).toBe(true);
+      expect(zero.denominator).toBe(1_000_000);
+      expect(zero.total).toBe(asListing.total);
+      expect(zero.total).toBeGreaterThan(0);
+      expect(zero.coverageNotes?.join(' ')).toContain('not set');
     });
   });
 

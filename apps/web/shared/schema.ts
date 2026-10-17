@@ -189,6 +189,31 @@ export interface CalculatorConfig {
     dgMaxPts?: number;
     /** FSC Banks/LTI: PP sub-minimum always passes (toolkit formula returns pass). */
     alwaysPassSubMin?: boolean;
+    /**
+     * The "all empowering suppliers" line counts every supplier's recognised
+     * spend and ignores the "Empowering Supplier? (Yes/No)" answer, as the
+     * Empower toolkit does (RCOGP Generic: Procurement Data[All Spend adjusted]
+     * has no empowering test). Off, an explicit "No" excludes the supplier —
+     * the Codes' wording ("empowering suppliers").
+     */
+    allSuppliersIgnoreEmpoweringFlag?: boolean;
+    /**
+     * Which suppliers' recognised spend is multiplied by 1.2. Every Empower
+     * template applies the factor; they differ on who earns it:
+     *  - 'black_owned_small_supplier' (default; RCOGP QSE, ICT, FSC, AgriBEE
+     *    templates): a QSE/EME ≥51% black owned that is a Supplier Development
+     *    beneficiary or holds a 3-year contract;
+     *  - 'flow_through' (RCOGP Generic v1.4): ≥51% black AND ≥51% flow-through
+     *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
+     *    contract.
+     */
+    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'flow_through';
+    /**
+     * RCOGP Generic only: a Generic supplier first procured as a QSE (EME),
+     * ≥51% black and ≥51% flow-through black owned, still counts on the QSE
+     * (EME) line within five years of first procurement.
+     */
+    countGraduatedSuppliersAsSmall?: boolean;
   };
   esd: {
     supplierDevMax: number;
@@ -212,6 +237,15 @@ export interface CalculatorConfig {
     edStockbrokerBonusMax?: number;
     /** FSC-only: NPAT fraction target for the stockbroker bonus (e.g. 0.005). */
     edStockbrokerTarget?: number;
+    /**
+     * RCOGP Generic: a contribution counts only when its beneficiary is an
+     * EME/QSE ≥51% black owned, or a graduate of one still ≥51% black and
+     * flow-through black owned ('ESD Data'[Recognised Amount]); the computed
+     * lower-interest / shorter-payment factors apply only when it also
+     * 'Qualif[ies]'. Applied to rows that carry the beneficiary's size or
+     * ownership. Other templates do not gate the amount this way.
+     */
+    applyBeneficiaryQualification?: boolean;
   };
   sed: {
     maxPoints: number;

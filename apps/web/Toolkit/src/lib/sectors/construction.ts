@@ -13,7 +13,7 @@
  * See docs/construction-wiring-spec.md for the full mapping blueprint.
  */
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { RCOGP_GENERIC_CALCULATOR_CONFIG } from './rcogp-generic';
+import { RCOGP_GENERIC_CODES_CALCULATOR_CONFIG } from './rcogp-generic';
 import {
   CONSTRUCTION_SCORECARDS,
   resolveConstructionEntityType,
@@ -52,7 +52,10 @@ export function resolveConstructionScorecardKey(
 export function buildConstructionCalculatorConfig(entityType: string): CalculatorConfig {
   const sc = CONSTRUCTION_SCORECARDS[entityType] ?? CONSTRUCTION_SCORECARDS.construction_contractor;
   const el = sc.elementMaxPoints;
-  const base = RCOGP_GENERIC_CALCULATOR_CONFIG;
+  // RCOGP's Codes reading, not the RCOGP Generic toolkit's method choices
+  // (see withEmpowerToolkitMethod in rcogp-generic.ts): construction's rawStats
+  // keep the reading they had.
+  const base = RCOGP_GENERIC_CODES_CALCULATOR_CONFIG;
   const pc = base.pillarConfigs ?? {};
   const withMax = <T extends object>(p: T | undefined, maxPoints: number): T =>
     ({ ...(p ?? ({} as T)), maxPoints } as T);

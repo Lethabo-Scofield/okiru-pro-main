@@ -145,13 +145,18 @@ describe("a schedule with no denominator says so", () => {
     supplierFrom({ supplierName: "Beta", spend: 600_000, bbbeeLevel: "2", currentSize: "QSE" }),
   ];
 
-  it("reports a missing TMPS as a coverage gap rather than scoring 0 in silence", () => {
+  it("reports a missing TMPS as a coverage gap, and measures against the supplier listing as the toolkit does", () => {
     const result = calculateProcurementScore(
       { id: "p", clientId: "c", tmps: 0, suppliers },
       RCOGP_GENERIC_CALCULATOR_CONFIG,
     );
+    const againstListing = calculateProcurementScore(
+      { id: "p", clientId: "c", tmps: 1_000_000, suppliers },
+      RCOGP_GENERIC_CALCULATOR_CONFIG,
+    );
 
-    expect(result.total).toBe(0);
+    // MAX(TMPS, listing): the R1.0m schedule is the denominator.
+    expect(result.total).toBe(againstListing.total);
     const note = (result.coverageNotes ?? []).join(" ");
     expect(note).toMatch(/Total Measured Procurement Spend is not set/i);
     expect(note).toContain("2 suppliers");

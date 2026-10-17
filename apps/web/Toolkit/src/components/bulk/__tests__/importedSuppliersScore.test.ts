@@ -23,7 +23,10 @@ import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { readSectionSheet } from "@/lib/workbookExcelNormalizer";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
-import { RCOGP_GENERIC_CALCULATOR_CONFIG } from "@toolkit/lib/sectors/rcogp-generic";
+import {
+  RCOGP_GENERIC_CALCULATOR_CONFIG,
+  RCOGP_GENERIC_CODES_CALCULATOR_CONFIG,
+} from "@toolkit/lib/sectors/rcogp-generic";
 import { BULK_IMPORT_SPECS, type ParsedRow } from "../bulkImportSpecs";
 import { coerceYesNo, coerceYesNoOrUnset } from "@/lib/yesNoValue";
 import type { Supplier } from "@toolkit/lib/types";
@@ -50,11 +53,17 @@ function importSuppliers(count: number): Supplier[] {
   return read.rows.map((r) => spec.toEntity(r as ParsedRow));
 }
 
-function score(suppliers: Supplier[]) {
+/**
+ * RCOGP Generic scores the all-suppliers line the Empower toolkit's way and
+ * never reads the empowering answer; the Codes' reading — where a stated
+ * "No" excludes the supplier — is what the empowering-answer tests below
+ * need, so they score on that.
+ */
+function score(suppliers: Supplier[], config = RCOGP_GENERIC_CALCULATOR_CONFIG) {
   const tmps = suppliers.reduce((sum, s) => sum + (s.spend ?? 0), 0);
   return calculateProcurementScore(
     { id: "p", clientId: "c", tmps, suppliers },
-    RCOGP_GENERIC_CALCULATOR_CONFIG,
+    config,
   );
 }
 
@@ -110,7 +119,11 @@ describe("suppliers imported from a spreadsheet", () => {
     const suppliers = read.rows.map((r) => spec.toEntity(r as ParsedRow));
 
     expect(suppliers[0].isEmpoweringSupplier).toBe(false);
-    expect(score(suppliers).rawStats.empoweringSpend).toBe(0);
+    expect(score(suppliers, RCOGP_GENERIC_CODES_CALCULATOR_CONFIG).rawStats.empoweringSpend).toBe(0);
+    // RCOGP Generic's toolkit counts it anyway, and the page says so.
+    const toolkit = score(suppliers);
+    expect(toolkit.rawStats.empoweringSpend).toBeGreaterThan(0);
+    expect((toolkit.coverageNotes ?? []).join(" ")).toContain("not empowering");
   });
 });
 
@@ -164,7 +177,7 @@ describe("surviving a page reload", () => {
     });
 
     // Proof the reload path was genuinely broken, not a theory about it.
-    expect(score(reloadedTheOldWay).rawStats.empoweringSpend).toBe(0);
+    expect(score(reloadedTheOldWay, RCOGP_GENERIC_CODES_CALCULATOR_CONFIG).rawStats.empoweringSpend).toBe(0);
   });
 
   it("keeps an explicit no through a reload", () => {

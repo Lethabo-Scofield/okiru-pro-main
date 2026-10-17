@@ -28,13 +28,23 @@ const THANDANANI_LIKE = {
   tmps: 23,
 } as never;
 
+const SCHEDULE_TOTAL = 412_797.4 + 250_000;
+
 describe("TMPS plausibility", () => {
-  it("scores 0 off a TMPS smaller than a single supplier, and flags it", () => {
+  it("cannot mint points off a TMPS smaller than a single supplier: the listing is the denominator, and it is flagged", () => {
+    // The toolkit divides by MAX(TMPS, supplier listing), so the misplaced 23
+    // never reaches the denominator — the pack scores exactly as it would
+    // against its own schedule, not 138,000x over target.
     const result = calculateProcurementScore(THANDANANI_LIKE);
-    expect(result.total).toBe(0);
+    const againstSchedule = calculateProcurementScore({
+      suppliers: [supplier("BP Edenvale", 412_797.4), supplier("Engen", 250_000)],
+      tmps: SCHEDULE_TOTAL,
+    } as never);
+    expect(result.denominator).toBeCloseTo(SCHEDULE_TOTAL, 2);
+    expect(result.total).toBe(againstSchedule.total);
     expect(result.dataFlags).toHaveLength(1);
     expect(result.dataFlags[0]).toContain("R23");
-    expect(result.dataFlags[0]).toContain("scores 0");
+    expect(result.dataFlags[0]).toContain("supplier listing");
   });
 
   it("scores normally when TMPS can contain its schedule", () => {
@@ -52,7 +62,9 @@ describe("TMPS plausibility", () => {
       tmps: 0,
     } as never);
     expect(result.dataFlags).toEqual([]);
-    expect(result.total).toBe(0);
+    // Measured against the listing instead, and said so in the coverage notes.
+    expect(result.denominator).toBeCloseTo(412_797.4, 2);
+    expect(result.coverageNotes?.join(" ")).toContain("not set");
   });
 
   it("does not flag when there are no suppliers to compare against", () => {

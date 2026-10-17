@@ -206,7 +206,7 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
       subMinThreshold: procSubMin,
       // ICT: BO51 threshold = 40% (not 50%)
       blackOwnedThreshold: pr.bo51Target,
-      blackWomenThreshold: pr.bwo30Target,
+      blackWomenThreshold: 0.30,           // supplier qualifies at ≥30% black-female owned (template BWO Spend); bwo30Target is the SPEND target
       allSuppliersTarget: pr.allSuppliersTarget,
       allSuppliersMaxPts: pr.allSuppliersMaxPts,
       qseTarget: pr.qseTarget,
