@@ -86,10 +86,18 @@ describe('the two factor families disagree, and the disagreement is pinned', () 
     // If this list changes, someone edited a table. Either the disagreement was
     // settled (update this test AND say which source ruled) or it just got
     // wider (do not).
+    //
+    // 2026-10: the TOOLKIT family was settled against the Empower toolkit's own
+    // 'ESD and SED Calcs' tables (RCOGP Generic v1.4): lower_interest_loan is
+    // computed per row (table cell blank → 0), lower_dividend_investment added,
+    // equity_investment became an alias of minority_investment. The pipeline
+    // family was left as it was.
     expect(esd.map((d) => d.contributionType)).toEqual([
       'employee_time',
       'equity_investment',
       'interest_free_loan',
+      'lower_dividend_investment',
+      'lower_interest_loan',
       'lower_interest_rate',
       'minority_investment',
       'overhead_costs',
@@ -103,9 +111,14 @@ describe('the two factor families disagree, and the disagreement is pinned', () 
   });
 
   it('SED disagrees on exactly these contribution types', () => {
+    // The toolkit's SED table holds seven types; loans, guarantees and
+    // investments are ESD instruments and score 0 there (2026-10).
     expect(sed.map((d) => d.contributionType)).toEqual([
       'equity_investment',
+      'guarantees',
       'interest_free_loan',
+      'lower_dividend_investment',
+      'lower_interest_loan',
       'lower_interest_rate',
       'minority_investment',
       'professional_services_discounted',

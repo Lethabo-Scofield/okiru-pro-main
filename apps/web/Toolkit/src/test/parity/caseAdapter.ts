@@ -70,6 +70,7 @@ function contributionKey(label: string): string {
   if (l.startsWith('professional services rendered at discount')) return 'professional_services_discount';
   if (l.startsWith('time of employees')) return 'employee_time';
   if (l.startsWith('shorter payment')) return 'shorter_payment_terms';
+  if (l.includes('lower dividend')) return 'lower_dividend_investment';
   return `unmapped:${label}`;
 }
 
@@ -263,12 +264,15 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
       spend: num(r['Spend *']),
     };
   });
+  const bufferCell = cell(c, 'Procurement Scorecard!D4');
   const procurement: ProcurementData = {
     id: 'pp',
     clientId: 'parity',
     tmps,
     tmpsManualOverride: true,
     tmpsSource: 'manual',
+    ...(bufferCell != null && bufferCell !== '' ? { tmpsBuffer: num(bufferCell) } : {}),
+    measurementPeriodEnd: String(C('D4') ?? '') || undefined,
     suppliers,
   };
 
@@ -302,6 +306,9 @@ export function adaptToolkitCase(c: ToolkitCase): AdaptedCase {
     contributions,
     graduationBonus: esdRows.some((r) => yes(r['Graduated to Supplier Development?'])),
     jobsCreatedBonus: esdRows.some((r) => yes(r['At least 1 job created?'])),
+    // The toolkit counts "years since first assistance" to each row's Data Date;
+    // every case row is dated at the period end.
+    measurementPeriodEnd: String(C('D4') ?? '') || undefined,
   };
 
   // Socio-economic development

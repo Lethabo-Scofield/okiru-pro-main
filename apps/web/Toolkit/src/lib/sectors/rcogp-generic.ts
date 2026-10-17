@@ -8,6 +8,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
+import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export const RCOGP_GENERIC_SECTOR_CODE = 'RCOGP' as const;
 export const RCOGP_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -158,7 +159,11 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
       tmpsTarget: 0,
       subMinThreshold: procSubMin,
       blackOwnedThreshold: pr.bo51Target,
-      blackWomenThreshold: pr.bwo30Target,
+      // The supplier QUALIFIES at >30% black-female ownership (the line's own
+      // name; Procurement Data[BWO Spend] tests ≥30%). bwo30Target (12%) is the
+      // SPEND target — feeding it here let 12-29% BWO suppliers count.
+      // Same fix as AgriBEE R12.
+      blackWomenThreshold: 0.30,
       allSuppliersTarget: pr.allSuppliersTarget,
       allSuppliersMaxPts: pr.allSuppliersMaxPts,
       qseTarget: pr.qseTarget,
@@ -246,33 +251,83 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
   };
 }
 
-const RCOGP_GENERIC_BASE = sectorConfigToCalculatorConfig(RCOGP_GENERIC);
+/**
+ * Where RCOGP Generic follows its Empower toolkit (v1.4, the reference for
+ * this sector) and the rule is that template's own — another template, or the
+ * Codes, reads it differently. Each is a method choice, flagged:
+ *   - the all-empowering-suppliers line counts every supplier's recognised
+ *     spend; the toolkit never reads "Empowering Supplier? (Yes/No)"
+ *     (the Codes speak of EMPOWERING suppliers);
+ *   - the 1.2 recognition factor on the flow-through rule (the other templates
+ *     award it to ≥51% black-owned QSE/EME SD beneficiaries / 3-year contracts);
+ *   - a Generic supplier first procured as a QSE/EME still counts on that line
+ *     for five years (no other template has this);
+ *   - an ESD contribution counts only for a qualifying beneficiary
+ *     ('ESD Data'[Recognised Amount]; RCOGP QSE / ICT / AgriBEE do not gate);
+ *   - guarantees are recognised at 50% of the guarantee (the Codes: 3%; every
+ *     Empower template we hold uses 50%).
+ *   - Skills by the toolkit's own method (EAP split with per-group caps, the
+ *     F&G and other-cost caps against all training spend, absorption against
+ *     headcount).
+ * Also here, though the Codes impose it too: the ED sub-minimum, 40% of the
+ * 5-point BASE line (Summary Scorecard H61 = F62 ≥ 40% × C62). RCOGP_GENERIC
+ * in apps/api still says 0 — the server-side engine reading it (being
+ * removed) tests ED on base + bonuses, and would fail entities the toolkit
+ * passes.
+ */
+function withEmpowerToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+  const pc = cfg.pillarConfigs ?? {};
+  return {
+    ...cfg,
+    pillarConfigs: {
+      ...pc,
+      enterpriseDevelopment: {
+        ...(pc.enterpriseDevelopment ?? { maxPoints: 7 }),
+        subMinimumPercent: 40,
+      },
+    },
+    procurement: {
+      ...cfg.procurement,
+      allSuppliersIgnoreEmpoweringFlag: true,
+      enhancedRecognitionRule: 'flow_through',
+      countGraduatedSuppliersAsSmall: true,
+    },
+    esd: { ...cfg.esd, applyBeneficiaryQualification: true },
+    // Skills as the toolkit scores it, including the absorption bonus against
+    // 5% of headcount (replaces the 100%-of-learners basis of the July audit,
+    // item 2, for this sector only).
+    skills: {
+      ...cfg.skills,
+      method: 'toolkit',
+      absorptionBasis: 'headcount',
+      absorptionTargetPercent: 5,
+    },
+    benefitFactors: cfg.benefitFactors.map((bf) =>
+      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
+        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
+        : bf,
+    ),
+  };
+}
+
+/**
+ * RCOGP Generic on the Codes' reading alone, without the toolkit's method
+ * choices above — the base a sector that merely borrows RCOGP's calculator
+ * plumbing (Construction) builds on.
+ */
+export const RCOGP_GENERIC_CODES_CALCULATOR_CONFIG: CalculatorConfig =
+  sectorConfigToCalculatorConfig(RCOGP_GENERIC);
 
 /**
  * The RCOGP skills block WITHOUT the toolkit method. Construction borrows the
  * RCOGP pillar config only to harvest the calculators' rawStats, and its mapper
  * reads them in the original method's terms.
  */
-export const RCOGP_GENERIC_ORIGINAL_SKILLS_CONFIG: CalculatorConfig['skills'] = RCOGP_GENERIC_BASE.skills;
+export const RCOGP_GENERIC_ORIGINAL_SKILLS_CONFIG: CalculatorConfig['skills'] = RCOGP_GENERIC_CODES_CALCULATOR_CONFIG.skills;
 
-/**
- * Complete RCOGP Generic config — use for scorecard, tests, and explicit sector wiring.
- *
- * Skills is scored the way the Empower toolkit (RCOGP Generic template) scores it,
- * checked line by line against the toolkit recalculated in Excel. That includes
- * the absorption bonus: absorbed learners against 5% of headcount, as the toolkit
- * measures it (this replaces the 100%-of-learners basis from the July audit, item 2,
- * for this sector only).
- */
-export const RCOGP_GENERIC_CALCULATOR_CONFIG: CalculatorConfig = {
-  ...RCOGP_GENERIC_BASE,
-  skills: {
-    ...RCOGP_GENERIC_BASE.skills,
-    method: 'toolkit',
-    absorptionBasis: 'headcount',
-    absorptionTargetPercent: 5,
-  },
-};
+/** Complete RCOGP Generic config — use for scorecard, tests, and explicit sector wiring. */
+export const RCOGP_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
+  withEmpowerToolkitMethod(RCOGP_GENERIC_CODES_CALCULATOR_CONFIG);
 
 export function isRcogpGenericSector(
   sectorCode: string,

@@ -215,7 +215,7 @@ export function sectorConfigToFscCalculatorConfig(sc: SectorConfig): CalculatorC
       subMinThreshold: procSubMin,            // 9.6 pts (40% × 24)
       // FSC-specific targets (different from RCOGP):
       blackOwnedThreshold: pr.bo51Target,     // 0.30 (30% — not RCOGP's 50%)
-      blackWomenThreshold: pr.bwo30Target,    // 0.10 (10% — not RCOGP's 12%)
+      blackWomenThreshold: 0.30,              // supplier qualifies at ≥30% black-female owned (FSC template BWO Spend); bwo30Target (10%) is the SPEND target
       allSuppliersTarget: pr.allSuppliersTarget,  // 0.80
       allSuppliersMaxPts: pr.allSuppliersMaxPts,  // 5
       qseTarget: pr.qseTarget,                // 0.18 (18% — not RCOGP's 15%)

@@ -117,10 +117,24 @@ export const PIPELINE_BENEFIT_FACTORS_SED: BenefitFactorTable = {
 // ---------------------------------------------------------------------------
 // Family B — the toolkit tables (apps/web/Toolkit/src/lib/calculators/esd-sed.ts)
 //
-// PROVENANCE: RCOGP slides 79-80 (ESD) and slide 52 (SED), per the docblocks
-// these tables carried before they moved here.
+// PROVENANCE: the Empower toolkit's own factor tables, 'ESD and SED Calcs'
+// A1:D43 of BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx (the SD rows A2:D15, the
+// ED rows A20:D32, the SED rows A37:D43). The same tables sit in the RCOGP QSE,
+// ICT Generic/QSE, FSC and AgriBEE templates.
 // @see docs/domain/pillars/05_enterprise_supplier_dev.md#qualifying-contributions
 // @see docs/domain/pillars/06_socioeconomic_dev.md#qualifying-contributions
+//
+// Two ESD types are not a fixed factor in the toolkit, and the calculator
+// computes them per row (esd-sed.ts):
+//   lower_interest_loan / lower_dividend_investment — (prime − actual rate),
+//     from the row's rates; the table cell is blank, so 0 without them.
+//   shorter_payment_terms — 15% less one point per day the invoice took to pay
+//     (0 past 14 days) when the beneficiary qualifies and both dates are
+//     captured; otherwise the table's 15%.
+//
+// guarantees stays at the Codes' 3% here. Every Empower template we hold uses
+// 50%; a sector whose template is the reference opts in through its
+// CalculatorConfig (EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES below).
 // ---------------------------------------------------------------------------
 
 export const TOOLKIT_BENEFIT_FACTORS_ESD: BenefitFactorTable = {
@@ -132,29 +146,77 @@ export const TOOLKIT_BENEFIT_FACTORS_ESD: BenefitFactorTable = {
   interest_free_loan: 0.70,
   standard_loan: 0.50,
   guarantees: 0.03,
-  lower_interest_loan: 0.70,
+  lower_interest_loan: 0,
+  lower_dividend_investment: 0,
   minority_investment: 0.70,
   professional_services_free: 0.60,
   professional_services_discount: 0.60,
   employee_time: 0.60,
   shorter_payment_terms: 0.15,
-  equity_investment: 1.0,
 };
 
+/**
+ * SED has its own table, and only the seven SED types in it. Loans, guarantees
+ * and investments are ESD instruments: the toolkit's SED lookup finds nothing
+ * for them and scores 0, so they are declared 0 here rather than borrowing an
+ * ESD factor.
+ */
 export const TOOLKIT_BENEFIT_FACTORS_SED: BenefitFactorTable = {
   grant: 1.0,
   direct_cost: 1.0,
   cost_covering: 1.0,
   discounts: 1.0,
   overhead_costs: 0.80,
-  interest_free_loan: 0.70,
-  standard_loan: 0.50,
-  guarantees: 0.03,
-  lower_interest_loan: 0.70,
-  minority_investment: 0.70,
   professional_services_free: 0.80,
   professional_services_discount: 0.80,
   employee_time: 0.80,
+  interest_free_loan: 0,
+  standard_loan: 0,
+  guarantees: 0,
+  lower_interest_loan: 0,
+  lower_dividend_investment: 0,
+  minority_investment: 0,
+};
+
+/**
+ * Contribution types our capture forms and older records use, mapped to the
+ * key the toolkit tables carry. Without these the form's own choices — "Loan",
+ * "Guarantee", "Employee secondment" — matched no table key and scored 0.
+ *
+ * Deliberately NOT mapped, so they stay unrecognised and reach a reviewer:
+ *   credit_facility — could be a loan (50%) or extended payment terms (≤15%);
+ *     the substance decides, and a guess moves the score up to 3x.
+ *   non_core_business_transfer — no row in any toolkit table.
+ * collateral IS mapped to guarantees: pledging security for a beneficiary's
+ * borrowing is the guarantee row in substance.
+ */
+export const TOOLKIT_CONTRIBUTION_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  loan: 'standard_loan',
+  guarantee: 'guarantees',
+  collateral: 'guarantees',
+  professional_services_discounted: 'professional_services_discount',
+  equity_investment: 'minority_investment',
+  employee_secondment: 'employee_time',
+  employee_mentorship: 'employee_time',
+  lower_interest_rate: 'lower_interest_loan',
+  shorter_payment_periods: 'shorter_payment_terms',
+};
+
+/** The toolkit table key for a contribution type (trimmed; aliases resolved). */
+export function canonicalContributionType(type: string | undefined): string {
+  const key = (type ?? '').trim();
+  return Object.prototype.hasOwnProperty.call(TOOLKIT_CONTRIBUTION_TYPE_ALIASES, key)
+    ? TOOLKIT_CONTRIBUTION_TYPE_ALIASES[key]
+    : key;
+}
+
+/**
+ * Where the Empower templates depart from the Codes' benefit-factor matrix:
+ * guarantees at 50% of the guarantee (Codes: 3%). Applied through the sector
+ * CalculatorConfig of a sector whose toolkit is the reference — RCOGP Generic.
+ */
+export const EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES: Readonly<Record<string, number>> = {
+  guarantees: 0.5,
 };
 
 // ---------------------------------------------------------------------------
