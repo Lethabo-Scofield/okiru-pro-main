@@ -479,24 +479,6 @@ export interface BbeeState extends PillarState {
     }>;
   } | null>;
 
-  calculateFromTemplate: (graphKey: string, entityMap?: Record<string, unknown>) => Promise<{
-    total: { score: number; maxPossible: number; percentage: number };
-    pillars: Record<string, {
-      key: string;
-      score: number;
-      achieved: number;
-      percentage: number;
-      subMinimumMet?: boolean;
-      indicators: Array<{
-        key: string;
-        score: number;
-        achieved: number;
-      }>;
-    }>;
-    beeLevel?: string;
-    recognition?: string;
-  } | null>;
-
   validateEntityCoverage: (sectorCode: string, scorecardType: string) => Promise<{
     hasCoverage: boolean;
     percentage: number;
@@ -507,91 +489,6 @@ export interface BbeeState extends PillarState {
 
   _recalculateAll: () => void;
 
-  setScorecardFromAPI: (apiResult: APIScorecardResult) => void;
-}
-
-/**
- * Shape returned by the UCS engine (POST /api/calculate).
- * Mapped to the frontend ScorecardResult by setScorecardFromAPI.
- */
-export interface APIScorecardResult {
-  assessmentId: string;
-  sectorCode: string;
-  scorecardType: string;
-  totalPoints: number;
-  maxPoints: number;
-  overallPercentage: number;
-  beeLevel: number;
-  recognitionLevel: number;
-  pillars: Array<{
-    pillarCode: string;
-    pillarName: string;
-    points: number;
-    maxPoints: number;
-    percentage: number;
-    subMinimumMet: boolean;
-    criteria: unknown[];
-  }>;
-  subMinimums: Record<string, boolean>;
-  calculationErrors: string[];
-  calculatedAt: string;
-  validation?: { errors: string[]; warnings: string[]; isValid: boolean };
-  ontologySnapshot?: unknown;
-}
-
-function mapAPIScorecardToFrontend(api: APIScorecardResult, ignoreSubMinimum = false): ScorecardResult {
-  const findPillar = (code: string) =>
-    api.pillars.find(p => p.pillarCode === code);
-
-  const makePillarScore = (code: string, fallbackTarget: number) => {
-    const p = findPillar(code);
-    return {
-      score: round2(p?.points ?? 0),
-      target: p?.maxPoints ?? fallbackTarget,
-      weighting: p?.maxPoints ?? fallbackTarget,
-      subMinimumMet: p?.subMinimumMet ?? true,
-    };
-  };
-
-  const own = makePillarScore('ownership', 25);
-  const mc = makePillarScore('managementControl', 19);
-  const sk = makePillarScore('skillsDevelopment', 25);
-  const proc = makePillarScore('preferentialProcurement', 29);
-  const sd = makePillarScore('supplierDevelopment', 10);
-  const ed = makePillarScore('enterpriseDevelopment', 7);
-  const sed = makePillarScore('socioEconomicDevelopment', 5);
-  const yes = makePillarScore('yesInitiative', 3);
-
-  const anySubMinFailed = Object.values(api.subMinimums).some(v => !v);
-  const achievedLevel = api.beeLevel;
-  // When ignoreSubMinimum is true, don't apply the discount even if sub-minimums failed
-  const isDiscounted = !ignoreSubMinimum && achievedLevel < 9 && anySubMinFailed;
-  const discountedLevel = isDiscounted ? Math.min(achievedLevel + 1, 8) : achievedLevel;
-
-  const recMap: Record<number, string> = {
-    1: '135%', 2: '125%', 3: '110%', 4: '100%',
-    5: '80%', 6: '60%', 7: '50%', 8: '10%',
-  };
-
-  return {
-    ownership: own,
-    managementControl: mc,
-    skillsDevelopment: sk,
-    procurement: proc,
-    supplierDevelopment: sd,
-    enterpriseDevelopment: ed,
-    socioEconomicDevelopment: sed,
-    yesInitiative: yes,
-    total: {
-      score: round2(api.totalPoints),
-      target: api.maxPoints,
-      weighting: api.maxPoints,
-    },
-    achievedLevel,
-    discountedLevel,
-    isDiscounted,
-    recognitionLevel: recMap[discountedLevel] || `${api.recognitionLevel}%`,
-  };
 }
 
 /** Standard B-BBEE level thresholds — used when config.levelThresholds unavailable */
@@ -1967,11 +1864,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
-  setScorecardFromAPI: (apiResult: APIScorecardResult) => {
-    const mapped = mapAPIScorecardToFrontend(apiResult, get().ignoreSubMinimum);
-    set({ scorecard: mapped });
-  },
-
   addFinancialYear: (year) => {
     set((state) => ({ client: { ...state.client, financialHistory: [...state.client.financialHistory, year] } }));
     const state = get();
@@ -2295,51 +2187,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       return data;
     } catch (error) {
       console.error('[store] Failed to load template structure:', error);
-      return null;
-    }
-  },
-
-  calculateFromTemplate: async (graphKey: string, entityMap?: Record<string, unknown>) => {
-    try {
-      const response = await fetch(`/api/templates/${graphKey}/evaluate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          overrides: entityMap,
-          includeFormulaDetails: false,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to calculate scorecard: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      // Update store with calculated results
-      if (data.scores) {
-        set((state) => ({
-          scorecard: {
-            ...state.scorecard,
-            // CRITICAL FIX: Apply round2 to all API-returned scores for consistent display
-            ownership: { ...state.scorecard.ownership, score: round2(data.scores.pillars?.ownership?.score || 0) },
-            managementControl: { ...state.scorecard.managementControl, score: round2(data.scores.pillars?.managementControl?.score || 0) },
-            skillsDevelopment: { ...state.scorecard.skillsDevelopment, score: round2(data.scores.pillars?.skillsDevelopment?.score || 0) },
-            procurement: { ...state.scorecard.procurement, score: round2(data.scores.pillars?.preferentialProcurement?.score || 0) },
-            supplierDevelopment: { ...state.scorecard.supplierDevelopment, score: round2(data.scores.pillars?.supplierDevelopment?.score || data.scores.pillars?.enterpriseSupplierDevelopment?.score || 0) },
-            enterpriseDevelopment: { ...state.scorecard.enterpriseDevelopment, score: round2(data.scores.pillars?.enterpriseDevelopment?.score || 0) },
-            socioEconomicDevelopment: { ...state.scorecard.socioEconomicDevelopment, score: round2(data.scores.pillars?.socioEconomicDevelopment?.score || 0) },
-            yesInitiative: { ...state.scorecard.yesInitiative, score: round2(data.scores.pillars?.yesInitiative?.score || 0) },
-            total: { ...state.scorecard.total, score: round2(data.scores.total?.score || 0) },
-            achievedLevel: parseInt(data.scores.beeLevel) || state.scorecard.achievedLevel,
-            recognitionLevel: data.scores.recognition || state.scorecard.recognitionLevel,
-          },
-        }));
-      }
-
-      return data.scores;
-    } catch (error) {
-      console.error('[store] Failed to calculate from template:', error);
       return null;
     }
   },
