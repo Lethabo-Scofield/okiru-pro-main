@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   sessionLean: (async () => null) as () => Promise<unknown>,
   memberLean: (async () => null) as () => Promise<unknown>,
+  clientLean: (async () => null) as () => Promise<unknown>,
 }));
 
 // Paths resolve relative to THIS test file: models.js and storage.js live at
@@ -41,7 +42,7 @@ vi.mock('../../../models.js', () => ({
     findOne: () => ({ lean: () => state.memberLean() }),
   },
   ClientModel: {
-    findOne: () => ({ lean: async () => null }),
+    findOne: () => ({ lean: () => state.clientLean() }),
   },
 }));
 
@@ -72,6 +73,7 @@ function mockRes() {
 beforeEach(() => {
   state.sessionLean = async () => null;
   state.memberLean = async () => null;
+  state.clientLean = async () => null;
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -144,5 +146,71 @@ describe('the normal decisions still stand', () => {
     const res = mockRes();
     expect(await verifyPillarAccess(mockReq(), res, 'procurement', '')).toBe(false);
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("verifyPillarAccess — the company binding is the authority", () => {
+  /**
+   * This is the bug the resolution order fixes. A company created the normal
+   * way has client.workspaceId set and NO workspace-bound ProcessorSession.
+   * The guard used to consult only the session, find nothing, and return true
+   * — so recorded pillar scopes were never applied to essentially any
+   * company. A workspace viewer was read-only in the workbook and could add
+   * and delete shareholders in the toolkit, on the same data.
+   */
+  it("denies a viewer on a company bound through client.workspaceId, with no session", async () => {
+    state.clientLean = async () => ({ workspaceId: "ws-1", createdByUserId: "someone-else" });
+    state.sessionLean = async () => null; // the case that used to pass open
+    state.memberLean = async () => ({ role: "viewer" });
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "ownership", "C-1")).toBe(false);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("denies a collaborator acting outside their recorded scopes", async () => {
+    state.clientLean = async () => ({ workspaceId: "ws-1", createdByUserId: "someone-else" });
+    state.sessionLean = async () => null;
+    state.memberLean = async () => ({ role: "collaborator", pillarScopes: ["skills"] });
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "procurement", "C-1")).toBe(false);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("allows that same collaborator inside their scope", async () => {
+    state.clientLean = async () => ({ workspaceId: "ws-1", createdByUserId: "someone-else" });
+    state.sessionLean = async () => null;
+    state.memberLean = async () => ({ role: "collaborator", pillarScopes: ["skills"] });
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "skills", "C-1")).toBe(true);
+  });
+
+  it("allows the company creator regardless of workspace membership", async () => {
+    state.clientLean = async () => ({ workspaceId: "ws-1", createdByUserId: "u1" });
+    state.sessionLean = async () => null;
+    state.memberLean = async () => null;
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "ownership", "C-1")).toBe(true);
+  });
+
+  it("still passes a company with no workspace binding at all — single-user flow", async () => {
+    state.clientLean = async () => ({ workspaceId: null, createdByUserId: null });
+    state.sessionLean = async () => null;
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "ownership", "C-1")).toBe(true);
+  });
+
+  it("still falls back to the ProcessorSession binding when the client has none", async () => {
+    state.clientLean = async () => ({ workspaceId: null, createdByUserId: null });
+    state.sessionLean = async () => ({ workspaceId: "ws-2", createdBy: "someone-else" });
+    state.memberLean = async () => ({ role: "viewer" });
+    const res = mockRes();
+
+    expect(await verifyPillarAccess(mockReq(), res, "ownership", "C-1")).toBe(false);
+    expect(res.statusCode).toBe(403);
   });
 });
