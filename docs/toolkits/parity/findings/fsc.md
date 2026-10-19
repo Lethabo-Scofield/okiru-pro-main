@@ -205,6 +205,15 @@ figures, and our scorecard scores what the formula evidently means.
 
 ## Also seen in the template
 
+- **Management control: a combined band with no senior manager loses 4
+  points.** When the entity says it does not distinguish other executives from
+  senior management ('MC Toolkit'!C8 = "No") and employs no senior manager,
+  the other-executive band falls back to its own 2 / 1 / 0 points, and the
+  senior band's 4 points are passed neither to it nor to middle or junior
+  management ('MC Calcs (Toolkit)'!K4:M4, K19:M19). Management control is then
+  out of 17 instead of 21, and the level thresholds scale to 4 fewer base
+  points. It is not clear what the intended split is, so we follow the
+  toolkit; **please rule**.
 - **Banks: electronic access and active accounts** ('AFS Scorecard - Banks'
   rows 11 and 13) have no target, so the toolkit scores them 0 whatever is
   entered. We have no target to score them against either; they score only on
