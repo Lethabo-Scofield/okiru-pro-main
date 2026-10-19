@@ -234,14 +234,17 @@ def make(seed, profile="full"):
         row = {
             "Data Date": DATA_DATE, "Pillar": pillar, "Beneficiary Name": f"Beneficiary {i + 1}",
             "Current Black ownership %": rng.choice([0.3, 0.51, 1.0]),
-            "Current Size": rng.choice(['EME', 'QSE', 'Generic']),
+            # The template's list offers QSE and EME only.
+            "Current Size": rng.choice(['EME', 'QSE']),
             "ICT Company?": yn(rng, 0.7),
             "Contribution Description*": f"Contribution {i + 1}",
             "Date of Transaction * (format: dd/mm/yyyy)": rdate(rng),
             "Contribution Type": ctype,
             "Amount": amount,
-            "Graduated to Supplier Development?": yn(rng, 0.2),
         }
+        # Offered on Enterprise Development rows only (its list is keyed on the pillar).
+        if pillar == 'Enterprise Development':
+            row["Graduated to Supplier Development?"] = yn(rng, 0.3)
         if ctype.startswith(('Lower insterest', 'Enterprise and Supplier Development Investment with lower')):
             row["Prime Rate"] = 0.1075
             row["Actual Interest Rate"] = rng.choice([0.0, 0.05, 0.08, 0.1])

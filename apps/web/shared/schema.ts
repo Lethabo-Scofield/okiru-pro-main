@@ -188,8 +188,12 @@ export interface CalculatorConfig {
      * kept out of the other spend lines), F & G course costs and other costs are
      * capped against all training spend, and training-admin costs are shared out
      * by the black workforce mix. Unset keeps the original method.
+     * 'ict_toolkit' is the ICT Generic toolkit's own method: learning spend,
+     * disabled spend, learners in learnerships etc., the unemployed ones among
+     * them and absorption of unemployed completers, each split by EAP group,
+     * with F & G and other costs sharing one 15% cap (no bursary line).
      */
-    method?: 'toolkit';
+    method?: 'toolkit' | 'ict_toolkit';
     /**
      * 'headcount': the absorption bonus measures absorbed learners against the
      * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
@@ -243,6 +247,13 @@ export interface CalculatorConfig {
      * (EME) line within five years of first procurement.
      */
     countGraduatedSuppliersAsSmall?: boolean;
+    /**
+     * ICT Generic: under 'black_owned_small_supplier', a first-time supplier
+     * (a QSE/EME ≥51% black owned) also earns the 1.2 factor. The ICT template
+     * has the column but its formula reads the 3-year-contract answer instead
+     * — a toolkit defect, not ported.
+     */
+    enhancedRecognitionCountsFirstTimeSupplier?: boolean;
   };
   esd: {
     supplierDevMax: number;
@@ -279,6 +290,11 @@ export interface CalculatorConfig {
   sed: {
     maxPoints: number;
     npatTarget: number;
+    /**
+     * ICT Generic: only contributions marked as sector-specific ("ICT Specific
+     * Initiative?" = Yes) are recognised (SED Data[Recognised Amount]).
+     */
+    sectorSpecificInitiativesOnly?: boolean;
     /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
     sedBaseMaxPts?: number;
     /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */

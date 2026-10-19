@@ -538,8 +538,18 @@ export function calculateSedScore(
   const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
+  // ICT: only sector-specific initiatives are recognised (SED Data[Recognised
+  // Amount] is 0 unless "ICT Specific Initiative?" = Yes). A row nobody was
+  // asked about (older captures have no such answer) still counts; an
+  // explicit "No" does not.
+  const sectorSpecificOnly = sc.sectorSpecificInitiativesOnly === true;
+  let notSectorSpecific = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
+    if (sectorSpecificOnly && c.isSectorSpecificInitiative === false) {
+      notSectorSpecific += amount;
+      return acc;
+    }
     const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
     if (!recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
@@ -587,9 +597,11 @@ export function calculateSedScore(
 
   const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
   const total = round2(clampScore(score, maxPoints));
-  const excludedClause = excludedSpend > 0
+  const excludedClause = (excludedSpend > 0
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
-    : '';
+    : '') + (notSectorSpecific > 0
+    ? `; ${formatRand(notSectorSpecific)} not counted: not a sector-specific initiative`
+    : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),

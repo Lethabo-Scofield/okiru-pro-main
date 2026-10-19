@@ -23,6 +23,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
+import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export const ICT_GENERIC_SECTOR_CODE = 'ICT' as const;
 export const ICT_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -299,9 +300,64 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
   };
 }
 
+/**
+ * Where ICT Generic follows its Empower toolkit (BBBEE Toolkit (ICT Generic)
+ * Template v1.4, checked line by line against Excel — see
+ * docs/toolkits/parity/findings/ict_generic.md). Each is a method choice of
+ * that template:
+ *   - ownership by the toolkit's arithmetic (holders weighed by share value,
+ *     designated-group / new-entrant shares per holder, acquisition debt netted
+ *     against the company value; net value = that black economic interest
+ *     against 100%);
+ *   - Skills by the ICT template's own method ('ict_toolkit');
+ *   - the all-suppliers procurement line counts every supplier's recognised
+ *     spend (the template never reads "Empowering Supplier?"), and the 1.2
+ *     factor also goes to first-time suppliers that are ≥51% black-owned
+ *     QSEs/EMEs (the template's formula reads the 3-year-contract answer for
+ *     that column — a defect, not ported);
+ *   - SED counts ICT-specific initiatives only;
+ *   - guarantees are recognised at 50% (the template's ESD table);
+ *   - the ED sub-minimum, 40% of the 15-point BASE line ('Scorecard
+ *     Calculations'!F8 = 15 × 40%; the API config says ED has none).
+ * An ESD contribution is NOT gated on the beneficiary qualifying: the
+ * template computes "Qualify?" but every branch of its Recognised Amount
+ * returns Amount × Benefit Factor.
+ */
+function withEmpowerIctToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+  const pc = cfg.pillarConfigs ?? {};
+  return {
+    ...cfg,
+    ownership: { ...cfg.ownership, ownershipMethod: 'toolkit', netValueTarget: 1 },
+    pillarConfigs: {
+      ...pc,
+      enterpriseDevelopment: {
+        ...(pc.enterpriseDevelopment ?? { maxPoints: 18 }),
+        subMinimumPercent: 40,
+      },
+    },
+    skills: { ...cfg.skills, method: 'ict_toolkit' },
+    procurement: {
+      ...cfg.procurement,
+      allSuppliersIgnoreEmpoweringFlag: true,
+      enhancedRecognitionRule: 'black_owned_small_supplier',
+      enhancedRecognitionCountsFirstTimeSupplier: true,
+    },
+    sed: { ...cfg.sed, sectorSpecificInitiativesOnly: true },
+    benefitFactors: cfg.benefitFactors.map((bf) =>
+      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
+        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
+        : bf,
+    ),
+  };
+}
+
+/** ICT Generic on the Codes' reading alone, without the toolkit's method choices above. */
+export const ICT_GENERIC_CODES_CALCULATOR_CONFIG: CalculatorConfig =
+  ictSectorConfigToCalculatorConfig(ICT_GENERIC);
+
 /** Complete ICT Generic config — zero RCOGP fallbacks, use for scorecard, tests, and sector wiring. */
 export const ICT_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
-  ictSectorConfigToCalculatorConfig(ICT_GENERIC);
+  withEmpowerIctToolkitMethod(ICT_GENERIC_CODES_CALCULATOR_CONFIG);
 
 export function isIctGenericSector(
   sectorCode: string,

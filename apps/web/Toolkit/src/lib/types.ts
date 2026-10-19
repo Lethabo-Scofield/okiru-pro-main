@@ -265,6 +265,12 @@ export interface SkillsData {
    * overhead to each group by these shares. Filled from Management Control.
    */
   workforceShares?: Record<string, number>;
+  /**
+   * ICT toolkit ('Skills Toolkit'!D9): disabled-learner spend measured per
+   * black group against its effective-EAP share — only with the verification
+   * agent's sign-off. Unset: one pool against the whole target.
+   */
+  disabledSpendUsesEap?: boolean;
 }
 
 // YES 4 Youth Initiative
@@ -344,6 +350,8 @@ export interface Supplier {
   isEmpoweringSupplier: boolean;         // Mandatory for Generic/QSE
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
+  /** First procured from in this measurement period (ICT toolkit "First-time supplier?"). */
+  isFirstTimeSupplier?: boolean;
   
   // Dates
   firstProcurementDate?: string;
@@ -500,6 +508,8 @@ export interface Contribution {
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
+  /** SED: a sector-specific initiative (ICT toolkit "ICT Specific Initiative?"). */
+  isSectorSpecificInitiative?: boolean;
 }
 
 export interface ESDData {

@@ -432,36 +432,36 @@
     "Contribution Description*": "Contribution 1",
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-04-24",
     "Contribution Type": "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiary",
-    "Amount": 1014806.94,
-    "Graduated to Supplier Development?": "No",
-    "Number of jobs Created": 2,
-    "Total Workforce": 42
+    "Amount": 1014806.94
    },
    {
     "Data Date": "2026-02-28",
     "Pillar": "Enterprise Development",
     "Beneficiary Name": "Beneficiary 2",
     "Current Black ownership %": 0.3,
-    "Current Size": "EME",
-    "ICT Company?": "Yes",
+    "Current Size": "QSE",
+    "ICT Company?": "No",
     "Contribution Description*": "Contribution 2",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-22",
-    "Contribution Type": "Grant Contribution",
-    "Amount": 273427.19,
-    "Graduated to Supplier Development?": "No"
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-27",
+    "Contribution Type": "Guarantees provided on behalf of an Enterprise and Supplier Development beneficiaries",
+    "Amount": 887901.77,
+    "Graduated to Supplier Development?": "No",
+    "Number of jobs Created": 3,
+    "Total Workforce": 31
    },
    {
     "Data Date": "2026-02-28",
-    "Pillar": "Enterprise Development",
+    "Pillar": "Supplier Development",
     "Beneficiary Name": "Beneficiary 3",
     "Current Black ownership %": 0.51,
     "Current Size": "EME",
     "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 3",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-17",
-    "Contribution Type": "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries",
-    "Amount": 786990.49,
-    "Graduated to Supplier Development?": "No"
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-20",
+    "Contribution Type": "Minority Investment in Enterprise and Supplier Development beneficiaries",
+    "Amount": 472836.34,
+    "Number of jobs Created": 1,
+    "Total Workforce": 29
    }
   ],
   "tblSED": [
@@ -469,11 +469,31 @@
     "Data Date": "2026-02-28",
     "Beneficiary Name *": "Beneficiary SED 1",
     "Description of Spend *": "SED spend 1",
+    "ICT Specific Initiative?": "Yes",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-08",
+    "Contribution Type *": "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
+    "% of Spend Benefiting Black Individuals *": 0.9,
+    "Amount": 239062.93
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Beneficiary Name *": "Beneficiary SED 2",
+    "Description of Spend *": "SED spend 2",
     "ICT Specific Initiative?": "No",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-25",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-03",
+    "Contribution Type *": "Grant Contribution",
+    "% of Spend Benefiting Black Individuals *": 0.75,
+    "Amount": 266523.79
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Beneficiary Name *": "Beneficiary SED 3",
+    "Description of Spend *": "SED spend 3",
+    "ICT Specific Initiative?": "No",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-12-31",
     "Contribution Type *": "Overhead costs incurred in supporting Socioeconomic Development beneficiaries",
-    "% of Spend Benefiting Black Individuals *": 1.0,
-    "Amount": 274758.95
+    "% of Spend Benefiting Black Individuals *": 0.5,
+    "Amount": 236507.13
    }
   ],
   "tblEAPAll": [

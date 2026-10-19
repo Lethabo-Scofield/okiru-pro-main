@@ -1952,34 +1952,35 @@
     "Contribution Description*": "Contribution 1",
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-10-24",
     "Contribution Type": "Professional services rendered at discount and supporting Enterprise and Supplier Development beneficiaries",
-    "Amount": 577069.37,
-    "Graduated to Supplier Development?": "No"
+    "Amount": 577069.37
    },
    {
     "Data Date": "2026-02-28",
     "Pillar": "Enterprise Development",
     "Beneficiary Name": "Beneficiary 2",
     "Current Black ownership %": 1.0,
-    "Current Size": "Generic",
+    "Current Size": "EME",
     "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 2",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-15",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-08",
     "Contribution Type": "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
     "Amount": 1018567.05,
-    "Graduated to Supplier Development?": "No"
+    "Graduated to Supplier Development?": "No",
+    "Number of jobs Created": 10,
+    "Total Workforce": 45
    },
    {
     "Data Date": "2026-02-28",
     "Pillar": "Enterprise Development",
     "Beneficiary Name": "Beneficiary 3",
-    "Current Black ownership %": 0.51,
+    "Current Black ownership %": 0.3,
     "Current Size": "QSE",
-    "ICT Company?": "No",
+    "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 3",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-03-16",
-    "Contribution Type": "Interest free loan with no security requirements",
-    "Amount": 772755.82,
-    "Graduated to Supplier Development?": "No"
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-12-29",
+    "Contribution Type": "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
+    "Amount": 1369896.22,
+    "Graduated to Supplier Development?": "Yes"
    }
   ],
   "tblSED": [
@@ -1988,50 +1989,20 @@
     "Beneficiary Name *": "Beneficiary SED 1",
     "Description of Spend *": "SED spend 1",
     "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-12-29",
-    "Contribution Type *": "Grant Contribution",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-24",
+    "Contribution Type *": "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
     "% of Spend Benefiting Black Individuals *": 0.5,
-    "Amount": 96826.2
+    "Amount": 378143.66
    },
    {
     "Data Date": "2026-02-28",
     "Beneficiary Name *": "Beneficiary SED 2",
     "Description of Spend *": "SED spend 2",
     "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-04-07",
-    "Contribution Type *": "Professional services rendered at no cost and supporting Socioeconomic Development beneficiaries",
-    "% of Spend Benefiting Black Individuals *": 0.5,
-    "Amount": 375280.78
-   },
-   {
-    "Data Date": "2026-02-28",
-    "Beneficiary Name *": "Beneficiary SED 3",
-    "Description of Spend *": "SED spend 3",
-    "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-11",
-    "Contribution Type *": "Grant Contribution",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-03-01",
+    "Contribution Type *": "Time of employees productively deployed in assisting Socioeconomic Development beneficiaries",
     "% of Spend Benefiting Black Individuals *": 1.0,
-    "Amount": 110364.0
-   },
-   {
-    "Data Date": "2026-02-28",
-    "Beneficiary Name *": "Beneficiary SED 4",
-    "Description of Spend *": "SED spend 4",
-    "ICT Specific Initiative?": "No",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-19",
-    "Contribution Type *": "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
-    "% of Spend Benefiting Black Individuals *": 0.75,
-    "Amount": 365958.59
-   },
-   {
-    "Data Date": "2026-02-28",
-    "Beneficiary Name *": "Beneficiary SED 5",
-    "Description of Spend *": "SED spend 5",
-    "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-27",
-    "Contribution Type *": "Professional services rendered at no cost and supporting Socioeconomic Development beneficiaries",
-    "% of Spend Benefiting Black Individuals *": 0.5,
-    "Amount": 149828.3
+    "Amount": 202339.52
    }
   ],
   "tblEAPAll": [

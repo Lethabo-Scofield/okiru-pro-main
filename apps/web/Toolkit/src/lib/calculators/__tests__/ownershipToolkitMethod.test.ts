@@ -65,9 +65,13 @@ describe('which sectors score ownership the toolkit way', () => {
     expect(CFG.ownership.netValueTarget).toBe(1);
   });
 
+  it('ICT Generic does (its template checked line by line), with a 100% net value target', () => {
+    expect(ICT_GENERIC_CALCULATOR_CONFIG.ownership.ownershipMethod).toBe('toolkit');
+    expect(ICT_GENERIC_CALCULATOR_CONFIG.ownership.netValueTarget).toBe(1);
+  });
+
   it.each([
     ['RCOGP QSE', RCOGP_QSE_CALCULATOR_CONFIG],
-    ['ICT Generic', ICT_GENERIC_CALCULATOR_CONFIG],
     ['Transport Generic', TRANSPORT_GENERIC_CALCULATOR_CONFIG],
     ['Transport QSE', TRANSPORT_QSE_CALCULATOR_CONFIG],
     ['Construction (built on RCOGP Generic)', buildConstructionCalculatorConfig('construction_contractor')],

@@ -2270,13 +2270,12 @@
     "Pillar": "Supplier Development",
     "Beneficiary Name": "Beneficiary 1",
     "Current Black ownership %": 1.0,
-    "Current Size": "Generic",
-    "ICT Company?": "No",
+    "Current Size": "EME",
+    "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 1",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-06-21",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-10",
     "Contribution Type": "Standard Loan to Enterprise and Supplier Development beneficiaries",
     "Amount": 392339.79,
-    "Graduated to Supplier Development?": "Yes",
     "Number of jobs Created": 2,
     "Total Workforce": 40
    },
@@ -2284,16 +2283,13 @@
     "Data Date": "2026-02-28",
     "Pillar": "Supplier Development",
     "Beneficiary Name": "Beneficiary 2",
-    "Current Black ownership %": 0.3,
-    "Current Size": "Generic",
+    "Current Black ownership %": 0.51,
+    "Current Size": "QSE",
     "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 2",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-18",
-    "Contribution Type": "Enterprise and Supplier Development Investment with lower dividend to fanacier",
-    "Amount": 865400.98,
-    "Graduated to Supplier Development?": "No",
-    "Prime Rate": 0.1075,
-    "Actual Interest Rate": 0.0,
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-03-18",
+    "Contribution Type": "Professional services rendered at no cost and supporting Enterprise and Supplier Development beneficiaries",
+    "Amount": 1054085.1,
     "Number of jobs Created": 9,
     "Total Workforce": 30
    },
@@ -2323,9 +2319,8 @@
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-05",
     "Contribution Type": "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
     "Amount": 74477.91,
-    "Graduated to Supplier Development?": "No",
-    "Number of jobs Created": 2,
-    "Total Workforce": 50
+    "Number of jobs Created": 1,
+    "Total Workforce": 36
    },
    {
     "Data Date": "2026-02-28",
@@ -2347,28 +2342,27 @@
     "Pillar": "Enterprise Development",
     "Beneficiary Name": "Beneficiary 6",
     "Current Black ownership %": 1.0,
-    "Current Size": "Generic",
-    "ICT Company?": "No",
+    "Current Size": "QSE",
+    "ICT Company?": "Yes",
     "Contribution Description*": "Contribution 6",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-01",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-04-28",
     "Contribution Type": "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
     "Amount": 897832.19,
     "Graduated to Supplier Development?": "No",
     "Number of jobs Created": 1,
-    "Total Workforce": 9
+    "Total Workforce": 15
    },
    {
     "Data Date": "2026-02-28",
     "Pillar": "Supplier Development",
     "Beneficiary Name": "Beneficiary 7",
-    "Current Black ownership %": 1.0,
+    "Current Black ownership %": 0.51,
     "Current Size": "QSE",
-    "ICT Company?": "Yes",
+    "ICT Company?": "No",
     "Contribution Description*": "Contribution 7",
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-07",
-    "Contribution Type": "Interest free loan with no security requirements",
-    "Amount": 710745.84,
-    "Graduated to Supplier Development?": "Yes",
+    "Contribution Type": "Minority Investment in Enterprise and Supplier Development beneficiaries",
+    "Amount": 1360671.73,
     "Number of jobs Created": 2,
     "Total Workforce": 8
    },
@@ -2377,15 +2371,15 @@
     "Pillar": "Enterprise Development",
     "Beneficiary Name": "Beneficiary 8",
     "Current Black ownership %": 0.3,
-    "Current Size": "Generic",
-    "ICT Company?": "Yes",
+    "Current Size": "EME",
+    "ICT Company?": "No",
     "Contribution Description*": "Contribution 8",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-11",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-03-18",
     "Contribution Type": "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries",
     "Amount": 976490.59,
-    "Graduated to Supplier Development?": "Yes",
-    "Number of jobs Created": 1,
-    "Total Workforce": 14
+    "Graduated to Supplier Development?": "No",
+    "Number of jobs Created": 3,
+    "Total Workforce": 60
    },
    {
     "Data Date": "2026-02-28",
@@ -2398,9 +2392,8 @@
     "Date of Transaction * (format: dd/mm/yyyy)": "2026-02-20",
     "Contribution Type": "Interest free loan with no security requirements",
     "Amount": 260899.54,
-    "Graduated to Supplier Development?": "No",
-    "Number of jobs Created": 0,
-    "Total Workforce": 28
+    "Number of jobs Created": 2,
+    "Total Workforce": 25
    }
   ],
   "tblSED": [
@@ -2409,20 +2402,20 @@
     "Beneficiary Name *": "Beneficiary SED 1",
     "Description of Spend *": "SED spend 1",
     "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-01",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-04",
     "Contribution Type *": "Grant Contribution",
-    "% of Spend Benefiting Black Individuals *": 0.75,
-    "Amount": 295222.88
+    "% of Spend Benefiting Black Individuals *": 0.5,
+    "Amount": 366094.94
    },
    {
     "Data Date": "2026-02-28",
     "Beneficiary Name *": "Beneficiary SED 2",
     "Description of Spend *": "SED spend 2",
     "ICT Specific Initiative?": "Yes",
-    "Date of Transaction * (format: dd/mm/yyyy)": "2025-10-06",
-    "Contribution Type *": "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
-    "% of Spend Benefiting Black Individuals *": 0.75,
-    "Amount": 208264.41
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-12",
+    "Contribution Type *": "Overhead costs incurred in supporting Socioeconomic Development beneficiaries",
+    "% of Spend Benefiting Black Individuals *": 1.0,
+    "Amount": 255894.7
    }
   ],
   "tblEAPAll": [

@@ -144,6 +144,7 @@ export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'flow_throu
 export function qualifiesForEnhancedRecognition(
   sup: Supplier,
   rule: EnhancedRecognitionRule = 'black_owned_small_supplier',
+  countFirstTimeSupplier = false,
 ): boolean {
   const size = normaliseSize(sup.enterpriseType);
   if (!size) return false;
@@ -151,7 +152,8 @@ export function qualifiesForEnhancedRecognition(
   const bo = Number(sup.blackOwnership) || 0;
   if (rule === 'black_owned_small_supplier') {
     return small && bo >= OWNED_51
-      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract));
+      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract)
+        || (countFirstTimeSupplier && Boolean(sup.isFirstTimeSupplier)));
   }
   const ft = Number(sup.flowThroughOwnership) || 0;
   if (bo >= OWNED_51 && ft >= OWNED_51) return true;
@@ -279,6 +281,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const ignoreEmpoweringFlag = pc.allSuppliersIgnoreEmpoweringFlag === true;
   const enhancedRule: EnhancedRecognitionRule = pc.enhancedRecognitionRule ?? 'black_owned_small_supplier';
   const countGraduates = pc.countGraduatedSuppliersAsSmall === true;
+  const countFirstTime = pc.enhancedRecognitionCountsFirstTimeSupplier === true;
 
   const blackWomenThreshold = pc.blackWomenThreshold ?? 0.30;
   // No configured sub-minimum means NO sub-minimum (audit 2026-07-26 item 15).
@@ -329,7 +332,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     // Procurement Data[All Spend adjusted] × 1.2 where the supplier qualifies
     // ([All Spend adjusted PLUS x1.2 Factor]) — the figure every line sums.
     const adjusted = spend * getRecognitionMultiplier(sup.beeLevel, config);
-    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule);
+    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule, countFirstTime);
     if (enhanced && adjusted > 0) enhancedCount += 1;
     const recognised = enhanced ? adjusted * ENHANCED_RECOGNITION : adjusted;
     recognisedSpend += recognised;

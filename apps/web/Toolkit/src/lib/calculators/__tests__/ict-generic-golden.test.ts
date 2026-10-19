@@ -274,7 +274,11 @@ describe('ICT Generic golden — Skills Development', () => {
       },
       CONFIG,
     );
-    expect(employedOnly.learnerships).toBeCloseTo(4, 1); // 2.1.2.1 all-LAI maxed
+    // The ICT toolkit splits each headcount line by effective EAP group: one
+    // African man fills the African-male share of the target and earns that
+    // share of the 4 points (toolkit 'Skills Calcs' N44 / J57).
+    const amShare = getEffectiveEap('National' as Province).AM;
+    expect(employedOnly.learnerships).toBeCloseTo(4 * amShare, 2); // 2.1.2.1 all-LAI, AM share maxed
     expect(employedOnly.bursaries).toBe(0);              // 2.1.2.2 unemployed-LAI — none (was folded → wrongly 8)
 
     const withUnemployed = calculateSkillsScore(
@@ -288,8 +292,8 @@ describe('ICT Generic golden — Skills Development', () => {
       },
       CONFIG,
     );
-    expect(withUnemployed.learnerships).toBeCloseTo(4, 1);
-    expect(withUnemployed.bursaries).toBeCloseTo(4, 1);  // 2.1.2.2 now scores → 4 + 4 = 8
+    expect(withUnemployed.learnerships).toBeCloseTo(4 * amShare, 2);
+    expect(withUnemployed.bursaries).toBeCloseTo(4 * amShare, 2);  // 2.1.2.2 now scores on its own line
   });
 
   it('absorption (2.1.3) is scored over unemployed-LAI completers, not all Black learners (ledger D-05)', () => {
@@ -311,9 +315,12 @@ describe('ICT Generic golden — Skills Development', () => {
       CONFIG,
     );
     expect(r.rawStats.absorptionRate).toBeCloseTo(0.5, 5); // was 0.25 under all-learners basis
-    // 50% absorption against the AICT300 100% target = half the 5 points.
+    // The toolkit measures each black group against its effective-EAP share of
+    // the unemployed completers (100% target), for its share of the 5 points
+    // ('Skills Calcs' K70:K75): 1 absorbed African man against 2 × AM share.
     // (The old 2.5% target maxed this at any rate >= 2.5% — audit item 2.)
-    expect(r.absorption).toBeCloseTo(2.5, 1);
+    const am = getEffectiveEap('National' as Province).AM;
+    expect(r.absorption).toBeCloseTo(Math.min(1 / (2 * am) * 5 * am, 5 * am), 2);
   });
 });
 
