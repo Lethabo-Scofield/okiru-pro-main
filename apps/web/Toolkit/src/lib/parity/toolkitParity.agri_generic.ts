@@ -300,11 +300,25 @@ export function refereeAgriGeneric(sheets: ToolkitSheets, tables?: ToolkitTables
   const discounted = subMinFailed ? (achieved >= 8 ? 9 : achieved + 1) : achieved;
   const exAchieved = levelNumber(sheets['Summary Scorecard']?.F73?.v);
   const exDiscounted = levelNumber(sheets['Summary Scorecard']?.F75?.v);
+  const levelText = (l: number) => (l === 9 ? 'Non-compliant' : `Level ${l}`);
+  const onBoundary = [100, 95, 90, 80, 75, 70, 55, 40].some((t) => Math.abs(total - t) < 1e-9);
+  const achievedWhy = [
+    onBoundary ? `the total ${total.toFixed(2)} sits exactly on a level boundary and its lookup ('Scorecard Calculations'!C12) only takes a boundary strictly below the total` : '',
+    totalDelta !== 0 ? 'it uses the uncorrected lines above' : '',
+  ].filter(Boolean);
+  const discountWhy = [
+    exAchieved !== achieved ? `it starts from ${levelText(exAchieved)}` : '',
+    !subMinFailed ? `it always discounts: its enterprise-development sub-minimum is tested against 40% of 15 points ('Scorecard Calculations'!F8) on a 5-point line, which no entity can reach, while every priority element here meets its sub-minimum` : '',
+  ].filter(Boolean);
   return {
     lines,
     achieved,
     discounted,
-    achievedNote: achieved !== exAchieved ? `The toolkit shows ${exAchieved === 9 ? 'Non-compliant' : `Level ${exAchieved}`}; its level lookup drops a level exactly on a threshold, or uses the uncorrected lines.` : undefined,
-    discountedNote: discounted !== exDiscounted ? `The toolkit shows ${exDiscounted === 9 ? 'Non-compliant' : `Level ${exDiscounted}`}; its enterprise-development sub-minimum is tested against 40% of 15 points on a 5-point line, so it always fails.` : undefined,
+    achievedNote: achieved !== exAchieved
+      ? `The toolkit shows ${levelText(exAchieved)}: ${achievedWhy.join('; ') || 'see the lines above'}.`
+      : undefined,
+    discountedNote: discounted !== exDiscounted
+      ? `The toolkit shows ${levelText(exDiscounted)}: ${discountWhy.join('; ') || 'see the lines above'}.`
+      : undefined,
   };
 }
