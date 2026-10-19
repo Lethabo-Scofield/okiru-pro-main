@@ -144,14 +144,19 @@ export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'flow_throu
 export function qualifiesForEnhancedRecognition(
   sup: Supplier,
   rule: EnhancedRecognitionRule = 'black_owned_small_supplier',
+  opts?: { firstTimeSupplier?: boolean },
 ): boolean {
   const size = normaliseSize(sup.enterpriseType);
   if (!size) return false;
   const small = size === 'qse' || size === 'eme';
   const bo = Number(sup.blackOwnership) || 0;
   if (rule === 'black_owned_small_supplier') {
+    // AgriBEE Generic (opt-in): a first-time supplier earns it too — the
+    // template's third column, as evidently meant (its formula reads the
+    // 3-year-contract answer instead of the first-time answer).
+    const firstTime = opts?.firstTimeSupplier === true && Boolean(sup.isFirstTimeSupplier);
     return small && bo >= OWNED_51
-      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract));
+      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract) || firstTime);
   }
   const ft = Number(sup.flowThroughOwnership) || 0;
   if (bo >= OWNED_51 && ft >= OWNED_51) return true;
@@ -329,7 +334,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     // Procurement Data[All Spend adjusted] × 1.2 where the supplier qualifies
     // ([All Spend adjusted PLUS x1.2 Factor]) — the figure every line sums.
     const adjusted = spend * getRecognitionMultiplier(sup.beeLevel, config);
-    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule);
+    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule, { firstTimeSupplier: pc.firstTimeSupplierEnhancedRecognition === true });
     if (enhanced && adjusted > 0) enhancedCount += 1;
     const recognised = enhanced ? adjusted * ENHANCED_RECOGNITION : adjusted;
     recognisedSpend += recognised;

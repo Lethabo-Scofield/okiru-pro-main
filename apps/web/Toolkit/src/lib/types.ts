@@ -265,6 +265,15 @@ export interface SkillsData {
    * overhead to each group by these shares. Filled from Management Control.
    */
   workforceShares?: Record<string, number>;
+  /**
+   * AgriBEE scarce-and-critical-skills declarations ('Skills Toolkit'!D10 for
+   * spend, D11 for headcount). Read only where the sector's config gates on
+   * them; false scores the gated lines 0, undefined does not gate.
+   */
+  scarceCriticalSpendDeclared?: boolean;
+  scarceCriticalHeadcountDeclared?: boolean;
+  /** Start of the measurement period (ISO date), for sectors that count only training within it. */
+  measurementPeriodStart?: string;
 }
 
 // YES 4 Youth Initiative
@@ -344,6 +353,8 @@ export interface Supplier {
   isEmpoweringSupplier: boolean;         // Mandatory for Generic/QSE
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
+  /** First-time supplier (AgriBEE: may earn the 1.2 recognition factor). */
+  isFirstTimeSupplier?: boolean;
   
   // Dates
   firstProcurementDate?: string;
@@ -500,6 +511,9 @@ export interface Contribution {
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
+
+  /** SED: a sector-specific initiative (AgriBEE: 'SED Data'[Agri Specific Initiative?]). */
+  isSectorSpecificInitiative?: boolean;
 }
 
 export interface ESDData {

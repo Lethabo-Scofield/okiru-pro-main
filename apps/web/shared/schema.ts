@@ -194,8 +194,43 @@ export interface CalculatorConfig {
      * 'headcount': the absorption bonus measures absorbed learners against the
      * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
      * Empower toolkit does. Unset keeps the learner-based rate.
+     *
+     * 'laiCompleters' (AgriBEE Generic toolkit, 'Skills Calcs'!J53; read by the
+     * 'toolkit' method only): absorbed unemployed black learners over every
+     * black learner who completed a learnership, apprenticeship or internship.
      */
-    absorptionBasis?: 'headcount';
+    absorptionBasis?: 'headcount' | 'laiCompleters';
+    /**
+     * AgriBEE Generic toolkit ('toolkit' method only): F & G course costs and
+     * the other training costs (travel, accommodation, catering, stationery,
+     * facility, other) share ONE cap, this fraction of all training spend per
+     * EAP group. Unset keeps the two separate caps of RCOGP Generic.
+     */
+    combinedOtherCostCap?: number;
+    /**
+     * 'toolkit' method: the share of training-manager salary + overheads that
+     * is recognised, spread by the black workforce mix. Unset: the other-cost cap.
+     */
+    adminCostShare?: number;
+    /**
+     * AgriBEE Generic toolkit ('toolkit' method only): the second headcount
+     * line (bursaryMaxPts) counts unemployed black learners in learnerships,
+     * apprenticeships or internships, each EAP group against its share of
+     * bursarySpendPercent × headcount — not bursary spend.
+     */
+    unemployedLearnersLine?: boolean;
+    /**
+     * 'toolkit' method: only training that ended after the measurement period
+     * began counts ('Skills Data'[Within FY?]; a missing end date is a year
+     * after the start). Needs SkillsData.measurementPeriodStart.
+     */
+    onlyTrainingWithinPeriod?: boolean;
+    /**
+     * AgriBEE Generic toolkit ('Skills Toolkit'!D10 / D11): a scarce-and-critical
+     * skills declaration answered "No" scores the spend lines (D10) or the
+     * headcount lines (D11) 0. An unanswered declaration does not gate.
+     */
+    scarceCriticalDeclarationsGate?: boolean;
   };
   procurement: {
     baseMax: number;
@@ -243,6 +278,12 @@ export interface CalculatorConfig {
      * (EME) line within five years of first procurement.
      */
     countGraduatedSuppliersAsSmall?: boolean;
+    /**
+     * AgriBEE Generic: a QSE/EME ≥51% black owned that is a FIRST-TIME supplier
+     * also earns the 1.2 factor under 'black_owned_small_supplier' (the
+     * template's third "Qualify for 1.2" column, as it is evidently meant).
+     */
+    firstTimeSupplierEnhancedRecognition?: boolean;
   };
   esd: {
     supplierDevMax: number;
@@ -292,6 +333,12 @@ export interface CalculatorConfig {
     /** FSC: Fundisa grant bonus from fundisaSpend meta. */
     fundisaMaxPts?: number;
     fundisaNpatTarget?: number;
+    /**
+     * AgriBEE Generic toolkit ('SED Data'[Recognised Amount]): a contribution
+     * answered as NOT an agri-specific initiative counts nothing. An
+     * unanswered one still counts.
+     */
+    sectorSpecificInitiativesOnly?: boolean;
   };
   yes?: {
     tier1Points: number;
