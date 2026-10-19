@@ -65,8 +65,13 @@ describe('which sectors score ownership the toolkit way', () => {
     expect(CFG.ownership.netValueTarget).toBe(1);
   });
 
+  it('RCOGP QSE does too, now its own template has been checked (combined new-entrants-or-designated line)', () => {
+    expect(RCOGP_QSE_CALCULATOR_CONFIG.ownership.ownershipMethod).toBe('toolkit');
+    expect(RCOGP_QSE_CALCULATOR_CONFIG.ownership.netValueTarget).toBe(1);
+    expect(RCOGP_QSE_CALCULATOR_CONFIG.ownership.combinedNewEntrantsDesignated).toBe(true);
+  });
+
   it.each([
-    ['RCOGP QSE', RCOGP_QSE_CALCULATOR_CONFIG],
     ['ICT Generic', ICT_GENERIC_CALCULATOR_CONFIG],
     ['Transport Generic', TRANSPORT_GENERIC_CALCULATOR_CONFIG],
     ['Transport QSE', TRANSPORT_QSE_CALCULATOR_CONFIG],

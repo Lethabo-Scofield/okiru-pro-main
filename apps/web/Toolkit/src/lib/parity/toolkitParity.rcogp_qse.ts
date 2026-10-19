@@ -240,10 +240,10 @@ export function rcogpQseReferee(sheets: ToolkitSheets, tables?: ToolkitTables): 
   // Procurement: the first-time-supplier route to the 1.2 factor.
   const pp = tables ? intendedProcurement(sheets, tables) : null;
   if (pp) {
-    for (const [row, value] of pp) {
+    pp.forEach((value, row) => {
       set(row, value, `Toolkit formula fault: its first-time-supplier test reads the 3-year-contract answer, so a first-time ≥51% black-owned QSE/EME supplier never earns the 1.2 recognition factor. ` +
         `With the first-time answer read: ${fmt(value)}; the toolkit shows ${fmt(F(row))}.`);
-    }
+    });
   }
 
   // Supplier development: the minority-investment benefit factor.

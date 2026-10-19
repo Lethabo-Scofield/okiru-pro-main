@@ -328,16 +328,18 @@ describe('RCOGP QSE — Skills Development pillar', () => {
 
   it('maxed absorption bonus (5 pts) at 100% absorption (Excel Skills Calcs!J28)', () => {
     // R8: target is 100% absorption (absorbed/completers = 1.0). All absorbed → 5 pts.
-    // Each TrainingProgram row = one learner (legacy flat format)
+    // Each TrainingProgram row = one learner (legacy flat format). The toolkit
+    // counts a learner only once the learnership is completed and the learner
+    // started it unemployed ('Skills Calcs'!D28 / F28), so the rows say both.
     const r = calculateSkillsScore(
       {
         id: '1',
         clientId: 'qse',
         leviableAmount: LEVIABLE,
         trainingPrograms: [
-          { id: 'y1', name: 'Learnership', category: 'learnership', cost: 10_000,
+          { id: 'y1', name: 'Learnership', category: 'learnership', cost: 10_000, isCompleted: true, employmentStatus: 'Unemployed',
             isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Female', race: 'African' } as any,
-          { id: 'y2', name: 'Learnership', category: 'learnership', cost: 10_000,
+          { id: 'y2', name: 'Learnership', category: 'learnership', cost: 10_000, isCompleted: true, employmentStatus: 'Unemployed',
             isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Male', race: 'African' } as any,
         ],
         yesCandidatesCount: 0,
@@ -356,9 +358,9 @@ describe('RCOGP QSE — Skills Development pillar', () => {
       {
         id: '1', clientId: 'qse', leviableAmount: LEVIABLE,
         trainingPrograms: [
-          { id: 'a', name: 'LAI', category: 'learnership', cost: 1000,
+          { id: 'a', name: 'LAI', category: 'learnership', cost: 1000, isCompleted: true, employmentStatus: 'Unemployed',
             isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Male', race: 'African' } as never,
-          { id: 'b', name: 'LAI', category: 'learnership', cost: 1000,
+          { id: 'b', name: 'LAI', category: 'learnership', cost: 1000, isCompleted: true, employmentStatus: 'Unemployed',
             isBlack: true, isDisabled: false, isAbsorbed: false, gender: 'Female', race: 'African' } as never,
         ],
         yesCandidatesCount: 0, yesAbsorbedCount: 0,
@@ -373,7 +375,7 @@ describe('RCOGP QSE — Skills Development pillar', () => {
     // 1 absorbed of 200 Black learners = 0.5% rate. Under the corrected 100% target:
     // 0.005 × 5 = 0.025 ≈ 0 (was 2.5 when the target was misread as 1%, ledger D-04).
     const programs = Array.from({ length: 200 }, (_, i) => ({
-      id: `L${i}`, name: 'LAI', category: 'learnership', cost: 1000,
+      id: `L${i}`, name: 'LAI', category: 'learnership', cost: 1000, isCompleted: true, employmentStatus: 'Unemployed',
       isBlack: true, isDisabled: false, isAbsorbed: i === 0, gender: 'Male', race: 'African',
     }));
     const r = calculateSkillsScore(
