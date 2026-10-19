@@ -752,7 +752,8 @@ function scoreToolkitMethod(data: SkillsData, p: ToolkitParams): ToolkitOutcome 
     categoryBreakdown,
     rawStats: {
       blackSpend: round2(learningRecognised),
-      bursarySpend: round2(bursaryRecognised),
+      // A rand figure; the AgriBEE unemployed-learners line counts heads, not rand.
+      bursarySpend: p.unemployedLearnersLine ? 0 : round2(bursaryRecognised),
       disabledSpend: round2(disabledRecognised),
       learnershipCount,
       absorbedCount,

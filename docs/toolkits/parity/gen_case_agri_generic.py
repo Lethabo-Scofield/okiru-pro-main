@@ -2,7 +2,7 @@
 Master v1.0.1), written in the toolkit's own vocabulary: sheet cells + table
 rows. Synthetic only: invented names, no ID numbers, no client data.
 
-  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary|factors]
+  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary|factors|coverage]
   py -3 gen_case_agri_generic.py --all <out_dir>      (the standard case set)
 
 Profiles:
@@ -21,6 +21,10 @@ Profiles:
            boundary).
   factors  development and socio-economic spend below target, so every
            benefit factor (computed or fixed) shows in the points.
+  coverage acquisition debt on non-black and partly black holders in later
+           register rows, TMPS exclusions, stationery costs, foreign black
+           learners and employees, the spend declaration "No" with the
+           headcount one "Yes".
 """
 import sys, json, random, datetime, os
 
@@ -410,18 +414,102 @@ def make_factors(seed):
     return case
 
 
+TMPS_EXCLUSIONS = ['Taxes and Levies', 'Movements in provisions (e.g. leave, bonus etc.)', 'Salaries and wages',
+                   'Pass-through third party procurement', 'Broker commissions',
+                   'Discount allowed/Discount Recvd disallowed', 'Inter-entity charges', 'Imports',
+                   'Depreciation & Amortisation', 'Amortisation', 'Municipality', 'Bad debts', 'Impairment',
+                   'Enterprise and Supplier Development']
+
+
+def make_coverage(seed):
+    """An ordinary company that also reaches the inputs the other profiles
+    leave alone: acquisition debt on a non-black holder and on a partly black
+    holder in LATER rows of the register (the toolkit nets those rows another
+    way), TMPS exclusions, stationery costs, foreign black learners and
+    employees, and the spend declaration answered "No" while the headcount one
+    is "Yes". Odd seeds let spend + buffer outweigh the TMPS; even seeds keep
+    the TMPS (after exclusions) the larger."""
+    case = make(seed, "full")
+    rng = random.Random(seed * 7919)
+    cells, tables = case["cells"], case["tables"]
+
+    # Ownership: four holders; debt on the first (black, more than 60% of its
+    # stake), the second (not black) and the third (partly black).
+    shares = [rng.randint(10, 60) * 100 for _ in range(4)]
+    total_shares = sum(shares)
+    company_value = rng.randint(50, 300) * 1_000_000
+    price = round(company_value / total_shares, 2)
+    spec = [(1.0, 0.7), (0.0, 0.3), (0.4, 0.2), (0.8, 0.0)]   # (BO%, debt as a share of the stake)
+    own_rows = []
+    for i, (bo, debt_share) in enumerate(spec):
+        stake = shares[i] * price
+        row = {
+            "Data Date": DATA_DATE, "Shareholder": f"Holder {i + 1}", "Ownership Type": OWN_TYPES[i % len(OWN_TYPES)],
+            "Outstaning Debt": round(stake * debt_share), "BO%": bo,
+            "BWO%": round(bo * rng.choice([0.25, 0.5, 1.0]), 4),
+            "BDG%": round(bo * rng.choice([0, 0.1, 0.3]), 4), "BNE%": round(bo * rng.choice([0, 0.2, 1.0]), 4),
+            "Number of Share": shares[i], "Share Value": round(stake, 2),
+            "Original Date": d(rng.randint(2016, 2023), rng.randint(1, 12), 1),
+        }
+        if debt_share:
+            row["Loan Date"] = d(rng.randint(2018, 2024), rng.randint(1, 12), 1)
+        own_rows.append(row)
+    tables["tblOwnershipData"] = own_rows
+    tables["tblCompanyValuation"] = [{"Date": DATA_DATE, "Company Asset Value": company_value,
+                                      "Total Shares": total_shares, "Share Value": price}]
+
+    # Management control: a foreign black senior manager (not black for B-BBEE).
+    tables["tblMCData"].append({"Data Date": DATA_DATE, "Full Name *": "Employee Foreign", "Gender *": "Female",
+                                "Race *": "African", "Designation *": "Senior Manager",
+                                "Disabled *": "No", "Foreign *": "Yes"})
+
+    # Skills: stationery on some rows, a foreign black unemployed learner, and
+    # the spend declaration "No" on odd seeds.
+    for r in tables["tblSkillsData"]:
+        if rng.random() < 0.4:
+            r["Stationery Cost"] = round(rng.uniform(200, 3_000), 2)
+    tables["tblSkillsData"].append({**tables["tblSkillsData"][0], "Training Program Name *": "Programme Foreign",
+                                    "Learner Name *": "Learner Foreign", "Category *": "B", "Race *": "African",
+                                    "Foreign?*": "Yes", "Employed?": "No", "Completed?": "Yes", "Absorbed?": "Yes",
+                                    "Course Cost": 25_000.0, "Stationery Cost": 800.0,
+                                    "Start Date (format: dd/mm/yyyy)": "2025-04-01",
+                                    "End Date (format: dd/mm/yyyy)": "2025-12-31"})
+    cells["Skills Toolkit!D10"] = "No" if seed % 2 else "Yes"
+    cells["Skills Toolkit!D11"] = "Yes"
+
+    # TMPS with exclusions.
+    total_spend = sum(r["Spend *"] for r in tables["tblPPData"])
+    if seed % 2:
+        cos, excl, buffer = total_spend * 1.05, {"Salaries and wages": 0.08, "Imports": 0.04}, 0.05
+    else:
+        cos, excl, buffer = total_spend * 1.4, {"Salaries and wages": 0.1, "Imports": 0.03, "Bad debts": 0.02}, None
+    tables["tblInclusions"] = [{"Inclusions": name, "Amount": amt} for name, amt in
+                               zip(TMPS_INCLUSIONS, [round(cos, 2), None, None, None, None])]
+    tables["tblExclusions"] = [{"Exclusions": name, "Amount": round(total_spend * excl[name], 2) if name in excl else None}
+                               for name in TMPS_EXCLUSIONS]
+    if buffer is None:
+        cells.pop("Procurement Scorecard!D4", None)
+    else:
+        cells["Procurement Scorecard!D4"] = buffer
+    case["profile"] = "coverage"
+    return case
+
+
 def build(seed, profile):
     if profile == "boundary":
         return make_boundary(seed)
     if profile == "factors":
         return make_factors(seed)
+    if profile == "coverage":
+        return make_coverage(seed)
     return make(seed, profile)
 
 
 # The standard set: (seed, profile).
 STANDARD = [(101, "full"), (102, "full"), (103, "small"), (104, "edge"), (105, "full"), (106, "lean"),
             (107, "discount"), (108, "full"), (109, "small"), (110, "edge"), (111, "full"), (112, "full"),
-            (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary"), (118, "factors")]
+            (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary"), (118, "factors"),
+            (119, "coverage"), (120, "coverage")]
 
 
 if __name__ == "__main__":
