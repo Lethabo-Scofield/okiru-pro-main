@@ -21,6 +21,17 @@ discounted level, to within half a cent of a point.
 
 RESULTS_PLACEHOLDER
 
+Not checked:
+
+- **Stock Exchanges.** Our product has no Stock Exchanges sub-sector (an FSC
+  client is Others, Banks, Long-term or Short-term Insurers), so there is
+  nothing of ours to compare. In the template it is the Others scorecard with
+  the two ownership bonus lines and 6 points of net value.
+- **YES.** The YES sheet only lifts the level once a YES tier and its
+  headcounts are entered; the comparison is on the level before YES.
+- **"Prior Year" and "Projected" columns.** Every scorecard was read on its
+  "Current YTD" period.
+
 ## How the FSC toolkit scores (as we now score it)
 
 - **Ownership.** Voting rights and economic interest are weighed by the value
@@ -49,23 +60,59 @@ RESULTS_PLACEHOLDER
   18%, EME 12%, 51% black-owned 30%, 30% black-women-owned 10%), plus two FSC
   bonuses measured against the **total allocated trade value** — intermediated
   black professional services and black stock brokers / fund managers (the
-  better of the two counts) — and the designated-group bonus.
+  better of the two counts) — and the designated-group bonus. A first-time
+  black-owned QSE/EME supplier earns the 1.2 recognition factor, as a
+  supplier-development recipient or one on a 3-year contract does.
 - **Enterprise and supplier development**: a contribution counts only for a
-  QSE/EME beneficiary at least 51% black owned. Others: SD 2% of NPAT (10),
-  ED 1% (5), graduation and jobs bonuses, and an ED bonus for support of black
-  stock brokers, fund managers and intermediaries (0.5%, 2 points). Banks and
-  long-term insurers score SD (1.8%, 7) and ED (0.2%, 3) on their empowerment
-  financing scorecard.
+  QSE/EME beneficiary at least 51% black owned. Others and short-term insurers:
+  SD 2% of NPAT (10), ED 1% (5), graduation and jobs bonuses, and an ED bonus
+  for support of black stock brokers, fund managers and intermediaries (0.5%,
+  2 points). Banks and long-term insurers score SD (1.8%, 7) and ED (0.2%, 3) on
+  their empowerment financing scorecard (long-term insurers keep the
+  stock-broker bonus; banks do not). Guarantees count at 50%, and **bad debts
+  written off on ESD financing at 100%** — the toolkit does not apply the
+  Code's "maximum of 50% of the non-recoverable target for banks and life
+  offices"; please say if it should.
 - **SED and consumer education** come from one table split by its Pillar
   column: SED 0.6% of NPAT (3; 0.7% for reinsurers), consumer education 0.4%
   (2), additional consumer education (bonus, 1), and the Fundisa Retail Fund
   (bonus, 2; a base line for reinsurers).
+- **Empowerment financing** (banks and long-term insurers, 15 points):
+  targeted investments 12 (banks: exposure on new loans against the
+  balance-sheet plus additional targeted-investment exposure; long-term
+  insurers: the targeted-investment portion against the qualifying exposure)
+  and transaction financing 3 (the period's transaction financing against its
+  target portion). It is the priority element in procurement's place.
+- **Access to financial services** (12 points). Banks: transaction, service
+  and sales points by share of the qualifying area (85% / 70% / 60%), a point of
+  presence (3). Long-term insurers: appropriate products (3), market
+  penetration (7, plus up to 0.25 for credit-life policies), transactional
+  access (2, in tiers). Short-term insurers: appropriate products — 2 points
+  shared equally by the products of the lines offered (4 personal, 6
+  commercial, or all 10), none when the FSTC granted an exemption — and
+  insurance policies (10; 8 personal + 2 commercial when both lines are
+  offered); each measures the qualifying policies × their average compliance
+  share against that line's target policies.
 - **Levels** use thresholds scaled to the scorecard's own base points: each of
-  100 / 95 / 90 / 80 / 75 / 70 / 55 / 40 is multiplied by base points ÷ 111
-  (Others: 106 base points, Level 1 from 95.50). A failed priority element
-  (net value, skills, procurement — empowerment financing for banks and
-  long-term insurers — supplier development, enterprise development) drops the
-  level by one; a discounted Level 8 is non-compliant.
+  100 / 95 / 90 / 80 / 75 / 70 / 55 / 40 is multiplied by base points ÷ 111.
+  Base points (bonus points excluded): Others 106 (Level 1 from 95.50); banks
+  and long-term insurers 121 (Level 1 from 109.01); short-term insurers 116
+  (114 when exempt from appropriate products). A failed priority element (net
+  value, skills, procurement — empowerment financing for banks and long-term
+  insurers — supplier development, enterprise development) drops the level by
+  one; a discounted Level 8 is non-compliant.
+
+### The empowerment financing denominator
+
+The open question was what the grand total is out of for banks and long-term
+insurers. The template answers it: the levels scale by the base points
+('Scorecard Calculations'!F12), which include empowerment financing and access
+to financial services — **121** for both (ownership 23, management control 21,
+skills 20, procurement 15, empowerment financing 15, SD 7, ED 3, SED and
+consumer education 5, access to financial services 12). With bonus points the
+grand total is out of **138** for banks and **140** for long-term insurers
+(Summary Scorecard C104); Others is 106 base, 120 with bonuses (117 for
+reinsurers). We score the same.
 
 ## Toolkit formula faults (please confirm)
 
@@ -104,7 +151,7 @@ figures, and our scorecard scores what the formula evidently means.
 6. **Procurement: the sub-minimum can never fail.** 'Scorecard Calculations'!G6
    is 40% of 'Procurement Scorecard'!C60:C64, which are empty, so the
    procurement priority element always passes. We test 40% of the five base
-   lines (8 points for Others).
+   lines (8 points for Others and short-term insurers).
 7. **Ownership: debt netting depends on row order and ignores the black share.**
    'Oustanding Debts Calcs': the first indebted shareholder row uses the 40%
    rule, the rows below use a different formula, every row credits the whole
@@ -117,28 +164,59 @@ figures, and our scorecard scores what the formula evidently means.
 9. **Ownership (sub-sectors other than Others): a negative bonus.** "Direct /
    indirect ownership in excess of 15%" is (black voting rights − 15%) against
    10%, so black voting rights below 15% give *negative* points. We floor it at 0.
-10. **Supplier development: minority investments count 0.** The benefit-factor
+10. **Management control: employees with disabilities.** 'MC Toolkit'!C111
+    counts black people with disabilities including non-executive directors,
+    while the employee count it divides by (C7) leaves them out. We count
+    employees only, on both sides.
+11. **Supplier development: minority investments count 0.** The benefit-factor
     lookup meets a duplicated "Minority Investment" row with no factor before
     the 70% row (the enterprise-development copy reads 70%). (Same as RCOGP
     Generic.) We use 70%.
-11. **Additional consumer education is measured above the wrong target.**
+12. **Banks and long-term insurers: ESD disappears without transaction
+    financing.** The EF & ESD scorecards ('EF & ESD Scorecard - Banks' /
+    '- Long Term', I27) take their "Current YTD" date from the
+    transaction-financing rows (Validation!H168:H186), and the SD, ED,
+    graduation, jobs and (long-term insurers) stock-broker lines filter the ESD
+    rows by that date. A bank that recorded no transaction financing in the
+    period scores 0 on all of them however much it spent. We read the ESD rows
+    in their own period (the ESD Scorecard's, I16).
+13. **Long-term insurers: transaction financing against the wrong target.**
+    'EF & ESD Scorecard - Long Term'!I14 divides by the targeted-investment
+    portion (C6) instead of the transaction-financing target (C8). We use C8.
+14. **Long-term insurers: transactional access is typed in.** 'AFS Scorecard -
+    Long Term'!H26 holds a typed, locked 80% (always 2 points) instead of the
+    share of polygons entered (E16). We score the share entered, on the
+    toolkit's own tiers (below 50% none; 60%–70% 1; 70%–80% 1.5; otherwise 2 —
+    which also gives 2 points between 50% and 60%; **please confirm that tier**).
+15. **Short-term insurers: commercial lines against the wrong target.** The
+    sheet asks for the target policies where it labels them — D6 for the line
+    offered, D7 for commercial lines when both personal and commercial lines are
+    offered — but its formulas divide by D6 whenever personal lines are offered
+    (so a personal-and-commercial insurer's commercial products and policies
+    meet the *personal* target) and by D7 for a commercial-only insurer (a cell
+    the sheet never labels for it, so every line scores 0). We measure each line
+    against its own line's target.
+16. **Additional consumer education is measured above the wrong target.**
     'SED & CE Scorecard'!I10 counts consumer-education spend above the *SED*
     target (0.6% of NPAT, F7) instead of above the consumer-education target
     (0.4%, F8). We use the consumer-education target.
-12. **Levels: a total exactly on a threshold drops a level.** The round-down
+17. **Levels: a total exactly on a threshold drops a level.** The round-down
     ('Scorecard Calculations'!C14) uses a strict "<". (Same as RCOGP Generic.)
 
-## Also seen in the template (not affecting the generic scorecard)
+## Also seen in the template
 
-- Banks: electronic access and active accounts ('AFS Scorecard - Banks' rows 11
-  and 13) have no target, so the toolkit scores them 0 whatever is entered. We
-  have no target to score them against either; they score only on a stated
-  compliance answer, which the toolkit does not collect. **Needs your target.**
-- Long-term insurers: the transaction-financing line divides by the
-  targeted-investment portion (C6) instead of its own target (C8); the
-  transactional-access share ('AFS Scorecard - Long Term'!H26) is a typed,
-  locked 80% (always 2 points), and its tiers give 2 points for 50%–60%.
-- Short-term insurers' access to financial services is scored from the AFS
-  policy table by policy line; it was not part of this check.
+- **Banks: electronic access and active accounts** ('AFS Scorecard - Banks'
+  rows 11 and 13) have no target, so the toolkit scores them 0 whatever is
+  entered. We have no target to score them against either; they score only on
+  a stated compliance answer, which the toolkit does not collect. **Needs your
+  target.**
+- **Short-term insurers: appropriate products** are scored as qualifying
+  policies × compliance ÷ target policies per product (so one product can earn
+  its share from policy volume alone), rather than as the share of products
+  that are compliant. We follow the toolkit; please say if the Code means
+  otherwise.
+- **The STI access-to-financial-services sheet has its own period picker**
+  ('AFS Scorecard - Short Term'!H34:H35), blank in the shipped template: until
+  someone picks "Current YTD" the actual column reads nothing.
 
 STILL_DIFFERENT_PLACEHOLDER
