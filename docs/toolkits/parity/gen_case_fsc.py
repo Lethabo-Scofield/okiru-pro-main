@@ -14,8 +14,10 @@ SED & Consumer Education table) and in three inputs it expects typed in:
     column evidently means: Spend x the recognition level of the supplier's
     B-BBEE level (Validation!B27:C35).
   - 'Skills Toolkit'!D3 (leviable amount) and D6 (headcount) are typed, not
-    linked; the template ships with another company's figures in them. The
-    case types the same leviable amount and headcount it gives everywhere else.
+    linked, and LOCKED on a password-protected sheet: the template ships with
+    another company's figures in them (R6.53bn, 14,212) and no user can change
+    them. The case leaves them; the referee reworks the four lines that read
+    them from the workbook's own leviable amount and headcount.
 """
 import sys, json, random, datetime, os
 
@@ -100,7 +102,6 @@ def make(seed, profile="full", subsector="Others"):
         "Client Information!D12": round(rng.uniform(0.03, 0.14), 4),
         "Client Information!D20": revenue, "Client Information!D21": npat,
         "MC Toolkit!C8": rng.choice(['Yes', 'Yes', 'No']),
-        "Ownership Scorecard!B3": rng.choice(['Share Value', 'Share Value', 'Asset Value']),
         "Procurement Scorecard!G9": "Actual",
     })
     if subsector == "Others" and rng.random() < 0.25:
@@ -131,10 +132,11 @@ def make(seed, profile="full", subsector="Others"):
     total_shares = sum(shares)
     company_value = rng.randint(50, 900) * 1_000_000
     price = round(company_value / total_shares, 2)
+    company_value = round(price * total_shares, 2)
     own_rows = []
     for i in range(n_sh):
         bo = pct(rng, 0, 1, 0.25)
-        debt = rng.choice([0, 0, round(company_value * shares[i] / total_shares * rng.uniform(0.1, 0.7))])
+        debt = rng.choice([0, round(company_value * shares[i] / total_shares * rng.uniform(0.1, 0.7))])
         row = {
             "Data Date": DATA_DATE, "Shareholder": f"Holder {i + 1}",
             "Ownership Type": rng.choice(OWN_TYPES),
@@ -147,10 +149,13 @@ def make(seed, profile="full", subsector="Others"):
             "Original Date": d(rng.randint(2014, 2024), rng.randint(1, 12), 1),
         }
         if debt:
-            row["Loan Date"] = d(rng.randint(2015, 2025), rng.randint(1, 12), 1)
+            # Some loans are ten years old or more: the toolkit's graduation
+            # table stops at year 9.
+            row["Loan Date"] = d(rng.randint(2012, 2025), rng.randint(1, 12), 1)
         own_rows.append(row)
-    # Asset value and share value differ so the "company value to use" pick matters.
-    own_val = [{"Date": DATA_DATE, "Company Asset Value": round(company_value * rng.uniform(0.8, 1.25)),
+    # 'Ownership Scorecard'!B3 ("company value to use") is locked on "Share
+    # Value"; the debt netting divides by the asset value, so the two agree.
+    own_val = [{"Date": DATA_DATE, "Company Asset Value": company_value,
                 "Total Shares": total_shares, "Share Value": price}]
 
     # Management control. Some cases leave a management band empty: the
@@ -167,7 +172,8 @@ def make(seed, profile="full", subsector="Others"):
         mc_rows.append({"Data Date": DATA_DATE, "Full Name *": f"Employee {i + 1}",
                         "Gender *": rng.choice(['Male', 'Female']), "Race *": rng.choices(RACES, RACE_W)[0],
                         "Designation *": des, "Disabled *": yn(rng, 0.05), "Foreign *": yn(rng, 0.03)})
-    headcount = sum(1 for r in mc_rows if r["Designation *"] != 'Non-executive Director')
+    staff = [r for r in mc_rows if r["Designation *"] != 'Non-executive Director']
+    headcount = len(staff)
 
     # Skills
     n_tr = rng.randint(4, 10) if small else rng.randint(12, 40)
@@ -194,11 +200,24 @@ def make(seed, profile="full", subsector="Others"):
             "Start Date (format: dd/mm/yyyy)": rdate(rng, FY_START, "2025-09-30"),
             "End Date (format: dd/mm/yyyy)": rdate(rng, "2025-10-01", FY_END),
         })
-    cells.update({
-        "Skills Toolkit!D2": FY_END,
-        "Skills Toolkit!D3": leviable,
-        "Skills Toolkit!D6": headcount,
-    })
+
+    # Training manager's salary and training overhead, shared out by the
+    # workforce demographics: the template's own "auto generated" row holds
+    # typed figures, so the case types the manual row from its MC data.
+    if rng.random() < 0.4:
+        cells["Skills Toolkit!D8"] = round(rng.uniform(300_000, 1_500_000), 2)
+        cells["Skills Toolkit!D9"] = round(rng.uniform(50_000, 600_000), 2)
+        bands = [('Other Executive Manager', 'Senior Manager', 'Executive Director'), ('Middle Manager',),
+                 ('Junior Manager',), ('Semi-skilled', 'Unskilled')]
+        cols = iter('BCDEFGHIJKLMN')
+        black = lambda r: r["Race *"] in ('African', 'Coloured', 'Indian') and r["Foreign *"] != 'Yes'
+        for band in bands:
+            inb = [r for r in staff if r["Designation *"] in band and black(r)]
+            for v in (len(inb), sum(1 for r in inb if r["Gender *"] == 'Female'), sum(1 for r in inb if r["Race *"] == 'African')):
+                cells[f"Employee Demographics!{next(cols)}4"] = round(v / headcount, 6) if headcount else 0
+        cells[f"Employee Demographics!{next(cols)}4"] = round(sum(1 for r in staff if black(r) and r["Disabled *"] == 'Yes') / headcount, 6) if headcount else 0
+    if edge and rng.random() < 0.5:
+        cells["Client Information!D26"] = round(abs(npat) * rng.uniform(0.6, 1.5) + 1_000_000)
 
     # Procurement
     n_sup = rng.randint(6, 12) if small else rng.randint(15, 60)

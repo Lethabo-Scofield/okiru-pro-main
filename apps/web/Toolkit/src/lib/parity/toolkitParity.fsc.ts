@@ -1,0 +1,413 @@
+/**
+ * Toolkit parity, FSC — the line map and the referee for the FSC Empower
+ * toolkit (BBBEE Toolkit (FSC) Template v1.0), shared by the FSC parity
+ * harness and its always-on gate. One definition, so the gate proves what the
+ * harness reports.
+ *
+ * The referee is the FSC toolkit recalculated by Excel. Where the toolkit's
+ * own formula is evidently broken, the referee is what that formula evidently
+ * means, computed from the toolkit's OWN figures; every such line says why.
+ * The faults (docs/toolkits/parity/findings/fsc.md):
+ *  - acquisition-debt netting depends on the row the shareholder sits in and
+ *    credits the whole stake regardless of its black share (economic interest
+ *    and net value), as in RCOGP Generic;
+ *  - 'Skills Toolkit'!D3 (leviable amount) and D6 (headcount) are typed,
+ *    locked cells holding another company's figures, so the unemployed,
+ *    disabled, learnership and absorption lines measure against them;
+ *  - the first-time-supplier recognition test reads the 3-year-contract column;
+ *  - the preferential-procurement sub-minimum reads empty cells, so it never fails;
+ *  - a duplicated blank "Minority Investment" row zeroes that supplier-
+ *    development contribution, as in RCOGP Generic;
+ *  - additional consumer education is measured above the SED target instead
+ *    of above the consumer-education target.
+ */
+import type { CalculatorConfig } from '../../../../shared/schema';
+import type { ScorecardResult } from '../types';
+import { FSC_GENERIC_CALCULATOR_CONFIG } from '../sectors/fsc-generic';
+
+export type ParityPillarKey = keyof ScorecardResult;
+export interface ParityLine { row: number; pillar: ParityPillarKey; label: string; names: string[] }
+export type ToolkitSheets = Record<string, Record<string, { v: unknown }>>;
+export type ToolkitTables = Record<string, { headers: unknown[]; rows: unknown[][] }>;
+
+export function fscConfigFor(sub: string): CalculatorConfig {
+  if (sub === 'Others' || !sub) return FSC_GENERIC_CALCULATOR_CONFIG;
+  throw new Error(`FSC parity: no toolkit config for sub-sector ${sub} yet`);
+}
+
+const OWNERSHIP: ParityLine[] = [
+  { row: 21, pillar: 'ownership', label: 'Voting rights: black', names: ['Exercisable voting rights of black individuals'] },
+  { row: 22, pillar: 'ownership', label: 'Voting rights: black women', names: ['Exercisable voting rights of black females'] },
+  { row: 23, pillar: 'ownership', label: 'Economic interest: black', names: ['Economic interest of black individuals'] },
+  { row: 24, pillar: 'ownership', label: 'Economic interest: black women', names: ['Economic interest of black females'] },
+  { row: 25, pillar: 'ownership', label: 'Economic interest: designated groups', names: ['Economic interest of black designated groups or participants in ownership schemes'] },
+  { row: 26, pillar: 'ownership', label: 'Economic interest: new entrants', names: ['Economic interest of black new entrants'] },
+  { row: 27, pillar: 'ownership', label: 'Net value', names: ['Net value'] },
+];
+
+const MC: ParityLine[] = [
+  { row: 32, pillar: 'managementControl', label: 'Board: black', names: ['Exercisable voting rights of black board members'] },
+  { row: 33, pillar: 'managementControl', label: 'Board: black women', names: ['Exercisable voting rights of black female board members'] },
+  { row: 34, pillar: 'managementControl', label: 'Executive directors: black', names: ['Black executive directors'] },
+  { row: 35, pillar: 'managementControl', label: 'Executive directors: black women', names: ['Black female executive directors'] },
+  { row: 36, pillar: 'managementControl', label: 'Other executive: black', names: ['Black other executive management'] },
+  { row: 37, pillar: 'managementControl', label: 'Other executive: black women', names: ['Black female other executive management'] },
+  { row: 38, pillar: 'managementControl', label: 'Other executive: African', names: ['Black African other executive management'] },
+  { row: 39, pillar: 'managementControl', label: 'Senior management: black', names: ['Black employees in senior management'] },
+  { row: 40, pillar: 'managementControl', label: 'Senior management: black women', names: ['Black female employees in senior management'] },
+  { row: 41, pillar: 'managementControl', label: 'Senior management: African', names: ['Black African employees in senior management'] },
+  { row: 42, pillar: 'managementControl', label: 'Middle management: black', names: ['Black employees in middle management'] },
+  { row: 43, pillar: 'managementControl', label: 'Middle management: black women', names: ['Black female employees in middle management'] },
+  { row: 44, pillar: 'managementControl', label: 'Middle management: African', names: ['Black African employees in middle management'] },
+  { row: 45, pillar: 'managementControl', label: 'Junior management: black', names: ['Black employees in junior management'] },
+  { row: 46, pillar: 'managementControl', label: 'Junior management: black women', names: ['Black female employees in junior management'] },
+  { row: 47, pillar: 'managementControl', label: 'Junior management: African', names: ['Black African employees in junior management'] },
+  { row: 48, pillar: 'managementControl', label: 'Employees with disabilities', names: ['Black employees with disabilities'] },
+];
+
+const SKILLS: ParityLine[] = [
+  { row: 51, pillar: 'skillsDevelopment', label: 'Spend: senior & executive management', names: ['Skills spend on senior & executive management'] },
+  { row: 52, pillar: 'skillsDevelopment', label: 'Spend: middle management', names: ['Skills spend on middle management'] },
+  { row: 53, pillar: 'skillsDevelopment', label: 'Spend: junior management', names: ['Skills spend on junior management'] },
+  { row: 54, pillar: 'skillsDevelopment', label: 'Spend: non-management', names: ['Skills spend on non-management'] },
+  { row: 55, pillar: 'skillsDevelopment', label: 'Spend: unemployed black people', names: ['Skills spend on black unemployed people'] },
+  { row: 56, pillar: 'skillsDevelopment', label: 'Spend: black people with disabilities', names: ['Skills spend on black people with disabilities'] },
+  { row: 57, pillar: 'skillsDevelopment', label: 'Learnerships / apprenticeships / internships', names: ['Number of black people in learnerships, apprenticeships and internships'] },
+  { row: 58, pillar: 'skillsDevelopment', label: 'Absorption (bonus)', names: ['Number of unemployed black people absorbed at the end of learnerships'] },
+];
+
+const PP: ParityLine[] = [
+  { row: 61, pillar: 'procurement', label: 'All suppliers', names: ['B-BBEE Procurement Spend from Empowering Suppliers'] },
+  { row: 62, pillar: 'procurement', label: 'QSE suppliers', names: ['Spend on QSE Empowering Suppliers'] },
+  { row: 63, pillar: 'procurement', label: 'EME suppliers', names: ['Spend on EME Suppliers'] },
+  { row: 64, pillar: 'procurement', label: '51% black-owned suppliers', names: ['Spend on Empowering Suppliers ≥51% Black Owned'] },
+  { row: 65, pillar: 'procurement', label: '30% black-women-owned suppliers', names: ['Spend on Empowering Suppliers >30% Black Female Owned'] },
+  { row: 66, pillar: 'procurement', label: 'Intermediated black professionals (bonus)', names: ['Spend from intermediated black professional service providers'] },
+  { row: 67, pillar: 'procurement', label: 'Black stock brokers / fund managers (bonus)', names: ['Spend from black stock brokers or fund managers'] },
+  { row: 68, pillar: 'procurement', label: 'Designated-group suppliers (bonus)', names: ['Spend on Designated Group Suppliers ≥51% Black Owned'] },
+];
+
+const ESD: ParityLine[] = [
+  { row: 75, pillar: 'supplierDevelopment', label: 'Supplier development', names: ['Annual value of all Supplier Development contributions'] },
+  { row: 78, pillar: 'enterpriseDevelopment', label: 'Enterprise development', names: ['Annual value of Enterprise Development contributions'] },
+  { row: 79, pillar: 'enterpriseDevelopment', label: 'Graduation bonus', names: ['Graduation of ED beneficiaries to SD beneficiaries'] },
+  { row: 80, pillar: 'enterpriseDevelopment', label: 'Jobs created bonus', names: ['Jobs created from ED & SD initiatives'] },
+  { row: 81, pillar: 'enterpriseDevelopment', label: 'Black stock brokers / fund managers (ED bonus)', names: ['ED support of black stockbrokers / fund managers / intermediaries'] },
+];
+
+const SED: ParityLine[] = [
+  { row: 84, pillar: 'socioEconomicDevelopment', label: 'Socio-economic development', names: ['Socioeconomic Development contributions'] },
+  { row: 85, pillar: 'socioEconomicDevelopment', label: 'Consumer education', names: ['Consumer Education contributions'] },
+  { row: 86, pillar: 'socioEconomicDevelopment', label: 'Additional consumer education (bonus)', names: ['Additional Consumer Education contributions'] },
+  { row: 87, pillar: 'socioEconomicDevelopment', label: 'Fundisa Retail Fund (bonus)', names: ['Grant contribution to the Fundisa Retail Fund and similar initiatives'] },
+];
+
+const SED_REINSURER: ParityLine[] = [
+  SED[0],
+  { row: 85, pillar: 'socioEconomicDevelopment', label: 'Fundisa Retail Fund (reinsurers)', names: ['Grant contribution to the Fundisa Retail Fund (reinsurers)'] },
+];
+
+export function fscLinesFor(sub: string, reinsurer = false): ParityLine[] {
+  if (sub !== 'Others') throw new Error(`FSC parity: no line map for ${sub} yet`);
+  return [...OWNERSHIP, ...MC, ...SKILLS, ...PP, ...ESD, ...(reinsurer ? SED_REINSURER : SED)];
+}
+
+export function fscTotalRowsFor(sub: string): Array<{ row: number; pillar: ParityPillarKey; label: string }> {
+  if (sub !== 'Others') throw new Error(`FSC parity: no total rows for ${sub} yet`);
+  return [
+    { row: 20, pillar: 'ownership', label: 'Ownership' },
+    { row: 31, pillar: 'managementControl', label: 'Management control' },
+    { row: 50, pillar: 'skillsDevelopment', label: 'Skills development' },
+    { row: 60, pillar: 'procurement', label: 'Preferential procurement' },
+    { row: 74, pillar: 'supplierDevelopment', label: 'Supplier development' },
+    { row: 77, pillar: 'enterpriseDevelopment', label: 'Enterprise development' },
+    { row: 83, pillar: 'socioEconomicDevelopment', label: 'SED and consumer education' },
+    { row: 104, pillar: 'total', label: 'Grand total' },
+  ];
+}
+
+export function summaryValue(sheets: ToolkitSheets, row: number): number | null {
+  const v = sheets['Summary Scorecard']?.[`F${row}`]?.v;
+  if (v === '' || v == null) return null;
+  return typeof v === 'number' ? v : Number(v);
+}
+
+export function levelNumber(v: unknown): number {
+  const s = String(v ?? '');
+  if (/non/i.test(s)) return 9;
+  const m = s.match(/(\d)/);
+  return m ? Number(m[1]) : NaN;
+}
+
+export interface RefereeResult {
+  lines: Map<number, { value: number; note: string }>;
+  achieved: number;
+  discounted: number;
+  achievedNote?: string;
+  discountedNote?: string;
+}
+
+function tableRows(tables: ToolkitTables | undefined, name: string): Array<Record<string, unknown>> {
+  const t = tables?.[name];
+  if (!t) return [];
+  return t.rows.map((r) => Object.fromEntries(t.headers.map((h, i) => [String(h), r[i]])));
+}
+
+const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : Number(x) || 0);
+const yes = (x: unknown) => String(x ?? '').trim().toLowerCase() === 'yes';
+/** MIN(actual ÷ target × points, points); 0 where the target is 0 (the toolkit's IFERROR). */
+const pts = (actual: number, target: number, max: number) => (target > 0 ? Math.min((actual / target) * max, max) : 0);
+const blankish = (v: unknown) => v === undefined || v === null || v === '';
+/** Ownership Calcs Formula A3:B11, with a loan in its tenth year or later fully graduated. */
+const GRADUATION: Record<number, number> = { 1: 0.1, 2: 0.2, 3: 0.4, 4: 0.5, 5: 0.6, 6: 0.7, 7: 0.8, 8: 0.9, 9: 1 };
+
+/**
+ * Ownership: black economic interest (row 23) and net value (row 27) with each
+ * indebted black stake netted the one way — the first debt row's formula: the
+ * stake counts in full once its net value reaches 40% of it — and only for its
+ * black share; the net value's loan-year graduation reads 100% from year 9 on.
+ */
+function refereeOwnership(sheets: ToolkitSheets, tables: ToolkitTables) {
+  const v = (sheet: string, ref: string) => n(sheets[sheet]?.[ref]?.v);
+  const holders = tableRows(tables, 'tblOwnershipData');
+  const value = v('Ownership Scorecard', 'C3');
+  const free = v('Ownership Data', 'W3');
+  let credited = 0;
+  let formulaA = 0;
+  let formulaB = 0;
+  let indebted = 0;
+  let lateLoan = false;
+  for (const h of holders) {
+    const share = n(h['Share %']);
+    const bo = n(h['BO%']);
+    const debt = n(h['Outstaning Debt']);
+    if (share <= 0 || bo <= 0 || debt <= 0 || value <= 0) continue;
+    indebted += 1;
+    const deemed = (value * share - debt) / value;
+    const hBlack = share * Math.min(1, deemed / (0.4 * share)) * bo;
+    credited += hBlack;
+    const year = Math.ceil(n(h['Loan Term']) + 1 - 1e-12);
+    const g = year >= 9 ? 1 : GRADUATION[year] ?? 0;
+    if (year > 9) lateLoan = true;
+    formulaA += g > 0 ? Math.max(Math.min((hBlack * 8) / (0.25 * g), 8), 0) : 0;
+    formulaB += (hBlack / 0.25) * 8;
+  }
+  const eiMax = v('Ownership Scorecard', 'F10');
+  const nvMax = v('Ownership Scorecard', 'F17');
+  const ei = free + credited;
+  const eiPts = Math.min((Math.max(ei, 0) / 0.25) * eiMax, eiMax);
+  const nvPts = Math.min(Math.min((free / 0.25) * nvMax, nvMax) + Math.min(formulaA, Math.min(formulaB, 8)), 8);
+  return { indebted, ei, eiPts, nvPts, lateLoan };
+}
+
+interface SkillRow {
+  black: boolean; female: boolean; african: boolean; disabled: boolean; position: string;
+  af: number; g: number; all: number; lai: boolean; completedU: boolean; absorbedU: boolean; name: string;
+}
+
+/**
+ * Skills, every line, from the toolkit's own Skills Data columns. Two faults
+ * are reworked: its "Within FY?" column compares each row's date with a cell
+ * that moves down the Validation sheet row by row (Validation!C2, C3, C4 …),
+ * so rows 6, 13 and 25 meet a text label and drop out of every skills sum;
+ * and the unemployed, disabled and learnership lines measure against
+ * 'Skills Toolkit'!D3 and D6 — locked cells holding another company's
+ * leviable amount and headcount — instead of the workbook's own
+ * (Financials!I3, 'Client Information'!E16).
+ */
+function refereeSkills(sheets: ToolkitSheets, tables: ToolkitTables) {
+  const v = (ref: string) => n(sheets['Skills Toolkit']?.[ref]?.v);
+  const rows: SkillRow[] = tableRows(tables, 'tblSkillsData')
+    .filter((r) => !blankish(r['Data Date']))
+    .map((r) => ({
+      black: yes(r['Black']), female: yes(r['Black Females?']), african: yes(r['Africans?']),
+      disabled: yes(r['Disabled.calcs']), position: String(r['Management Position.calcs'] ?? '').trim(),
+      af: n(r['Cat A-F Spend']) + n(r['Salaries (BCD)']),
+      g: n(r['Cat G Spend']) + n(r['Other Legitimate Cost']),
+      all: n(r['All Spend']), lai: yes(r['LAI']),
+      completedU: yes(r['Completed LAI (Unemployed)']), absorbedU: yes(r['Absorbed LAI [Unemployed]']),
+      name: String(r['Learner Name *'] ?? '').trim(),
+    }));
+  const leviable = n(sheets['Financials']?.I3?.v);
+  const headcount = n(sheets['Client Information']?.E16?.v);
+  const sum = (f: (r: SkillRow) => boolean, val: (r: SkillRow) => number) => rows.filter(f).reduce((a, r) => a + val(r), 0);
+  const bands: Array<{ row: number; o: number; inBand: (r: SkillRow) => boolean }> = [
+    { row: 51, o: 0, inBand: (r) => r.position === 'Senior Management' || r.position === 'Executive Management' },
+    { row: 52, o: 36, inBand: (r) => r.position === 'Middle Management' },
+    { row: 53, o: 72, inBand: (r) => r.position === 'Junior Management' },
+    { row: 54, o: 108, inBand: (r) => r.position === 'Non-Management' },
+  ];
+  const out = new Map<number, number>();
+  let allBands = 0;
+  for (const b of bands) {
+    const admin = (col: 'D' | 'E' | 'F') => v(`${col}${28 + b.o}`) + v(`${col}${29 + b.o}`);
+    const blackAll = sum((r) => b.inBand(r) && r.black, (r) => r.all) + admin('D');
+    const otherAll = sum((r) => b.inBand(r) && !r.black, (r) => r.all);
+    allBands += blackAll + otherAll;
+    const cap = (blackAll + otherAll) * 0.15;
+    const rec = (f: (r: SkillRow) => boolean, col: 'D' | 'E' | 'F') =>
+      sum((r) => b.inBand(r) && f(r), (r) => r.af) + Math.min(cap, sum((r) => b.inBand(r) && f(r), (r) => r.g) + admin(col));
+    out.set(b.row,
+      pts(rec((r) => r.black, 'D'), v(`D${46 + b.o}`), v(`I${24 + b.o}`))
+      + pts(rec((r) => r.female, 'E'), v(`E${46 + b.o}`), v(`I${26 + b.o}`))
+      + pts(rec((r) => r.african, 'F'), v(`F${46 + b.o}`), v(`I${28 + b.o}`)));
+  }
+  const unemployed = (r: SkillRow) => r.position === 'Unemployed';
+  const uBlack = sum((r) => unemployed(r) && r.black, (r) => r.all);
+  const uOther = sum((r) => unemployed(r) && !r.black, (r) => r.all);
+  allBands += uBlack + uOther;
+  const uRec = sum((r) => unemployed(r) && r.black, (r) => r.af)
+    + Math.min((uBlack + uOther) * 0.15, sum((r) => unemployed(r) && r.black, (r) => r.g));
+  out.set(55, pts(uRec, leviable * v('F168'), v('G168')));
+  const dAdmin = v('D204') + v('D205');
+  const dAll = sum((r) => r.disabled && r.black, (r) => r.all) + dAdmin;
+  const dRec = sum((r) => r.disabled && r.black, (r) => r.af)
+    + Math.min((dAll + allBands) * 0.15, sum((r) => r.disabled && r.black, (r) => r.g) + dAdmin);
+  out.set(56, pts(dRec, leviable * v('F200'), v('G200')));
+  const unique = (f: (r: SkillRow) => boolean) => new Set(rows.filter(f).map((r) => r.name)).size;
+  out.set(57, pts(unique((r) => r.lai && r.black), headcount * v('F236'), v('G236')));
+  const completed = unique((r) => r.completedU);
+  out.set(58, completed > 0 ? Math.min((unique((r) => r.completedU && r.black && r.absorbedU) / completed) * v('G265'), v('G265')) : 0);
+  return out;
+}
+
+/**
+ * Preferential procurement from the toolkit's own Procurement Data rows, with
+ * the 1.2 recognition factor's first-time-supplier test reading the
+ * first-time-supplier answer (the toolkit reads the 3-year-contract column).
+ */
+function refereeProcurement(sheets: ToolkitSheets, tables: ToolkitTables) {
+  const v = (ref: string) => n(sheets['Procurement Scorecard']?.[ref]?.v);
+  const S = (k: string) => `${k}\n[Scenario].Calcs`;
+  let all = 0, qse = 0, eme = 0, bo = 0, bwo = 0, bdg = 0, inter = 0, broker = 0, fund = 0;
+  let firstTimeOnly = 0;
+  for (const r of tableRows(tables, 'tblPPData')) {
+    if (blankish(r['Data Date'])) continue;
+    const size = String(r[S('Company Size')] ?? '');
+    const small = size === 'QSE' || size === 'EME';
+    const own = n(r[S('Black Ownership')]);
+    const sd = yes(r[S('Supplier development recipient? (Yes/No)')]);
+    const three = yes(r[S('3 year contract in place? (Yes/No)')]);
+    const scenarioFirst = r['First-time supplier? (Yes/No)\n[Scenario]'];
+    const first = blankish(scenarioFirst) ? yes(r['First-time supplier? (Yes/No)']) : yes(scenarioFirst);
+    const enhanced = small && own >= 0.51 && (sd || three || first);
+    if (small && own >= 0.51 && first && !sd && !three) firstTimeOnly += 1;
+    const x = n(r['All Spend\nadjusted']) * (enhanced ? 1.2 : 1);
+    all += x;
+    if (size === 'QSE') qse += x;
+    if (size === 'EME') eme += x;
+    if (own >= 0.51) bo += x;
+    if (n(r[S('Black Female ownership')]) >= 0.3) bwo += x;
+    if (own >= 0.51 && n(r[S('Black Designated Group  ownership')]) >= 0.51) bdg += x;
+    if (own >= 0.51 && yes(r['Intermediary? (Yes/No)'])) inter += x;
+    if (own >= 0.51 && yes(r['Stock broker? (Yes/No)'])) broker += x;
+    if (own >= 0.51 && yes(r['Fund manager? (Yes/No)'])) fund += x;
+  }
+  const lines = new Map<number, number>([
+    [61, pts(all, v('G12'), v('E12'))], [62, pts(qse, v('G13'), v('E13'))], [63, pts(eme, v('G14'), v('E14'))],
+    [64, pts(bo, v('G15'), v('E15'))], [65, pts(bwo, v('G16'), v('E16'))],
+    [66, pts(inter, v('G18'), v('E18'))], [67, pts(Math.max(fund, broker), v('G19'), v('E19'))],
+    [68, pts(bdg, v('G20'), v('E20'))],
+  ]);
+  return { lines, firstTimeOnly };
+}
+
+export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): RefereeResult {
+  const v = (sheet: string, ref: string) => n(sheets[sheet]?.[ref]?.v);
+  const F = (row: number) => v('Summary Scorecard', `F${row}`);
+  const manual = (sheet: string, ref: string) => !blankish(sheets[sheet]?.[ref]?.v);
+  const lines = new Map<number, { value: number; note: string }>();
+  const set = (row: number, value: number, note: string) => {
+    if (Math.abs(value - F(row)) > 1e-9) lines.set(row, { value, note });
+  };
+  const fixed = (row: number) => lines.get(row)?.value ?? F(row);
+
+  if (tables) {
+    const own = refereeOwnership(sheets, tables);
+    if (own.indebted > 0) {
+      if (!manual('Ownership Scorecard', 'L10')) {
+        set(23, own.eiPts, `Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, and counts the whole stake as black. Netted the one way and for the black share only, black economic interest is ${(own.ei * 100).toFixed(2)}% → ${own.eiPts.toFixed(2)}; the toolkit shows ${F(23).toFixed(2)}.`);
+      }
+      if (!manual('Ownership Scorecard', 'L17')) {
+        set(27, own.nvPts, `Toolkit formula fault: the net value nets indebted stakes the same faulty way${own.lateLoan ? ', and a loan in its tenth year or later finds no graduation factor and scores nothing' : ''}. Reworked: ${own.nvPts.toFixed(2)}; the toolkit shows ${F(27).toFixed(2)}.`);
+      }
+    }
+    for (const [row, value] of refereeSkills(sheets, tables)) {
+      const frozen = row === 55 || row === 56 || row === 57;
+      set(row, value, frozen
+        ? `Toolkit formula faults: this line measures against 'Skills Toolkit'!${row === 57 ? 'D6 (headcount 14,212)' : 'D3 (leviable amount R6.53bn)'} — a locked cell holding another company's figure — and its "Within FY?" test drops training rows 6, 13 and 25. Against the workbook's own ${row === 57 ? 'headcount' : 'leviable amount'}, every row counted: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`
+        : `Toolkit formula fault: its "Within FY?" test compares each training row with a cell that moves down the Validation sheet, so rows 6, 13 and 25 drop out. Every row counted: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
+    }
+    const pp = refereeProcurement(sheets, tables);
+    if (pp.firstTimeOnly > 0) {
+      for (const [row, value] of pp.lines) {
+        set(row, value, `Toolkit formula fault: the 1.2 recognition factor's first-time-supplier test reads the 3-year-contract column, so ${pp.firstTimeOnly} first-time black-owned QSE/EME supplier(s) lose it. With it: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
+      }
+    }
+    // Supplier development: a duplicated blank "Minority Investment" factor row.
+    const sdRows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === 'Supplier Development');
+    const npat = v('ESD Scorecard', 'E2');
+    if (sdRows.length > 0 && npat > 0) {
+      let recognised = 0;
+      let reworked = false;
+      for (const r of sdRows) {
+        const minority = /^minority investment/i.test(String(r['Contribution Type'] ?? ''));
+        if (minority && n(r['Recognised Amount']) === 0 && yes(r['Qualify?'])) { recognised += n(r['Amount']) * 0.7; reworked = true; }
+        else recognised += n(r['Recognised Amount']);
+      }
+      if (reworked) {
+        const max = v('ESD Scorecard', 'E7');
+        const sd = Math.min((Math.max(recognised / npat, 0) / v('ESD Scorecard', 'F7')) * max, max);
+        set(75, sd, `Toolkit formula fault: its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%). At 70%: ${sd.toFixed(2)}; the toolkit shows ${F(75).toFixed(2)}.`);
+      }
+    }
+  }
+  // Additional consumer education: above the consumer-education target, not the SED one.
+  if (String(sheets['Client Information']?.D8?.v ?? '') !== 'Reinsurers') {
+    const c2 = v('SED & CE Scorecard', 'C2');
+    const additional = Math.max(v('SED & CE Scorecard', 'I8') - v('SED & CE Scorecard', 'F8'), 0);
+    const max = v('SED & CE Scorecard', 'D10');
+    const val = c2 > 0 ? Math.min((additional / c2 / v('SED & CE Scorecard', 'E10')) * max, max) : 0;
+    set(86, val, `Toolkit formula fault: additional consumer education is counted above the SED target (0.6% of NPAT) instead of above the consumer-education target (0.4%). Above its own target: ${val.toFixed(2)}; the toolkit shows ${F(86).toFixed(2)}.`);
+  }
+
+  // Element totals and the grand total, with the corrected lines.
+  const groups: Array<[number, number[]]> = [
+    [20, [21, 22, 23, 24, 25, 26, 27]],
+    [50, [51, 52, 53, 54, 55, 56, 57, 58]],
+    [74, [75]],
+    [83, [84, 85, 86, 87]],
+  ];
+  let delta = 0;
+  for (const [total, rows] of groups) {
+    const d = rows.reduce((a, r) => a + (fixed(r) - F(r)), 0);
+    if (Math.abs(d) > 1e-12) { lines.set(total, { value: F(total) + d, note: 'Includes the corrected lines.' }); delta += d; }
+  }
+  // Procurement: five base lines, the better of rows 66 / 67, and row 68.
+  const ppTotal = [61, 62, 63, 64, 65].reduce((a, r) => a + fixed(r), 0) + Math.max(fixed(66), fixed(67)) + fixed(68);
+  if (Math.abs(ppTotal - F(60)) > 1e-9) { lines.set(60, { value: ppTotal, note: 'Includes the corrected lines.' }); delta += ppTotal - F(60); }
+  const total = F(104) + delta;
+  if (Math.abs(delta) > 1e-12) lines.set(104, { value: total, note: 'Includes the corrected lines above.' });
+
+  // Levels against the toolkit's own thresholds (Summary F5:F12); a total
+  // exactly on a threshold reaches it (the toolkit's round-down uses "<").
+  const thresholds = [5, 6, 7, 8, 9, 10, 11, 12].map((r, i) => ({ level: i + 1, min: v('Summary Scorecard', `F${r}`) }));
+  const achieved = thresholds.find((t) => total >= t.min)?.level ?? 9;
+  const ppBaseMax = [61, 62, 63, 64, 65].reduce((a, r) => a + v('Summary Scorecard', `C${r}`), 0);
+  const failed = fixed(27) < v('Scorecard Calculations', 'G3')
+    || [51, 52, 53, 54, 55, 56, 57].reduce((a, r) => a + fixed(r), 0) < v('Scorecard Calculations', 'G5')
+    || [61, 62, 63, 64, 65].reduce((a, r) => a + fixed(r), 0) < ppBaseMax * 0.4
+    || fixed(75) < v('Scorecard Calculations', 'G8')
+    || F(78) < v('Scorecard Calculations', 'G9');
+  const discounted = failed ? (achieved >= 8 ? 9 : achieved + 1) : achieved;
+  const exAchieved = levelNumber(sheets['Summary Scorecard']?.F109?.v);
+  const exDiscounted = levelNumber(sheets['Summary Scorecard']?.F111?.v);
+  const lvl = (l: number) => (l === 9 ? 'Non-compliant' : `Level ${l}`);
+  return {
+    lines,
+    achieved,
+    discounted,
+    achievedNote: achieved !== exAchieved ? `The toolkit shows ${lvl(exAchieved)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.` : undefined,
+    discountedNote: discounted !== exDiscounted ? `The toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its procurement sub-minimum reading empty cells (it never fails).` : undefined,
+  };
+}

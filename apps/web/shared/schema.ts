@@ -387,6 +387,16 @@ export interface CalculatorConfig {
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];
+  /**
+   * FSC only: score the scorecard the way the FSC Empower toolkit (BBBEE
+   * Toolkit (FSC) Template v1.0) does, checked line by line against Excel —
+   * per-level skills spend against each level's payroll, management-control
+   * points that move between bands by who is employed in them, the stock
+   * broker / intermediary procurement bonuses, SED and consumer education
+   * lines, and level thresholds scaled to the scorecard's own base points.
+   * Absent on every other sector, which scores as before.
+   */
+  fscToolkit?: { subSector: 'Others' | 'Banks' | 'LTI' | 'STI' };
 }
 
 export interface User {

@@ -329,9 +329,19 @@ export function sectorConfigToFscCalculatorConfig(sc: SectorConfig): CalculatorC
   };
 }
 
-/** Complete FSC Generic (Others) config — use for scorecard, tests, and explicit sector wiring. */
-export const FSC_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToFscCalculatorConfig(FSC_GENERIC);
+/**
+ * Complete FSC Generic (Others) config — use for scorecard, tests, and explicit sector wiring.
+ *
+ * The scorecard scores FSC the way the FSC Empower toolkit (BBBEE Toolkit
+ * (FSC) Template v1.0) does — checked line by line against Excel
+ * (docs/toolkits/parity/findings/fsc.md): `fscToolkit` routes calculateScorecard
+ * to calculators/fscToolkit.ts. The fields above still configure the
+ * individual pillar calculators, which other callers use directly.
+ */
+export const FSC_GENERIC_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...sectorConfigToFscCalculatorConfig(FSC_GENERIC),
+  fscToolkit: { subSector: 'Others' },
+};
 
 export function isFscGenericSector(
   sectorCode: string,
