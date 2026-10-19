@@ -1960,6 +1960,10 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
   const blackPctIdx = colIdx(headers, "benefitingblack", "benefiting black", "percentbenefitingblack");
   const amountIdx = colIdx(headers, "amount");
   const dateIdx = colIdx(headers, "dateoftransaction", "date");
+  // "ICT Specific Initiative?" (the ICT toolkit and our own export). Exact
+  // header match only: colIdx also matches by containment, and a stray "ICT"
+  // or "Initiative" header must not be read as this answer.
+  const ictIdx = headers.get(norm("ICT Specific Initiative?")) ?? headers.get(norm("ICT-Specific?"));
 
   const out: WorkbookRow[] = [];
   for (let r = headerIdx + 1; r < matrix.length; r++) {
@@ -1969,11 +1973,17 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
     const amount = amountIdx !== undefined ? parseCurrency(row[amountIdx]) ?? 0 : 0;
     if (!name || amount <= 0) continue;
     const blackPct = blackPctIdx !== undefined ? parsePercent(row[blackPctIdx]) ?? 100 : 100;
+    // Only an answer the sheet gives, and only a plain Yes or No. ICT SED
+    // scores sector-specific initiatives only, so a "No" stamped on every
+    // imported row (as this importer used to write) would exclude every
+    // imported ICT SED contribution; blank, "N/A" and the like stay unset.
+    const ictRaw = ictIdx !== undefined ? cellStr(row[ictIdx]).trim().toLowerCase() : "";
+    const ict = ["yes", "y", "true"].includes(ictRaw) ? true : ["no", "n", "false"].includes(ictRaw) ? false : undefined;
     out.push({
       _id: uuidv4(),
       beneficiaryName: name,
       descriptionOfSpend: descIdx !== undefined ? cellStr(row[descIdx]) : "Grant",
-      ictSpecificInitiative: false,
+      ...(ict !== undefined ? { ictSpecificInitiative: ict } : {}),
       contributionType: typeIdx !== undefined ? cellStr(row[typeIdx]) || "Grant Contribution" : "Grant Contribution",
       percentBenefitingBlack: pctForWorkbook(blackPct) || 100,
       amount,
@@ -2071,7 +2081,6 @@ function ensureAggregateDetailRows(
         _id: uuidv4(),
         beneficiaryName: data.companyName ? `${data.companyName} — SED` : "Aggregate SED beneficiary",
         descriptionOfSpend: "Imported socio-economic development total",
-        ictSpecificInitiative: false,
         contributionType: "Grant Contribution",
         percentBenefitingBlack: 100,
         amount: data.sedContributions ?? 0,

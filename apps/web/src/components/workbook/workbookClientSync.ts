@@ -69,6 +69,11 @@ export type WorkbookClientFinancials = {
   headcount?: number;
   trainingManagerSalary?: number;
   trainingOverheadCost?: number;
+  /**
+   * ICT Generic ('Skills Toolkit'!D9): disabled-learner spend measured per
+   * black group against its EAP share, with the verification agent's sign-off.
+   */
+  disabledSpendUsesEap?: boolean;
   selectPeriod?: string;
   dataDate?: string;
   /** MC layout toggle from company-information meta. */
@@ -260,6 +265,9 @@ export function mapWorkbookFinancialsToClient(
     }
     if (!blank(skillsMeta.trainingOverheadCost)) {
       result.trainingOverheadCost = num(skillsMeta.trainingOverheadCost);
+    }
+    if (skillsMeta.disabledSpendUsesEap !== undefined && skillsMeta.disabledSpendUsesEap !== "") {
+      result.disabledSpendUsesEap = coerceYesNo(skillsMeta.disabledSpendUsesEap);
     }
 
     const sp = s(skillsMeta.selectPeriod);

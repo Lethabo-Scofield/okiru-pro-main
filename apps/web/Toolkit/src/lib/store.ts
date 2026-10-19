@@ -1434,6 +1434,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           undefined,
         trainingManagerSalary: finExtras.trainingManagerSalary as number | undefined,
         trainingOverheadCost: finExtras.trainingOverheadCost as number | undefined,
+        // ICT Generic: the verification agent's sign-off on measuring disabled
+        // spend against the EAP split (workbook Skills meta, 'Skills Toolkit'!D9).
+        disabledSpendUsesEap: coerceYesNo(finExtras.disabledSpendUsesEap),
         // BBEE-008/009: preserve EVERY field the Skills calculator and UI read, so
         // scores don't silently drop to 0 (or YES/absorption data vanish) on
         // reload / _recalculateAll. Previously isAbsorbed, isForeign, isBursary,
@@ -1494,6 +1497,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isDesignatedGroup: coerceYesNo(s.isDesignatedGroup),
           isSupplierDevRecipient: coerceYesNo(s.isSupplierDevRecipient),
           hasThreeYearContract: coerceYesNo(s.hasThreeYearContract),
+          // ICT Generic's 1.2 factor for a first-time supplier; adds only.
+          isFirstTimeSupplier: coerceYesNo(s.isFirstTimeSupplier),
           // Carried, not cherry-picked away. This map listed the flags and
           // dropped everything else, so a supplier matched against the
           // certificate registry lost its expiry date on the next page load —
@@ -1588,6 +1593,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         contributions: (data.sed?.contributions || []).map((c: any) => ({
           ...c,
           amount: c.amount || 0,
+          // ICT SED counts sector-specific initiatives only, so an explicit
+          // "No" removes a row. Kept unset unless someone answered: never
+          // read from `ictSpecificInitiative`, which the api schema defaults
+          // to false and the projection coerces to false when blank.
+          isSectorSpecificInitiative: coerceYesNoOrUnset(c.isSectorSpecificInitiative),
         })),
       };
 

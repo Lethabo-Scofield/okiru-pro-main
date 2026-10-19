@@ -1092,6 +1092,11 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
   }),
 ];
 
+/** ICT Generic-only inputs (the procurement "First-time Supplier?" column and the
+ *  Skills EAP-split sign-off), kept for the importer and hidden from other
+ *  sectors' forms via getSection: only ICT Generic's toolkit method reads them. */
+export const ICT_GENERIC_ONLY_KEYS = new Set<string>(["firstTimeSupplier", "disabledSpendUsesEap"]);
+
 /** Construction-only column keys, appended to the base arrays for the importer but
  *  hidden from non-construction forms via getSection. (Phase 1 template columns) */
 export const CONSTRUCTION_ONLY_COLUMN_KEYS = new Set<string>([
@@ -1177,6 +1182,15 @@ export const SKILLS_META: ColumnDef[] = [
     required: false,
     validate: numericValidator,
     guidance: "Total training overhead costs (venue hire, admin, etc.) (≥ 0). Also subject to the 15% admin cost cap.",
+  },
+  {
+    // ICT Generic only (hidden elsewhere by getSection): 'Skills Toolkit'!D9.
+    key: "disabledSpendUsesEap",
+    label: "Disabled learners measured against EAP targets? (verification agent sign-off)",
+    type: "boolean",
+    required: false,
+    aliases: ["EAP targets applicable on disability spend?", "EAP targets applicable on disability spend"],
+    guidance: "ICT Generic only. Tick only when the verification agent has signed off on it: spend on black learners with disabilities is then measured per black group against that group's EAP share. Unticked: all black learners with disabilities are measured as one pool against the whole 0.3% target.",
   },
   {
     key: "selectPeriod",
@@ -1323,6 +1337,13 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "unmodifiedBlackOwnership", label: "Unmodified Black Ownership (%)", type: "number", width: 200, validate: percentValidator },
   yesNoColumn("sdRecipient", "SD Recipient?", { width: 130, aliases: ["Supplier development recipient? (Yes/No)"] }),
   yesNoColumn("threeYearContract", "3yr Contract?", { width: 130, aliases: ["3 year contract in place? (Yes/No)"] }),
+  // ICT Generic only (hidden elsewhere by getSection): a first-time supplier
+  // that is a ≥51% black-owned QSE/EME earns the 1.2 recognition factor.
+  yesNoColumn("firstTimeSupplier", "First-time Supplier?", {
+    width: 160,
+    aliases: ["First-time supplier? (Yes/No)", "First-time supplier?", "First time supplier", "First-time supplier"],
+    guidance: "ICT Generic only: was this supplier first procured from in this measurement period? A first-time supplier that is a QSE or EME at least 51% black owned earns the 1.2 recognition factor.",
+  }),
   yesNoColumn("designated", "Designated?", { width: 120, aliases: ["Black Designated Group  ownership"] }),
   { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator, aliases: ["Rand Value", "Amount", "Spend", "Spend *", "Procurement Spend", "Supplier Spend", "Value (R)", "R Spend", "Total Spend", "Annual Spend", "Spend Amount", "Spend (Excl VAT)"], validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },
   { key: "certificateExpiryDate", label: "Cert Expiry (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Certificate Expiry", "Cert Expiry Date", "Expiry Date", "Valid Until"], validationMessage: "Enter date as dd/mm/yyyy", guidance: "Optional. When supplied, feeds the AI certificate parser and expiry checks." },
@@ -1618,6 +1639,9 @@ export const SECTIONS: SectionDef[] = [
  * Looks up a section by key, optionally filtering its columns and meta to match
  * the caller's sector and scorecard type. Sector-aware transformations applied:
  *  - SED "ICT-Specific?" column: only shown for ICT sector.
+ *  - Procurement "First-time Supplier?" column and the Skills "Disabled
+ *    learners measured against EAP targets?" field: only shown for ICT
+ *    Generic, the only scorecard whose method reads them.
  *  - SED section gets CE/Fundisa meta for FSC sector (hybrid: meta + columns).
  *  - Ownership section gets "Farm Worker?" column for AGRI sector.
  *  - Skills Development: eapProvince and eapYear excluded for QSE (fixed % targets, no EAP lookup).
@@ -1630,14 +1654,28 @@ export function getSection(
   fscReinsurer?: boolean,
 ): SectionDef | undefined {
   const result = getSectionInner(key, sectorCode, scorecardType, fscSubSector, fscReinsurer);
+  if (!result || sectorCode === undefined) return result;
+  const sector = String(sectorCode).trim().toUpperCase();
+  let out = result;
   // Construction-only columns live in the base arrays so the importer (which calls
   // getSection with NO sector) always parses them. Hide them from EXPLICIT
   // non-construction sector forms; keep them for the importer and for Construction.
-  if (!result?.columns || sectorCode === undefined) return result;
-  const sector = String(sectorCode).trim().toUpperCase();
-  if (sector === "" || sector === "CONSTRUCTION") return result;
-  const cols = result.columns.filter((c) => !CONSTRUCTION_ONLY_COLUMN_KEYS.has(c.key));
-  return cols.length === result.columns.length ? result : { ...result, columns: cols };
+  if (out.columns && sector !== "" && sector !== "CONSTRUCTION") {
+    const cols = out.columns.filter((c) => !CONSTRUCTION_ONLY_COLUMN_KEYS.has(c.key));
+    if (cols.length !== out.columns.length) out = { ...out, columns: cols };
+  }
+  // ICT Generic-only inputs, the same way: kept for the importer, hidden from
+  // every other explicit sector form (nothing else scores them).
+  const ictGeneric = sector === "ICT" && String(scorecardType ?? "").trim().toUpperCase() !== "QSE";
+  if (!ictGeneric) {
+    if (out.columns?.some((c) => ICT_GENERIC_ONLY_KEYS.has(c.key))) {
+      out = { ...out, columns: out.columns.filter((c) => !ICT_GENERIC_ONLY_KEYS.has(c.key)) };
+    }
+    if (out.meta?.some((f) => ICT_GENERIC_ONLY_KEYS.has(f.key))) {
+      out = { ...out, meta: out.meta.filter((f) => !ICT_GENERIC_ONLY_KEYS.has(f.key)) };
+    }
+  }
+  return out;
 }
 
 function getSectionInner(
