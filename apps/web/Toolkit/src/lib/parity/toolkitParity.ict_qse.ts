@@ -218,7 +218,14 @@ export function refereeIctQse(sheets: ToolkitSheets, tables?: ToolkitTables): Re
     set(24, capped(measure, 0.02, 3),
       `Toolkit formula fault (its 2% target is cut to "0.0"): its own measure ${(measure * 100).toFixed(2)}% against the real 2% target gives ${fmt(capped(measure, 0.02, 3))}; the toolkit shows ${fmt(F(24))}.`);
   }
-  const ownDelta = delta([22, 24, 25]);
+  // A shareholder deep in acquisition debt drives the black-women economic
+  // interest below zero, and the toolkit's MIN(...) has no floor at 0.
+  for (const row of [20, 21, 23]) {
+    if (F(row) < 0) {
+      set(row, 0, `Toolkit formula fault: its points formula has no floor, so acquisition debt larger than the stake shows ${fmt(F(row))} points; a line cannot score below 0.`);
+    }
+  }
+  const ownDelta = delta([20, 21, 22, 23, 24, 25]);
   if (ownDelta !== 0) lines.set(19, { value: F(19) + ownDelta, note: 'Includes the corrected ownership lines.' });
 
   // Management control: the combined layout's middle-and-junior line has no formula.
