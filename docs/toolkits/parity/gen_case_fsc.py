@@ -72,6 +72,12 @@ SED_TYPES = [
     "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
 ]
 SED_PILLARS = ['Socioeconomic Development', 'Consumer Education', 'Fundisa Retail Fund']
+# 'AFS Data - Short Term'[Policy Type *] (Validation!BX1:BX10), by line of products.
+STI_TYPES = {
+    'Personal': ['Personal-MotorVehicle', 'Personal-Homeowner', 'Personal-Household', 'Personal-Other'],
+    'Commercial': ['Commercial-EME/QSEEquipmentcontent', 'Commercial-EME/QSEPremises', 'Commercial-EME/QSELiability',
+                   'Commercial-Agriculture', 'Commercial-Livestock', 'Commercial-Other'],
+}
 
 # Every scorecard sheet filters its data by a period picker; "Current YTD"
 # selects the latest data date, which every generated row carries.
@@ -323,11 +329,41 @@ def make(seed, profile="full", subsector="Others"):
         cells["AFS Scorecard - Long Term!E14"] = round(saia * rng.uniform(0, 0.08))
         cells["AFS Scorecard - Long Term!E16"] = round(rng.uniform(0.3, 1.0), 4)
 
+    afs_rows = []
+    if subsector == 'Short-Term Insurers':
+        # Access to financial services ('AFS Scorecard - Short Term'): the line
+        # of products, the FSTC exemption, the target policies typed where the
+        # sheet labels them (D6 for the first line offered, D7 for commercial
+        # lines when both are), the sheet's own period picker, and policy rows.
+        lines = rng.choice(['Personal', 'Commercial', 'Personal and Commercial'])
+        sh = 'AFS Scorecard - Short Term'
+        cells[f"{sh}!D4"] = 'Yes' if rng.random() < 0.2 else 'No'
+        cells[f"{sh}!D5"] = lines
+        cells[f"{sh}!H34"] = "Year"
+        cells[f"{sh}!H35"] = "Current YTD"
+        targets = {'Personal': rng.randint(20, 600) * 100, 'Commercial': rng.randint(5, 200) * 100}
+        cells[f"{sh}!D6"] = targets['Commercial'] if lines == 'Commercial' else targets['Personal']
+        if lines == 'Personal and Commercial':
+            cells[f"{sh}!D7"] = targets['Commercial']
+        offered = [t for k in ('Personal', 'Commercial') if k in lines for t in STI_TYPES[k]]
+        others = [t for k in ('Personal', 'Commercial') if k not in lines for t in STI_TYPES[k]]
+        for i in range(rng.randint(2, 14)):
+            # Now and then a policy of a line the insurer does not offer.
+            t = rng.choice(others) if others and rng.random() < 0.12 else rng.choice(offered)
+            line = 'Personal' if t.startswith('Personal') else 'Commercial'
+            afs_rows.append({
+                "Data Date": DATA_DATE, "Policy Name *": f"Policy {i + 1}", "Policy Type *": t,
+                "Date of Policy Introduction (dd/mm/yyyy)": rdate(rng, "2018-01-01", FY_END),
+                "Number of Qualifying Policies": round(targets[line] * rng.uniform(0.02, 0.6)),
+                "Compliance Percentage": round(rng.uniform(0.3, 1.0), 2),
+            })
+
     return {"template": "fsc", "subsector": subsector, "seed": seed, "cells": cells, "tables": {
         "tblOwnershipData": own_rows, "tblCompanyValuation": own_val, "tblMCData": mc_rows,
         "tblSkillsData": sk_rows, "tblPPData": pp_rows, "tblInclusions": tmps_incl,
         "tblESDData": esd_rows, "tblSEDnCEData": sed_rows,
         **({"tblTransactionFinancingData": tf_rows} if subsector in ('Banks', 'Long-Term Insurers') else {}),
+        **({"tblAFSDataShortTerm": afs_rows} if subsector == 'Short-Term Insurers' else {}),
         "tblEAPAll": our_eap_rows()}}
 
 

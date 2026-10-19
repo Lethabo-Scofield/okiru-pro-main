@@ -66,7 +66,7 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — FSC', () => {
       const sub = state.client.fscSubSector ?? 'Others';
       const result = calculateScorecard({ ...state, scorecard: {} as ScorecardResult, calculatorConfig: fscConfigFor(sub) });
       const ref = fscReferee(sheets, tables);
-      for (const spec of fscLinesFor(sub, Boolean(state.client.fscReinsurer))) {
+      for (const spec of fscLinesFor(sub, Boolean(state.client.fscReinsurer), state.afs?.stiProductLines)) {
         const fix = ref.lines.get(spec.row);
         const ex = fix ? fix.value : summaryValue(sheets, spec.row);
         const pillar = result[spec.pillar] as { subLines?: BreakdownLine[] } | undefined;

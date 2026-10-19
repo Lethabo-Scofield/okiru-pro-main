@@ -61,6 +61,20 @@ export function fscContributionKey(label: string): string {
   return `unmapped:${label}`;
 }
 
+/** 'AFS Data - Short Term'[Policy Type *] → its product ([Policy Type (Adjusted)], Validation!BX1:BY10). */
+const STI_PRODUCT: Record<string, string> = {
+  'Personal-MotorVehicle': 'Personal - Motor Vehicle',
+  'Personal-Homeowner': 'Personal - Homeowner',
+  'Personal-Household': 'Personal - Household',
+  'Personal-Other': 'Personal - Other',
+  'Commercial-EME/QSEEquipmentcontent': 'Commercial - Equipment',
+  'Commercial-EME/QSEPremises': 'Commercial - Property',
+  'Commercial-EME/QSELiability': 'Commercial - Liability',
+  'Commercial-Agriculture': 'Commercial - Agriculture',
+  'Commercial-Livestock': 'Commercial - Livestock',
+  'Commercial-Other': 'Commercial - Other',
+};
+
 const SED_PILLAR: Record<string, Contribution['sedPillar']> = {
   'Socioeconomic Development': 'sed',
   'Consumer Education': 'consumer_education',
@@ -347,6 +361,13 @@ export function adaptFscToolkitCase(c: ToolkitCase): AdaptedCase {
   // and a count the toolkit has no target for; nothing here can judge them.
   const A = (ref: string) => cell(`AFS Scorecard - Banks!${ref}`);
   const L = (ref: string) => cell(`AFS Scorecard - Long Term!${ref}`);
+  const S = (ref: string) => cell(`AFS Scorecard - Short Term!${ref}`);
+  // Short-term insurers: the target policies sit where the sheet labels them
+  // — D6 for the first line offered, D7 for commercial lines when both are.
+  const stiLines = (optStr(S('D5')) ?? 'Commercial') as NonNullable<AfsData['stiProductLines']>;
+  const stiTargets = stiLines === 'Commercial'
+    ? { stiCommercialTargetPolicies: num(S('D6')) }
+    : { stiPersonalTargetPolicies: num(S('D6')), ...(stiLines === 'Personal and Commercial' ? { stiCommercialTargetPolicies: num(S('D7')) } : {}) };
   const afs: AfsData = subSector === 'Banks'
     ? {
         id: 'afs', clientId: 'parity',
@@ -365,7 +386,19 @@ export function adaptFscToolkitCase(c: ToolkitCase): AdaptedCase {
           creditLifePolicies: num(L('E14')),
           transactionalAccessCoverage: num(L('E16')) * 100,
         }
-      : { id: 'afs', clientId: 'parity' };
+      : subSector === 'STI'
+        ? {
+            id: 'afs', clientId: 'parity',
+            stiProductLines: stiLines,
+            stiExempt: yes(S('D4')),
+            ...stiTargets,
+            stiPolicies: rows(c, 'tblAFSDataShortTerm').map((r) => ({
+              product: STI_PRODUCT[String(r['Policy Type *'] ?? '')] ?? String(r['Policy Type *'] ?? ''),
+              qualifyingPolicies: num(r['Number of Qualifying Policies']),
+              compliance: num(r['Compliance Percentage']),
+            })),
+          }
+        : { id: 'afs', clientId: 'parity' };
   if (subSector === 'Banks' && (A('K11') != null || A('K13') != null)) {
     unrepresented.push('AFS electronic access (a share) and active accounts (a count): the toolkit gives no target for either');
   }

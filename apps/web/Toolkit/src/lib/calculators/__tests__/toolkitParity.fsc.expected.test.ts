@@ -47,7 +47,7 @@ describe('FSC scores every Summary Scorecard line as the FSC Empower toolkit doe
       const result = calculateScorecard({ ...state, scorecard: {} as ScorecardResult, calculatorConfig: fscConfigFor(sub) });
       const ref = fscReferee(ex.cells, ex.tables);
       const diffs: string[] = [];
-      for (const spec of fscLinesFor(sub, Boolean(state.client.fscReinsurer))) {
+      for (const spec of fscLinesFor(sub, Boolean(state.client.fscReinsurer), state.afs?.stiProductLines)) {
         const toolkit = ref.lines.get(spec.row)?.value ?? summaryValue(ex.cells, spec.row);
         const pillar = result[spec.pillar] as { subLines?: BreakdownLine[] } | undefined;
         const line = (pillar?.subLines ?? []).find((l) => spec.names.includes(l.name));

@@ -57,6 +57,8 @@ TABLES = {
     "tblESDData": ["Pillar", "Contribution Type", "Amount", "Recognised Amount", "Qualify?", "End of Month",
                    "Graduated to Supplier Development?", "At least 1 job created?",
                    "Stock brokers, Fund managers or Intermediaries? (Yes/No)"],
+    "tblAFSDataShortTerm": ["Policy Type (Adjusted)", "Policy Line", "Number of Qualifying Policies",
+                            "Compliance Percentage", "End of month"],
 }
 # Text cells the referee reads beyond the Summary Scorecard and Client
 # Information: the period each ESD reading is filtered by.
@@ -87,12 +89,13 @@ def export(excel_path, case_path, out_path):
         # Values only, and of the labels only those the referee reads (sub-sector, reinsurer).
         cells[sheet] = {ref: {"v": e.get("v")} for ref, e in src.items()
                         if lo <= int(ROW.match(ref).group(1)) <= hi and e.get("v") not in (None, "")
-                        and (not isinstance(e.get("v"), str) or sheet in ("Summary Scorecard", "Client Information")
+                        and (not isinstance(e.get("v"), str)
+                             or sheet in ("Summary Scorecard", "Client Information", "AFS Scorecard - Short Term")
                              or (sheet, ref) in TEXT_CELLS)}
     tables = {}
     for name, cols in TABLES.items():
         t = excel["tables"].get(name)
-        if not t:
+        if not t or not t["rows"] or name not in case["tables"]:
             continue
         idx = [t["headers"].index(c) for c in cols]
         tables[name] = {"headers": cols, "rows": [[r[i] for i in idx] for r in t["rows"]]}

@@ -19,13 +19,27 @@
  *  - a duplicated blank "Minority Investment" row zeroes that supplier-
  *    development contribution, as in RCOGP Generic;
  *  - additional consumer education is measured above the SED target instead
- *    of above the consumer-education target.
+ *    of above the consumer-education target;
+ *  - the skills "Within FY?" test compares each row with a cell that moves
+ *    down the Validation sheet;
+ *  - management control counts non-executive directors among the black
+ *    employees with disabilities but not among the employees;
+ *  - banks / long-term insurers: the EF & ESD scorecard filters SD, ED and the
+ *    bonuses by a period taken from the transaction-financing rows;
+ *    long-term insurers: transaction financing against the targeted-investment
+ *    portion, and transactional access from a typed, locked 80%;
+ *  - short-term insurers: commercial lines measured against the wrong target
+ *    policies cell;
+ *  - a voting-rights-above-15% bonus that goes negative.
  */
 import type { CalculatorConfig } from '../../../../shared/schema';
 import type { ScorecardResult } from '../types';
 import { FSC_GENERIC_CALCULATOR_CONFIG } from '../sectors/fsc-generic';
 import { FSC_BANKS_CALCULATOR_CONFIG } from '../sectors/fsc-banks';
 import { FSC_LTI_CALCULATOR_CONFIG } from '../sectors/fsc-lti';
+import { FSC_STI_CALCULATOR_CONFIG } from '../sectors/fsc-sti';
+import { fscStiProducts } from '../calculators/fscToolkit';
+import type { AfsData } from '../types';
 
 export type ParityPillarKey = keyof ScorecardResult;
 export interface ParityLine { row: number; pillar: ParityPillarKey; label: string; names: string[] }
@@ -36,6 +50,7 @@ export function fscConfigFor(sub: string): CalculatorConfig {
   if (sub === 'Others' || !sub) return FSC_GENERIC_CALCULATOR_CONFIG;
   if (sub === 'Banks') return FSC_BANKS_CALCULATOR_CONFIG;
   if (sub === 'LTI') return FSC_LTI_CALCULATOR_CONFIG;
+  if (sub === 'STI') return FSC_STI_CALCULATOR_CONFIG;
   throw new Error(`FSC parity: no toolkit config for sub-sector ${sub} yet`);
 }
 
@@ -136,19 +151,35 @@ const SED_REINSURER: ParityLine[] = [
   { row: 85, pillar: 'socioEconomicDevelopment', label: 'Fundisa Retail Fund (reinsurers)', names: ['Grant contribution to the Fundisa Retail Fund (reinsurers)'] },
 ];
 
-export function fscLinesFor(sub: string, reinsurer = false): ParityLine[] {
+/**
+ * Short-term insurers: Summary rows 90–99 carry the appropriate products of
+ * the lines offered ('AFS Scorecard - Short Term'!C12:C21), rows 100–101 the
+ * insurance policies (C26:C27).
+ */
+function afsStiLines(lines: AfsData['stiProductLines']): ParityLine[] {
+  const products = fscStiProducts(lines);
+  const policies = lines === 'Personal and Commercial' ? ['personal', 'commercial'] : [lines === 'Personal' ? 'personal' : 'commercial'];
+  return [
+    ...products.map((p, i) => ({ row: 90 + i, pillar: 'accessToFinancialServices' as const, label: `Appropriate products: ${p}`, names: [`Appropriate products: ${p}`] })),
+    ...policies.map((l, i) => ({ row: 100 + i, pillar: 'accessToFinancialServices' as const, label: `Insurance policies: ${l} lines`, names: [`Insurance policies: ${l} lines`] })),
+  ];
+}
+
+export function fscLinesFor(sub: string, reinsurer = false, stiLines?: AfsData['stiProductLines']): ParityLine[] {
   const sed = reinsurer ? SED_REINSURER : SED;
   if (sub === 'Others') return [...OWNERSHIP, ...MC, ...SKILLS, ...PP, ...ESD, ...sed];
   if (sub === 'Banks') return [...OWNERSHIP, ...OWNERSHIP_BONUS, ...MC, ...SKILLS, ...PP, ...EF, ...ESD.filter((l) => l.row !== 81), ...sed, ...AFS_BANKS];
   if (sub === 'LTI') return [...OWNERSHIP, ...OWNERSHIP_BONUS, ...MC, ...SKILLS, ...PP, ...EF, ...ESD, ...sed, ...AFS_LTI];
+  if (sub === 'STI') return [...OWNERSHIP, ...OWNERSHIP_BONUS, ...MC, ...SKILLS, ...PP, ...ESD, ...sed, ...afsStiLines(stiLines)];
   throw new Error(`FSC parity: no line map for ${sub} yet`);
 }
 
 export function fscTotalRowsFor(sub: string): Array<{ row: number; pillar: ParityPillarKey; label: string }> {
-  if (sub !== 'Others' && sub !== 'Banks' && sub !== 'LTI') throw new Error(`FSC parity: no total rows for ${sub} yet`);
+  if (sub !== 'Others' && sub !== 'Banks' && sub !== 'LTI' && sub !== 'STI') throw new Error(`FSC parity: no total rows for ${sub} yet`);
+  const afs = { row: 89, pillar: 'accessToFinancialServices' as const, label: 'Access to financial services' };
   const extra: Array<{ row: number; pillar: ParityPillarKey; label: string }> = sub === 'Banks' || sub === 'LTI'
-    ? [{ row: 70, pillar: 'empowermentFinancing', label: 'Empowerment financing' }, { row: 89, pillar: 'accessToFinancialServices', label: 'Access to financial services' }]
-    : [];
+    ? [{ row: 70, pillar: 'empowermentFinancing', label: 'Empowerment financing' }, afs]
+    : sub === 'STI' ? [afs] : [];
   return [
     ...extra,
     { row: 20, pillar: 'ownership', label: 'Ownership' },
@@ -467,6 +498,46 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
     const ta = cover < 0.5 ? 0 : cover >= 0.6 && cover < 0.7 ? 1 : cover >= 0.7 && cover < 0.8 ? 1.5 : 2;
     const taMax = v('AFS Scorecard - Long Term', 'E26');
     set(92, Math.min(ta, taMax), `Toolkit formula fault: transactional access reads a typed, locked 80% (H26) instead of the share of polygons entered (${(cover * 100).toFixed(1)}%). On the share entered: ${Math.min(ta, taMax).toFixed(2)}; the toolkit shows ${F(92).toFixed(2)}.`);
+  }
+  // Short-term insurers: each line measured against its own line's target
+  // policies. The sheet asks for them where it labels them — D6 for the first
+  // line offered, D7 for commercial lines when both are — but its formulas
+  // divide by D6 whenever personal lines are offered (so commercial products
+  // and policies of a personal-and-commercial insurer meet the personal
+  // target) and by D7 for a commercial-only insurer (a cell it never labels, so
+  // left empty: every line scores 0).
+  if (tables && String(sheets['Client Information']?.D7?.v ?? '').toLowerCase() === 'short-term insurers') {
+    const S = 'AFS Scorecard - Short Term';
+    const text = (ref: string) => String(sheets[S]?.[ref]?.v ?? '').trim();
+    const offered = text('D5');
+    if (offered === 'Commercial' || offered === 'Personal and Commercial') {
+      const period = text('K35');
+      const rows = tableRows(tables, 'tblAFSDataShortTerm').filter((r) => String(r['End of month'] ?? '') === period);
+      const target = offered === 'Commercial' ? v(S, 'D6') : v(S, 'D7');
+      const measure = (f: (r: Record<string, unknown>) => boolean) => {
+        const rs = rows.filter(f);
+        if (rs.length === 0 || target <= 0) return 0;
+        const count = rs.reduce((a, r) => a + n(r['Number of Qualifying Policies']), 0);
+        const compliance = rs.reduce((a, r) => a + n(r['Compliance Percentage']), 0) / rs.length;
+        return (count * compliance) / target;
+      };
+      const why = offered === 'Commercial'
+        ? `its formula divides by D7, a cell the sheet never labels for a commercial-only insurer, instead of the commercial-line target it asks for in D6 (${target})`
+        : `its formula measures commercial lines against the personal-line target (D6, ${v(S, 'D6')}) instead of the commercial-line target (D7, ${target})`;
+      for (let i = 0; i < 10; i++) {
+        const product = text(`C${12 + i}`);
+        if (!product.startsWith('Commercial')) continue;
+        const max = v(S, `E${12 + i}`);
+        const value = Math.min(measure((r) => String(r['Policy Type (Adjusted)'] ?? '') === product) * max, max);
+        set(90 + i, value, `Toolkit formula fault: ${why}. Against its own target: ${value.toFixed(2)}; the toolkit shows ${F(90 + i).toFixed(2)}.`);
+      }
+      for (let j = 0; j < 2; j++) {
+        if (text(`C${26 + j}`) !== 'Commercial line policies') continue;
+        const max = v(S, `E${26 + j}`);
+        const value = Math.min(measure((r) => String(r['Policy Line'] ?? '') === 'Commercial line policies') * max, max);
+        set(100 + j, value, `Toolkit formula fault: ${why}. Against its own target: ${value.toFixed(2)}; the toolkit shows ${F(100 + j).toFixed(2)}.`);
+      }
+    }
   }
   // Additional consumer education: above the consumer-education target, not the SED one.
   if (String(sheets['Client Information']?.D8?.v ?? '') !== 'Reinsurers') {

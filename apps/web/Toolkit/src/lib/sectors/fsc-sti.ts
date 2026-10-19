@@ -231,9 +231,17 @@ export function sectorConfigToFscStiCalculatorConfig(sc: SectorConfig): Calculat
   };
 }
 
-/** Complete FSC Short-Term Insurers (FS703) config. */
-export const FSC_STI_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToFscStiCalculatorConfig(FSC_STI);
+/**
+ * Complete FSC Short-Term Insurers (FS703) config.
+ *
+ * The scorecard scores FSC short-term insurers the way the FSC Empower toolkit
+ * does (`fscToolkit` → calculators/fscToolkit.ts; docs/toolkits/parity/findings/fsc.md):
+ * access to financial services from the qualifying policies per product.
+ */
+export const FSC_STI_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...sectorConfigToFscStiCalculatorConfig(FSC_STI),
+  fscToolkit: { subSector: 'STI' },
+};
 
 export { FSC_SKILLS_PER_LEVEL_TARGETS as FSC_STI_SKILLS_PER_LEVEL_TARGETS };
 

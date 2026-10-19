@@ -710,6 +710,58 @@ export function fscAfsLti(data: AfsData) {
   return { lines, exact: ap + mp + ta, max: 12 };
 }
 
+/** 'AFS Scorecard - Short Term'!C12:C21 — the appropriate-product rows, by line of products. */
+export const FSC_STI_PRODUCTS = {
+  personal: ['Personal - Motor Vehicle', 'Personal - Homeowner', 'Personal - Household', 'Personal - Other'],
+  commercial: ['Commercial - Equipment', 'Commercial - Liability', 'Commercial - Property', 'Commercial - Agriculture', 'Commercial - Livestock', 'Commercial - Other'],
+} as const;
+
+export function fscStiProducts(lines: AfsData['stiProductLines']): string[] {
+  if (lines === 'Personal') return [...FSC_STI_PRODUCTS.personal];
+  if (lines === 'Personal and Commercial') return [...FSC_STI_PRODUCTS.personal, ...FSC_STI_PRODUCTS.commercial];
+  return [...FSC_STI_PRODUCTS.commercial];
+}
+
+/**
+ * Short-term insurers ('AFS Scorecard - Short Term'): appropriate products (2
+ * points shared equally by the products of the lines offered; none when the
+ * FSTC granted an exemption) and insurance policies (10 points; 8 personal +
+ * 2 commercial when both lines are offered). Each measures the qualifying
+ * policies × their average compliance share against the target policies of
+ * its own line (personal or commercial).
+ */
+export function fscAfsSti(data: AfsData) {
+  const lines = data.stiProductLines ?? 'Commercial';
+  const products = fscStiProducts(lines);
+  const policies = data.stiPolicies ?? [];
+  const isPersonal = (product: string) => product.startsWith('Personal');
+  const target = (personal: boolean) => Number(personal ? data.stiPersonalTargetPolicies : data.stiCommercialTargetPolicies) || 0;
+  /** Σ qualifying policies × their average compliance, ÷ the line's target. */
+  const measure = (rows: typeof policies, personal: boolean) => {
+    if (rows.length === 0 || target(personal) <= 0) return 0;
+    const count = rows.reduce((a, r) => a + (Number(r.qualifyingPolicies) || 0), 0);
+    const compliance = rows.reduce((a, r) => a + (Number(r.compliance) || 0), 0) / rows.length;
+    return (count * compliance) / target(personal);
+  };
+  const perProduct = data.stiExempt ? 0 : 2 / products.length;
+  const out: Line[] = [];
+  for (const product of products) {
+    const m = measure(policies.filter((r) => r.product === product), isPersonal(product));
+    const score = perProduct > 0 ? Math.min(m * perProduct, perProduct) : 0;
+    out.push({ name: `Appropriate products: ${product}`, target: '100% of target policies', weighting: perProduct, score,
+      note: `${pct(m, 1)} of the ${isPersonal(product) ? 'personal' : 'commercial'}-line target → ${score.toFixed(2)} of ${round2(perProduct)}${data.stiExempt ? ' (exempted by the FSTC)' : ''}.` });
+  }
+  const policyLines: Array<[string, boolean, number]> = lines === 'Personal and Commercial'
+    ? [['Insurance policies: personal lines', true, 8], ['Insurance policies: commercial lines', false, 2]]
+    : [[`Insurance policies: ${lines === 'Personal' ? 'personal' : 'commercial'} lines`, lines === 'Personal', 10]];
+  for (const [name, personal, max] of policyLines) {
+    const m = measure(policies.filter((r) => isPersonal(r.product) === personal), personal);
+    const score = Math.min(m * max, max);
+    out.push({ name, target: '100% of target policies', weighting: max, score, note: `${pct(m, 1)} of the target policies → ${score.toFixed(2)} of ${max}.` });
+  }
+  return { lines: out, exact: out.reduce((a, l) => a + l.score, 0), max: out.reduce((a, l) => a + l.weighting, 0) };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The scorecard
 // ─────────────────────────────────────────────────────────────────────────────
@@ -742,10 +794,13 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
   const esd = fscEsd({ ...state.esd, measurementPeriodEnd: state.esd.measurementPeriodEnd ?? client.measurementPeriodEnd }, npat, cfg, sub);
   const sed = fscSedCe(state.sed, npat, Boolean(client.fscReinsurer));
   const ef = BANKS_OR_LTI(sub) ? fscEmpowermentFinancing(state.empowermentFinancing, sub) : null;
-  const afsFsc = sub === 'Banks' ? fscAfsBanks(state.afs) : sub === 'LTI' ? fscAfsLti(state.afs) : null;
-  const afsOther = sub === 'STI' && cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
+  // Short-term insurers score from their qualifying policies; a record that
+  // only carries the older yes/no answers keeps the older AFS calculator.
+  const stiPolicies = sub === 'STI' && (state.afs?.stiProductLines != null || (state.afs?.stiPolicies?.length ?? 0) > 0);
+  const afsFsc = sub === 'Banks' ? fscAfsBanks(state.afs) : sub === 'LTI' ? fscAfsLti(state.afs) : stiPolicies ? fscAfsSti(state.afs) : null;
+  const afsOther = sub === 'STI' && !stiPolicies && cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
   const afs = afsFsc
-    ? { total: afsFsc.exact, maxPoints: 12, lines: afsFsc.lines.map((l) => ({ name: l.name, target: l.target, maxPoints: l.weighting, score: l.score })) }
+    ? { total: afsFsc.exact, maxPoints: afsFsc.max, lines: afsFsc.lines.map((l) => ({ name: l.name, target: l.target, maxPoints: l.weighting, score: l.score })) }
     : afsOther;
   const esdW = fscEsdWeights(sub);
 

@@ -630,6 +630,24 @@ export interface AfsData {
   commercialOther?: boolean;
   /** Meets the Insurance Policies target (yes/no simplified from SAIA policy count). */
   insurancePoliciesCompliant?: boolean;
+  /**
+   * FSC toolkit (STI, 'AFS Scorecard - Short Term'): the line of products
+   * offered, which sets the appropriate-product rows and the insurance-policy
+   * split (personal 10; commercial 10; both 8 + 2).
+   */
+  stiProductLines?: 'Personal' | 'Commercial' | 'Personal and Commercial';
+  /** Granted exemption by the FSTC: the appropriate-product points fall away. */
+  stiExempt?: boolean;
+  /** Target number of personal-line policies. */
+  stiPersonalTargetPolicies?: number;
+  /** Target number of commercial-line policies. */
+  stiCommercialTargetPolicies?: number;
+  /**
+   * Qualifying policies by product ('AFS Data - Short Term'): the product
+   * (e.g. 'Personal - Motor Vehicle', 'Commercial - Equipment'), the number of
+   * qualifying policies and their compliance share (0–1).
+   */
+  stiPolicies?: Array<{ product: string; qualifyingPolicies: number; compliance: number }>;
 }
 
 /**
