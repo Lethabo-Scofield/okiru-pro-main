@@ -465,6 +465,35 @@ def edge(name):
                               "YES!C22": "Tier 2 (1 Level up) + 3 points", "YES!A9": "Yes"})
         case["profile"] = "edge:yes"
         return case
+    elif name == "contrib":
+        # The contribution types no other case uses, each below its line's cap
+        # so its benefit factor shows: overhead costs (70%), time of employees
+        # (60%; the template's "/160" branch can never be reached), an SD
+        # interest-free loan (70%), an SD investment at a lower dividend
+        # (prime − actual), free professional services for ED (60%), SED time
+        # of employees (80%); and one ED row for a beneficiary that is neither
+        # an EME/QSE nor 51% black owned (the QSE template counts it anyway).
+        case = edge("qse_rule")
+        case["cells"]["Client Information!C3"] = "QSE edge: contribution types"
+        sd, ed = 'Supplier Development', 'Enterprise Development'
+        tes = 'Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries'
+        case["tables"]["tblESDData"] = [
+            _esd(1, sd, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiary', 6_000),
+            _esd(2, sd, tes, 5_000),
+            _esd(3, sd, 'Interest free loan with no security requirements', 8_000, size='QSE'),
+            _esd(4, sd, 'Enterprise and Supplier Development Investment with lower dividend to fanacier', 50_000,
+                 **{"Prime Rate": 0.11, "Actual Interest Rate": 0.08}),
+            _esd(5, ed, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries', 7_000),
+            _esd(6, ed, tes, 6_000, jobs='Yes'),
+            _esd(7, ed, 'Professional services rendered at no cost and supporting Enterprise and Supplier Development beneficiaries', 5_000),
+            _esd(8, ed, tes, 4_000, bo=0.3, size='Generic'),
+        ]
+        case["tables"]["tblSED"] = [
+            _sed(1, 'Time of employees productively deployed in assisting Socioeconomic Development beneficiaries', 10_000),
+            _sed(2, SED_GRANT, 3_000, 0.6),
+        ]
+        case["profile"] = "edge:contrib"
+        return case
     else:
         raise SystemExit(f"unknown edge case {name}")
     tables["tblCompanyValuation"] = [{"Date": DATA_DATE, "Company Asset Value": value,
@@ -473,7 +502,7 @@ def edge(name):
     return {"template": TEMPLATE, "seed": None, "profile": f"edge:{name}", "cells": cells, "tables": tables}
 
 
-EDGES = ["zero", "threshold75", "qse_rule", "skills_fail", "full", "own_fail_l8", "bonus", "debt", "yes"]
+EDGES = ["zero", "threshold75", "qse_rule", "skills_fail", "full", "own_fail_l8", "bonus", "debt", "yes", "contrib"]
 RANDOM = [(101, "full"), (102, "small"), (103, "full"), (104, "small"), (105, "full"),
           (106, "full"), (107, "small"), (108, "full")]
 
