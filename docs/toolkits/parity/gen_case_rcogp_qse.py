@@ -318,11 +318,13 @@ def edge(name):
                   "tblInclusions": [{"Inclusions": "Cost of Sales", "Amount": 1_500_000}],
                   "tblESDData": [], "tblSED": []}
         value = 10_000_000
-    elif name in ("threshold75", "qse_rule", "full"):
+    elif name in ("threshold75", "qse_rule", "full", "skills_fail"):
         # threshold75: every line full or zero so the total is exactly 75.00 —
         #   the Level 5 boundary (toolkit's strict "<" drops it to Level 6);
         # qse_rule: Ownership and Skills pass, Supplier Development is empty
         #   (fails its sub-minimum) — a QSE needs Ownership plus Skills OR ESD;
+        # skills_fail: Ownership and every ESD line pass, Skills misses its
+        #   sub-minimum — again no discount for a QSE;
         # full: every line at its maximum (108, Level 1).
         npat = 2_000_000
         cells = _base(f"QSE edge: {name}", npat=npat, monthly_sdl=5_000)   # leviable R6m
@@ -347,6 +349,13 @@ def edge(name):
         elif name == "qse_rule":
             pp = sup_full
             esd = [_esd(1, 'Enterprise Development', GRANT, 25_000)]
+            sed = [_sed(1, SED_GRANT, 8_000)]
+        elif name == "skills_fail":
+            # R40 000 of black spend against a R180 000 target, nothing for
+            # black women or disabled learners: Skills scores well under 10.
+            sk = [_learner(1, 'C', 'African', 'Male', 40_000)]
+            pp = sup_full
+            esd = [_esd(1, 'Enterprise Development', GRANT, 15_000), _esd(2, 'Supplier Development', GRANT, 12_000)]
             sed = [_sed(1, SED_GRANT, 8_000)]
         else:
             pp = sup_full
@@ -446,12 +455,13 @@ def edge(name):
                   "tblInclusions": [{"Inclusions": "Cost of Sales", "Amount": 10_000_000}],
                   "tblESDData": esd, "tblSED": sed}
     elif name == "yes":
-        # The YES sheet filled in (prior-year level, chosen tier and priority
-        # element). Its reward is added on its own rows; the B-BBEE total and
-        # both levels must not move.
-        case = make(905, "small")
+        # The YES sheet filled in so the entity qualifies (prior-year level 4,
+        # measured level 2, Ownership and the chosen priority element — Skills
+        # — above 40%): the toolkit adds its tier reward on its own rows
+        # (YES points, YES level); the B-BBEE total and both levels must not move.
+        case = edge("qse_rule")
         case["cells"]["Client Information!C3"] = "QSE edge: YES inputs"
-        case["cells"].update({"YES!C3": "No", "YES!C4": "2025-05-01", "YES!C17": 6, "YES!C18": 6,
+        case["cells"].update({"YES!C3": "No", "YES!C4": "2025-05-01", "YES!C17": 4, "YES!C18": 2,
                               "YES!C22": "Tier 2 (1 Level up) + 3 points", "YES!A9": "Yes"})
         case["profile"] = "edge:yes"
         return case
@@ -463,7 +473,7 @@ def edge(name):
     return {"template": TEMPLATE, "seed": None, "profile": f"edge:{name}", "cells": cells, "tables": tables}
 
 
-EDGES = ["zero", "threshold75", "qse_rule", "full", "own_fail_l8", "bonus", "debt", "yes"]
+EDGES = ["zero", "threshold75", "qse_rule", "skills_fail", "full", "own_fail_l8", "bonus", "debt", "yes"]
 RANDOM = [(101, "full"), (102, "small"), (103, "full"), (104, "small"), (105, "full"),
           (106, "full"), (107, "small"), (108, "full")]
 
