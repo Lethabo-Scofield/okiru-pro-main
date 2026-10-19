@@ -13,7 +13,11 @@
  *    so that line always scores 0;
  *  - acquisition debt is netted by a formula that depends on the row the
  *    shareholder sits in, and counts an indebted holder's whole stake as black
- *    (the RCOGP Generic template's fault, repeated);
+ *    (the RCOGP Generic template's fault, repeated); its debt column also
+ *    ignores the "Debt?" flag, so a non-black holder's debt is subtracted
+ *    from the black economic interest;
+ *  - the ownership points formula has no floor at 0, so acquisition debt
+ *    larger than the stake shows negative points;
  *  - with executive and senior management combined, the "black employees in
  *    middle and junior management" line has no formula ('MC Scorecard (Exco +
  *    Senior)'!K28 is empty), so it always scores 0;
@@ -210,7 +214,7 @@ export function refereeIctQse(sheets: ToolkitSheets, tables?: ToolkitTables): Re
     for (const d of [{ row: 22, target: 0.3, pts: 5, manual: 'J7' }, { row: 25, target: 1, pts: 8, manual: 'J10' }]) {
       if (!blank(own[d.manual]?.v)) continue;
       set(d.row, capped(ei, d.target, d.pts),
-        `Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, and counts the whole stake as black. Its own figures, netted the one way and for the black share only, give ${(ei * 100).toFixed(2)}% black economic interest → ${fmt(capped(ei, d.target, d.pts))}; the toolkit shows ${fmt(F(d.row))}.`);
+        `Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, counts the whole stake as black, and also subtracts a non-black shareholder's debt. Its own figures, netted the one way, for the black share only and for black shareholders only, give ${(ei * 100).toFixed(2)}% black economic interest → ${fmt(capped(ei, d.target, d.pts))}; the toolkit shows ${fmt(F(d.row))}.`);
     }
   }
   if (blank(own.J9?.v)) {
@@ -285,15 +289,41 @@ export function refereeIctQse(sheets: ToolkitSheets, tables?: ToolkitTables): Re
   const exAchieved = levelNumber(sheets['Summary Scorecard']?.[`F${ICT_QSE_LEVEL_ROWS.achieved}`]?.v);
   const exDiscounted = levelNumber(sheets['Summary Scorecard']?.[`F${ICT_QSE_LEVEL_ROWS.discounted}`]?.v);
   const lvl = (l: number) => (l === 9 ? 'Non-compliant' : `Level ${l}`);
+
+  // Why a level differs from the toolkit's, said specifically. The toolkit's
+  // own test ('Scorecard Calculations'!C13) is, in effect, net value, SD and
+  // ED only, on its uncorrected lines: its Skills and PP tests always pass.
+  const rawTotal = F(56);
+  const rawLevel = levelForPoints(rawTotal);
+  const achievedWhy: string[] = [];
+  if (totalDelta !== 0 && achieved !== rawLevel) {
+    achievedWhy.push(`the corrected lines move the total from ${fmt(rawTotal)} to ${fmt(total)}`);
+  }
+  if (rawLevel !== exAchieved) {
+    achievedWhy.push(`its level lookup uses a strict "<" ('Scorecard Calculations'!C12), so its total of ${fmt(rawTotal)}, exactly on a threshold, drops a level`);
+  }
+  const toolkitTestFailed = F(25) < 3.2 || F(45) < 2 || F(48) < 2;
+  const discountedWhy: string[] = [];
+  if (achieved !== exAchieved) discountedWhy.push('it starts from a different achieved level (above)');
+  if (subMinFailed !== toolkitTestFailed) {
+    const skillsPpFailed = skillsBase < 10 || ppBase < 8;
+    const toolkitLinesFailNow = value(25) < 3.2 || value(45) < 2 || value(48) < 2;
+    if (skillsPpFailed && !toolkitTestFailed) {
+      discountedWhy.push(`its Skills and PP sub-minimum tests ('Scorecard Calculations'!G5, G6) add the gap and other columns to the points and always pass; here Skills scores ${fmt(skillsBase)} of the 10 needed and PP ${fmt(ppBase)} of the 8 needed`);
+    }
+    if (toolkitLinesFailNow !== toolkitTestFailed) {
+      discountedWhy.push(`the corrected net value or supplier-development line changes whether its sub-minimum is met`);
+    }
+  }
   return {
     lines,
     achieved,
     discounted,
     achievedNote: achieved !== exAchieved
-      ? `The toolkit shows ${lvl(exAchieved)}; its level lookup drops a level exactly on a threshold, or uses the uncorrected lines.`
+      ? `The toolkit shows ${lvl(exAchieved)}: ${achievedWhy.join('; and ') || 'the referee cannot say why'}.`
       : undefined,
     discountedNote: discounted !== exDiscounted
-      ? `The toolkit shows ${lvl(exDiscounted)}; its Skills and PP sub-minimum tests add the gap, scenario and projected columns and always pass, or it uses the uncorrected lines.`
+      ? `The toolkit shows ${lvl(exDiscounted)}: ${discountedWhy.join('; and ') || 'the referee cannot say why'}.`
       : undefined,
   };
 }
