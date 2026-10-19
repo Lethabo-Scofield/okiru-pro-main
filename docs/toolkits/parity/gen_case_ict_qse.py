@@ -2,7 +2,7 @@
 written in the toolkit's own vocabulary (sheet cells + table rows). Synthetic
 only: invented names, no ID numbers, nothing from any client file.
 
-  py -3 gen_case_ict_qse.py <seed> <out.case.json> [--profile small|full|max|empty|debt|esd|firsttime|deemed]
+  py -3 gen_case_ict_qse.py <seed> <out.case.json> [--profile small|full|max|empty|debt|esd|firsttime|deemed|weak|poor]
 
   py -3 gen_case_ict_qse.py --all    writes the standard set into cases/ict_qse/
 
@@ -27,6 +27,11 @@ DESIG_W = [2, 3, 2, 4, 6, 9, 10, 8]
 RACES = ['African', 'Coloured', 'Indian', 'White']
 RACE_W = [60, 12, 6, 22]
 SIZES = ['Generic', 'QSE', 'EME']
+# Low-scoring profiles: 'weak' lands near Level 8 and fails the procurement
+# and skills sub-minimums (so a discounted Level 8 becomes Non-compliant);
+# 'poor' lands below 40 points (Non-compliant before any discount).
+LOW = ('weak', 'poor')
+LOW_RACE_W = {'weak': [40, 8, 6, 46], 'poor': [20, 5, 5, 70]}
 
 # The template's own contribution vocabularies ('ESD and SED Calcs' tables),
 # read from the blank-template dump so the labels are exactly the toolkit's.
@@ -144,6 +149,10 @@ def ownership(rng, profile):
     for i in range(n_sh):
         if profile == 'max':
             bo, bwo, bdg, bne = 1.0, 1.0, 0.05, 0.0
+        elif profile in LOW:
+            # One black holder with a small stake; the rest are not black.
+            bo = (0.5 if profile == 'weak' else 0.25) if i == 0 else 0.0
+            bwo, bdg, bne = round(bo * 0.5, 4), 0.0, round(bo * 0.02, 4)
         else:
             bo = pct(rng, 0, 1, 0.25)
             bwo = round(bo * pct(rng, 0, 1, 0.25), 4)
@@ -157,7 +166,7 @@ def ownership(rng, profile):
             debt = round(stake * rng.choice([0.2, 0.7, 0.95, 1.3]))
             if i == n_sh - 1 and n_sh > 1:
                 bo, bwo, bdg, bne = 0.0, 0.0, 0.0, 0.0
-        elif profile != 'max' and rng.random() < 0.35:
+        elif profile not in ('max',) + LOW and rng.random() < 0.35:
             debt = round(stake * rng.uniform(0.1, 0.7))
         row = {
             "Data Date": DATA_DATE, "Shareholder": f"Holder {i + 1}",
@@ -186,6 +195,8 @@ def management(rng, profile, small):
         des = rng.choices(DESIGS, DESIG_W)[0]
         if profile == 'max':
             race, gender, foreign = 'African', 'Female', 'No'
+        elif profile in LOW:
+            race, gender, foreign = rng.choices(RACES, LOW_RACE_W[profile])[0], rng.choice(['Male', 'Female']), 'No'
         else:
             race, gender, foreign = rng.choices(RACES, RACE_W)[0], rng.choice(['Male', 'Female']), yn(rng, 0.04)
         row = {"Data Date": DATA_DATE, "Full Name *": f"Employee {i + 1}",
@@ -214,6 +225,8 @@ def skills(rng, profile, small):
     if profile == 'empty':
         return []
     n_tr = rng.randint(4, 10) if small else rng.randint(10, 26)
+    if profile in LOW:
+        n_tr = min(n_tr, 4)
     rows = []
     for i in range(n_tr):
         cat = rng.choice('ABCDEFG') if not (profile == 'max' and i < 3) else 'BCD'[i]
@@ -228,21 +241,21 @@ def skills(rng, profile, small):
         absorbed = 'Yes' if lai and completed == 'Yes' and employed == 'No' and rng.random() < 0.6 else 'No'
         if profile == 'max' and lai:
             employed, completed, absorbed = 'No', 'Yes', 'Yes'
-        heavy_other = profile != 'max' and rng.random() < 0.25
+        heavy_other = profile not in ('max',) + LOW and rng.random() < 0.25
         rows.append({
             "Data Date": DATA_DATE, "Training Program Name *": f"Programme {i + 1}", "Category *": cat,
             "ABET": 'No', "Mandatory Training?": yn(rng, 0.1),
             "Learner Name *": f"Learner {i + 1}", "Gender *": gender, "Race *": race,
             "Disabled?*": disabled, "Foreign?*": foreign, "Age": rng.randint(19, 50),
             "Employed?": employed, "Completed?": completed, "Absorbed?": absorbed,
-            "Course Cost": round(rng.uniform(2_000, 45_000), 2),
+            "Course Cost": round(rng.uniform(2_000, 45_000), 2) if profile not in LOW else round(rng.uniform(1_500, 9_000), 2),
             # F & G courses and the "other" costs share a 15% cap; some rows carry a lot.
             "Travel Cost": round(rng.uniform(5_000, 40_000), 2) if heavy_other else (round(rng.uniform(0, 4_000), 2) if rng.random() < 0.3 else 0),
             "Accommodation Cost": round(rng.uniform(1_000, 9_000), 2) if rng.random() < 0.15 else 0,
             "Catering Cost": round(rng.uniform(200, 3_000), 2) if rng.random() < 0.15 else 0,
             "Stationery Cost": round(rng.uniform(100, 1_500), 2) if rng.random() < 0.1 else 0,
             "Training Facility Cost": round(rng.uniform(1_000, 8_000), 2) if rng.random() < 0.1 else 0,
-            "Salary Cost (stipend and category B,C,D only)": round(rng.uniform(10_000, 70_000), 2) if lai and rng.random() < 0.6 else 0,
+            "Salary Cost (stipend and category B,C,D only)": round(rng.uniform(10_000, 70_000), 2) if lai and profile not in LOW and rng.random() < 0.6 else 0,
             "Other Costs": round(rng.uniform(500, 6_000), 2) if rng.random() < 0.15 else 0,
             "Start Date (format: dd/mm/yyyy)": rdate(rng, FY_START, "2025-09-30"),
             "End Date (format: dd/mm/yyyy)": rdate(rng, "2025-10-01", FY_END),
@@ -258,16 +271,22 @@ def procurement(rng, profile, small):
         size = rng.choices(SIZES, [4, 3, 3])[0]
         if profile == 'max':
             lvl, bo, bwo, bdg = 1, 1.0, 1.0, 0.0
+        elif profile in LOW:
+            # Mostly low-level, white-owned suppliers against a large TMPS.
+            lvl = rng.choice([4, 6, 7, 8, 'Non-compliant', 'Non-compliant'])
+            bo = rng.choice([0, 0, 0.26, 0.51, 1.0])
+            bwo = round(bo * rng.choice([0, 0.5]), 4)
+            bdg = round(bo * rng.choice([0, 1.0]), 4)
         else:
             lvl = rng.choice([1, 1, 2, 2, 3, 4, 5, 6, 7, 8, 'Non-compliant'])
             bo = rng.choice([0, 0.1, 0.26, 0.3, 0.51, 0.6, 1.0])
             bwo = round(bo * rng.choice([0, 0.3, 0.5, 1.0]), 4)
             bdg = round(bo * rng.choice([0, 0, 0.5, 0.9, 1.0]), 4)
-        first_time_p = 0.5 if profile == 'firsttime' else 0.15
+        first_time_p = 0.5 if profile in ('firsttime',) + LOW else 0.15
         sd = yn(rng, 0.15)
         three = yn(rng, 0.2)
         first = yn(rng, first_time_p)
-        if profile == 'firsttime' and size in ('QSE', 'EME') and i % 2 == 0:
+        if profile in ('firsttime',) + LOW and size in ('QSE', 'EME') and i % 2 == 0:
             # The branch the toolkit never reads: first-time, not an SD
             # beneficiary, no three-year contract, ≥51% black owned.
             sd, three, first, bo = 'No', 'No', 'Yes', max(bo, 0.6)
@@ -285,6 +304,9 @@ def procurement(rng, profile, small):
         })
     # TMPS: usually above the listing; sometimes below it (the listing then rules).
     factor = rng.uniform(0.85, 1.4) if profile != 'max' else 1.0
+    if profile in LOW:
+        # The listing is a fraction of the TMPS, so no line reaches its cap.
+        factor = rng.uniform(3.0, 4.5)
     incl = [{"Inclusions": "Cost of Sales", "Amount": round(total_spend * factor * 0.7, 2)},
             {"Inclusions": "Operating Expenses", "Amount": round(total_spend * factor * 0.3, 2)}]
     excl = []
@@ -301,7 +323,7 @@ def esd(rng, profile, small, npat):
     if profile == 'esd':
         n = 9
     rows = []
-    scale = max(abs(npat), 400_000) * 0.006
+    scale = max(abs(npat), 400_000) * (0.006 if profile not in LOW else 0.0015)
     for i in range(n):
         pillar = rng.choice(['Supplier Development', 'Enterprise Development'])
         if profile == 'esd':
@@ -355,7 +377,7 @@ def sed(rng, profile, small, npat):
     if profile in ('empty', 'max'):
         return []
     n = rng.randint(1, 3) if small else rng.randint(2, 7)
-    scale = max(abs(npat), 400_000) * 0.004
+    scale = max(abs(npat), 400_000) * (0.004 if profile not in LOW else 0.0015)
     rows = []
     for i in range(n):
         rows.append({
@@ -415,10 +437,12 @@ def make(seed, profile="full"):
 # edge the random ones may miss. The 'max' case lands its corrected total on
 # exactly 100 points (every line at its maximum except SED, which has no rows,
 # the ED graduation and jobs bonuses, and the designated-group supplier bonus),
-# so the level lookup is tested right on a threshold.
+# so the level lookup is tested right on a threshold. 'weak' (109) lands on
+# Level 8 and fails the procurement and skills sub-minimums, so its discounted
+# level is Non-compliant; 'poor' (112) stays under 40 points.
 STANDARD = [(s, 'full' if s % 3 else 'small') for s in range(1, 13)] + [
     (101, 'max'), (102, 'empty'), (103, 'debt'), (104, 'esd'), (105, 'firsttime'),
-    (106, 'deemed'), (107, 'deemed'), (108, 'debt'),
+    (106, 'deemed'), (107, 'deemed'), (108, 'debt'), (109, 'weak'), (112, 'poor'),
 ]
 
 
