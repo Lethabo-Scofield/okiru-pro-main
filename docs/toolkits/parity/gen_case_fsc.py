@@ -2,7 +2,7 @@
 written in the toolkit's own vocabulary (sheet cells + table rows).
 Synthetic only: invented names, no ID numbers, no client data.
 
-  py -3 gen_case_fsc.py <seed> <out.case.json> [--profile small|full|edge]
+  py -3 gen_case_fsc.py <seed> <out.case.json> [--profile small|full|edge|weak]
                         [--subsector Others|Banks|Long-Term Insurers|Short-Term Insurers]
 
 The FSC template differs from RCOGP Generic in layout (Client Information
@@ -328,6 +328,35 @@ def make(seed, profile="full", subsector="Others"):
         cells["AFS Scorecard - Long Term!E13"] = round(saia * rng.uniform(0.2, 1.1))
         cells["AFS Scorecard - Long Term!E14"] = round(saia * rng.uniform(0, 0.08))
         cells["AFS Scorecard - Long Term!E16"] = round(rng.uniform(0.3, 1.0), 4)
+
+    if profile == "weak":
+        # A weakly transformed entity: little black ownership, a mostly white
+        # workforce, token training and procurement from low-level suppliers,
+        # little ESD and no SED — the net-value sub-minimum, the bottom levels
+        # and discounting to non-compliant. Its own generator, so the other
+        # profiles' cases are unchanged.
+        wr = random.Random(seed * 7919 + 1)
+        for r in own_rows:
+            bo = wr.choice([0, 0, 0.05, 0.1])
+            r.update({"BO%": bo, "BWO%": round(bo * 0.5, 4), "BDG%": 0, "BNE%": 0})
+        for r in mc_rows:
+            if wr.random() < 0.85:
+                r["Race *"] = 'White'
+        for r in sk_rows:
+            for k in ("Course Cost", "Travel Cost", "Accommodation Cost", "Salary Cost (category BCD only)", "Other Costs"):
+                r[k] = round(r[k] * 0.05, 2)
+        for r in pp_rows:
+            lvl = wr.choice([6, 7, 8, 'Non-compliant'])
+            bo = wr.choice([0, 0, 0.1, 0.3])
+            r.update({"B-BBEE Level": lvl, "Current Black ownership": bo,
+                      "Current Black Female ownership": round(bo * 0.5, 4), "Black Designated Group  ownership": 0,
+                      "All Spend\nadjusted": round(r["Spend *"] * RECOGNITION[lvl], 2)})
+        for r in esd_rows:
+            r["Amount"] = round(r["Amount"] * 0.05, 2)
+        del esd_rows[1:]
+        sed_rows.clear()
+        for k in [k for k in cells if k.startswith(("Employee Demographics!", "Skills Toolkit!D8", "Skills Toolkit!D9"))]:
+            del cells[k]
 
     afs_rows = []
     if subsector == 'Short-Term Insurers':
