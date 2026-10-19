@@ -264,11 +264,11 @@ function intendedProcurement(sheets: ToolkitSheets, tables: ToolkitTables): Map<
     if (n(r['Black Female ownership\n[Scenario].Calcs']) >= 0.3) extra.set(13, extra.get(13)! + delta);
     if (n(r['Black Designated Group  ownership\n[Scenario].Calcs']) >= 0.51) extra.set(15, extra.get(15)! + delta);
   }
-  if ([...extra.values()].every((x) => x === 0)) return null;
+  if (Array.from(extra.values()).every((x) => x === 0)) return null;
   const ps = sheets['Procurement Scorecard'] ?? {};
   const den = Math.max(n(ps.C3?.v), n(ps.C4?.v));
   const out = new Map<number, number>();
-  for (const [psRow, delta] of extra) {
+  for (const [psRow, delta] of Array.from(extra.entries())) {
     const spend = n(ps[`H${psRow}`]?.v) + delta;
     const ratio = den > 0 ? spend / den : 0;
     out.set(psRow, capped(ratio, n(ps[`D${psRow}`]?.v), n(ps[`C${psRow}`]?.v)));
@@ -334,7 +334,7 @@ export function refereeIctGeneric(sheets: ToolkitSheets, tables?: ToolkitTables)
   const pp = tables ? intendedProcurement(sheets, tables) : null;
   if (pp) {
     const summaryRow: Record<number, number> = { 9: 51, 10: 52, 11: 53, 12: 54, 13: 55, 15: 56 };
-    for (const [psRow, value] of pp) {
+    for (const [psRow, value] of Array.from(pp.entries())) {
       const row = summaryRow[psRow];
       set(row, 50, value, `Toolkit formula fault: its "first-time supplier" test reads the 3-year-contract answer, so a first-time supplier (a ≥51% black-owned QSE/EME) misses the 1.2 recognition factor. With the factor: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
     }
