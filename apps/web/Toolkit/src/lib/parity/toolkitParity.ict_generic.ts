@@ -15,6 +15,9 @@
  *    black (same 'Oustanding Debts Calcs' sheet as RCOGP Generic);
  *  - the Supplier Development benefit factor for a minority investment reads
  *    a duplicated blank row and is 0 (same table as RCOGP Generic);
+ *  - the lower-interest / lower-dividend factor ('ESD Data'!AF = prime −
+ *    actual) has no floor, so a loan above prime is recognised at a negative
+ *    amount that cancels other contributions;
  *  - 'Skills Calcs'!F58:F62 count every black learner in a learnership,
  *    apprenticeship or internship as "unemployed" — only the African-male row
  *    tests "Employed?" = No;
@@ -187,19 +190,63 @@ function intendedEconomicInterest(sheets: ToolkitSheets, tables: ToolkitTables):
   return ei;
 }
 
-/** Supplier development with the SD minority-investment factor at 70% (the ED copy of the row). */
-function intendedSupplierDevelopment(sheets: ToolkitSheets, tables: ToolkitTables): number | null {
-  const rows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === 'Supplier Development');
-  if (rows.length === 0) return null;
+const LOWER_RATE_TYPE = /^(lower insterest|lower interest|enterprise and supplier development investment with lower)/i;
+
+export type EsdRowFault = 'minority' | 'negative';
+
+/**
+ * One 'ESD Data' row's Recognised Amount as the toolkit means it: its own
+ * figure, except a Supplier Development minority investment at 70% where the
+ * duplicated blank table row gave 0, and a lower-interest / lower-dividend
+ * row at no less than 0 (its factor, prime − actual, has no floor).
+ */
+export function intendedEsdRowValue(r: Record<string, unknown>): { value: number; fault?: EsdRowFault } {
+  const type = String(r['Contribution Type'] ?? '');
+  const shown = n(r['Recognised Amount']);
+  if (String(r['Pillar'] ?? '') === 'Supplier Development' && /^minority investment/i.test(type) && shown === 0) {
+    return { value: n(r['Amount']) * 0.7, fault: 'minority' };
+  }
+  if (LOWER_RATE_TYPE.test(type) && shown < 0) return { value: 0, fault: 'negative' };
+  return { value: shown };
+}
+
+/**
+ * The 'ESD Data' rows as the referee reads them, in table order. An empty
+ * table still has one blank body row (its calculated columns read 0); it is
+ * not a contribution.
+ */
+export function esdDataRows(tables: ToolkitTables | undefined): Array<Record<string, unknown>> {
+  const blank = (v: unknown) => v === null || v === undefined || v === '';
+  return tableRows(tables, 'tblESDData')
+    .filter((r) => !(blank(r['Pillar']) && blank(r['Contribution Type']) && blank(r['Amount'])));
+}
+
+/**
+ * Supplier or Enterprise Development with each row as the toolkit means it
+ * (intendedEsdRowValue); null when no row in the pillar needs reworking.
+ * 'ESD Scorecard'!H12:H13 = MIN(recognised ÷ NPAT ÷ target × points, points).
+ */
+function intendedEsdLine(
+  sheets: ToolkitSheets, tables: ToolkitTables, pillar: string, target: number, points: number,
+): { value: number; faults: Set<EsdRowFault> } | null {
+  const rows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === pillar);
+  const read = rows.map(intendedEsdRowValue);
+  const faults = new Set(read.map((x) => x.fault).filter((f): f is EsdRowFault => f !== undefined));
+  if (faults.size === 0) return null;
   const npat = n(sheets['ESD Scorecard']?.D2?.v);
   if (npat <= 0) return null;
-  let recognised = 0;
-  for (const r of rows) {
-    const minority = /^minority investment/i.test(String(r['Contribution Type'] ?? ''));
-    recognised += minority && n(r['Recognised Amount']) === 0 ? n(r['Amount']) * 0.7 : n(r['Recognised Amount']);
-  }
-  return Math.min(Math.max(recognised / npat, 0) / 0.02 * 10, 10);
+  const recognised = read.reduce((a, x) => a + x.value, 0);
+  return { value: Math.min(Math.max(recognised / npat, 0) / target * points, points), faults };
 }
+
+const ESD_FAULT_NOTE: Record<EsdRowFault, string> = {
+  minority: 'its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%)',
+  negative: 'its lower-interest factor (prime less the actual rate) has no floor, so a loan above prime is recognised at a negative amount',
+};
+const ESD_FAULT_FIX: Record<EsdRowFault, string> = {
+  minority: 'minority investments at 70%',
+  negative: 'loans above prime at 0',
+};
 
 /** 'Skills Calcs' J63 with every group tested for "Employed?" = No, as its African-male row is. */
 function intendedUnemployedLai(sheets: ToolkitSheets, tables: ToolkitTables): number | null {
@@ -340,10 +387,17 @@ export function refereeIctGeneric(sheets: ToolkitSheets, tables?: ToolkitTables)
     }
   }
 
-  // Supplier development.
-  const sd = tables ? intendedSupplierDevelopment(sheets, tables) : null;
-  if (sd !== null) {
-    set(59, 58, sd, `Toolkit formula fault: its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%). At 70%: ${sd.toFixed(2)}; the toolkit shows ${F(59).toFixed(2)}.`);
+  // Supplier and enterprise development, row by row as the toolkit means it.
+  for (const d of [
+    { pillar: 'Supplier Development', row: 59, total: 58, target: 0.02, pts: 10 },
+    { pillar: 'Enterprise Development', row: 62, total: 61, target: 0.03, pts: 15 },
+  ]) {
+    const line = tables ? intendedEsdLine(sheets, tables, d.pillar, d.target, d.pts) : null;
+    if (line === null) continue;
+    const faults = Array.from(line.faults);
+    const why = faults.map((f) => ESD_FAULT_NOTE[f]).join('; and ');
+    const fix = faults.map((f) => ESD_FAULT_FIX[f]).join(' and ');
+    set(d.row, d.total, line.value, `Toolkit formula fault: ${why}. With ${fix}: ${line.value.toFixed(2)}; the toolkit shows ${F(d.row).toFixed(2)}.`);
   }
 
   // Enterprise development: the two job tiers are alternatives.

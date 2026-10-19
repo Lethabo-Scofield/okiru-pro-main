@@ -202,7 +202,15 @@ function shorterPaymentFactor(c: Contribution): number {
   return Math.max(0, SHORTER_PAYMENT_BASE - days / 100);
 }
 
-/** (prime − actual) from the row's rates; 0 without both, never negative. */
+/**
+ * (prime − actual) from the row's rates; 0 without both, never negative.
+ *
+ * Both Empower templates compute 'ESD Data'!AF = [Prime Rate] − [Actual
+ * Interest Rate] with no floor, so a loan above prime is recognised at a
+ * NEGATIVE amount that cancels other contributions, and a blank actual rate
+ * reads as 0% (the loan counts at the full prime rate). Neither is a benefit
+ * the beneficiary received; not ported (docs/toolkits/parity/findings/ict_generic.md).
+ */
 function lowerInterestFactor(c: Contribution): number {
   const prime = Number(c.primeRate);
   const actual = Number(c.actualInterestRate);
@@ -217,25 +225,43 @@ interface EsdRowReading {
   factor: number;
 }
 
+/** How a sector's toolkit reads ESD rows (from CalculatorConfig.esd). */
+interface EsdRowRules {
+  applyQualification: boolean;
+  computedFactorsForEveryRow: boolean;
+}
+
+function esdRowRules(ec: Partial<NonNullable<CalculatorConfig['esd']>> | undefined): EsdRowRules {
+  return {
+    applyQualification: ec?.applyBeneficiaryQualification === true,
+    computedFactorsForEveryRow: ec?.computedFactorsForEveryRow === true,
+  };
+}
+
+const hasPaymentDates = (c: Contribution) =>
+  c.invoiceDate != null && c.invoiceDate !== '' && c.paymentDate != null && c.paymentDate !== '';
+
 /**
  * One ESD row's benefit factor and whether it counts at all.
  *
  * The beneficiary rule applies only where the sector's toolkit gates on it
  * (RCOGP Generic: esd.applyBeneficiaryQualification) and the row carries the
  * beneficiary's size or black ownership; older rows without them keep scoring
- * on the factor alone, as they always have.
+ * on the factor alone, as they always have. Where the template computes the
+ * shorter-payment and lower-rate factors for every row (ICT Generic:
+ * esd.computedFactorsForEveryRow), they are computed whatever the beneficiary.
  */
 function readEsdRow(
   c: Contribution,
   table: Record<string, number>,
   asOf: Date | null,
-  applyQualification: boolean,
+  rules: EsdRowRules,
 ): EsdRowReading {
   const key = canonicalContributionType(c.type);
   const declared = benefitFactorFor(key, table);
   if (!declared.recognised) return { recognised: false, beneficiaryCounts: true, factor: 0 };
 
-  const factsPresent = applyQualification && hasBeneficiaryFacts(c);
+  const factsPresent = rules.applyQualification && hasBeneficiaryFacts(c);
   const beneficiaryCounts = factsPresent ? esdBeneficiaryCounts(c) : true;
   // Without beneficiary facts, the computed factors still apply where the row
   // carries what they are computed from.
@@ -243,12 +269,31 @@ function readEsdRow(
 
   let factor = declared.factor;
   if (key === 'lower_interest_loan' || key === 'lower_dividend_investment') {
-    factor = qualifies ? lowerInterestFactor(c) : declared.factor;
+    factor = qualifies || rules.computedFactorsForEveryRow ? lowerInterestFactor(c) : declared.factor;
   } else if (key === 'shorter_payment_terms') {
-    const hasDates = c.invoiceDate != null && c.invoiceDate !== '' && c.paymentDate != null && c.paymentDate !== '';
-    if (factsPresent ? qualifies : hasDates) factor = shorterPaymentFactor(c);
+    // Where the template computes the factor for every such row (ICT
+    // Generic), a row without both dates is recognised at 0, not at the
+    // table's 15%.
+    if (rules.computedFactorsForEveryRow || (factsPresent ? qualifies : hasPaymentDates(c))) {
+      factor = shorterPaymentFactor(c);
+    }
   }
   return { recognised: true, beneficiaryCounts, factor };
+}
+
+/**
+ * What one ESD row adds to its element's recognised spend: its amount times
+ * its benefit factor, or 0 when the row is not counted (type not recognised,
+ * Supplier/Enterprise Development not stated, beneficiary not qualifying).
+ * The same reading calculateEsdScore sums; the parity checks compare it with
+ * the toolkit's 'ESD Data'[Recognised Amount] row by row.
+ */
+export function esdRecognisedValue(c: Contribution, config?: CalculatorConfig, measurementPeriodEnd?: string): number {
+  const ec = config?.esd as Partial<NonNullable<CalculatorConfig['esd']>> | undefined;
+  const row = readEsdRow(c, buildEsdBenefitFactors(config), parseCalcDate(measurementPeriodEnd), esdRowRules(ec));
+  if (!row.recognised || !row.beneficiaryCounts) return 0;
+  if (c.category !== 'supplier_development' && c.category !== 'enterprise_development') return 0;
+  return (Number(c.amount) || 0) * row.factor;
 }
 
 interface CategorizedEsd {
@@ -257,23 +302,26 @@ interface CategorizedEsd {
   unrecognisedTypes: string[];
   excludedSpend: number;
   nonQualifying: { sd: number; ed: number; count: number; sdCount: number; edCount: number };
+  /** Shorter-payment rows recognised at 0 because they carry no invoice and payment dates. */
+  undatedShorterPayment: { sd: number; ed: number; sdCount: number; edCount: number };
 }
 
 function categorizeContributions(
   contributions: Contribution[],
   benefitFactors: Record<string, number>,
   asOf: Date | null,
-  applyQualification: boolean,
+  rules: EsdRowRules,
 ): CategorizedEsd {
   let sdSpend = 0;
   let edSpend = 0;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
   const nonQualifying = { sd: 0, ed: 0, count: 0, sdCount: 0, edCount: 0 };
+  const undatedShorterPayment = { sd: 0, ed: 0, sdCount: 0, edCount: 0 };
 
   for (const c of contributions) {
     const amount = Number(c.amount) || 0;
-    const row = readEsdRow(c, benefitFactors, asOf, applyQualification);
+    const row = readEsdRow(c, benefitFactors, asOf, rules);
     if (!row.recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
       excludedSpend += amount;
@@ -298,9 +346,19 @@ function categorizeContributions(
     const value = amount * row.factor;
     if (isSd) sdSpend += value;
     else edSpend += value;
+    if (rules.computedFactorsForEveryRow && amount > 0 && !hasPaymentDates(c)
+      && canonicalContributionType(c.type) === 'shorter_payment_terms') {
+      if (isSd) { undatedShorterPayment.sd += amount; undatedShorterPayment.sdCount += 1; }
+      else { undatedShorterPayment.ed += amount; undatedShorterPayment.edCount += 1; }
+    }
   }
 
-  return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend, nonQualifying };
+  return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend, nonQualifying, undatedShorterPayment };
+}
+
+function undatedShorterPaymentClause(amount: number, count: number): string {
+  if (count <= 0) return '';
+  return `; ${formatRand(amount)} across ${count} shorter-payment contribution${count === 1 ? '' : 's'} recognised at 0: no invoice and payment dates to measure the payment period`;
 }
 
 function nonQualifyingClause(amount: number, count: number): string {
@@ -370,11 +428,11 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const edTarget = npat * enterpriseDevTargetPct;
 
   const esdFactors = buildEsdBenefitFactors(config);
-  const { sdSpend, edSpend, unrecognisedTypes, excludedSpend, nonQualifying } = categorizeContributions(
+  const { sdSpend, edSpend, unrecognisedTypes, excludedSpend, nonQualifying, undatedShorterPayment } = categorizeContributions(
     contributions,
     esdFactors,
     parseCalcDate(data.measurementPeriodEnd),
-    ec.applyBeneficiaryQualification === true,
+    esdRowRules(ec),
   );
 
   const sdScore = safeRatio(sdSpend, sdTarget, supplierDevMax);
@@ -445,7 +503,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
       weighting: supplierDevMax,
       score: sdScore,
       note: ratioLineNote({ spend: sdSpend, denominator: npat, denominatorLabel: 'NPAT', target: supplierDevTargetPct, maxPoints: supplierDevMax })
-        + nonQualifyingClause(nonQualifying.sd, nonQualifying.sdCount),
+        + nonQualifyingClause(nonQualifying.sd, nonQualifying.sdCount)
+        + undatedShorterPaymentClause(undatedShorterPayment.sd, undatedShorterPayment.sdCount),
     },
   ];
 
@@ -456,7 +515,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
       weighting: enterpriseDevMax,
       score: edScore,
       note: ratioLineNote({ spend: edSpend, denominator: npat, denominatorLabel: 'NPAT', target: enterpriseDevTargetPct, maxPoints: enterpriseDevMax })
-        + nonQualifyingClause(nonQualifying.ed, nonQualifying.edCount),
+        + nonQualifyingClause(nonQualifying.ed, nonQualifying.edCount)
+        + undatedShorterPaymentClause(undatedShorterPayment.ed, undatedShorterPayment.edCount),
     },
     {
       name: "Graduation of ED beneficiaries to SD beneficiaries", target: "Tick-box", weighting: edGraduationBonusMax, score: graduationBonusScore, isBonus: true,

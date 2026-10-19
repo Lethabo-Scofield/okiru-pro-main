@@ -16,8 +16,10 @@ exercised somewhere in the set:
              Toolkit'!D9 = Yes) plus training-admin costs
   admin      training-manager salary and overhead with disabled black staff in
              every group (the admin share of the disabled line)
-  jobs       ESD beneficiaries creating jobs in both tiers, graduations,
-             lower-interest / lower-dividend / shorter-payment contributions
+  jobs       ESD beneficiaries creating jobs in both tiers, graduations, and
+             in each pillar a loan below prime plus three shorter-payment rows
+             (paid within 14 days, paid after 14 days, no dates); odd seeds put
+             the Enterprise Development loan above prime (forced_esd_rows)
   suppliers  first-time, Supplier Development and 3-year-contract suppliers,
              a procurement buffer and TMPS exclusions
 """
@@ -57,6 +59,65 @@ STANDARD_SET = [
 
 SIMPLE_ESD_EXCLUDED = ('Lower insterest', 'Enterprise and Supplier Development Investment with lower',
                        'Shorter payment')
+
+LOWER_INTEREST = 'Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries'
+SHORTER_PAYMENT = 'Shorter payment periods for Enterprise and Supplier Development beneficiaries'
+
+
+def forced_esd_rows(seed, first_index):
+    """The computed-factor rows the jobs profile always carries, so the random
+    draws cannot leave them out: in each pillar, a loan below prime and three
+    shorter-payment rows (paid within 14 days, paid after 14 days, no dates).
+
+    The template's Benefit Factor column computes these for every row: prime
+    less the actual rate ('ESD Data'!AF, no floor), and 15% less a point per
+    day to pay ('ESD Data'!AD:AE: 0 after 14 days or without both dates). On
+    odd seeds the Enterprise Development loan sits ABOVE prime, which the
+    template recognises at a negative amount (a fault; see the findings).
+
+    The Enterprise Development list does not offer "Shorter payment periods"
+    (only the Supplier Development one does); its rows here are what the
+    template's formulas do with that value pasted in, which our ESD register
+    accepts for either pillar.
+
+    Its own random stream, so the rest of the case draws exactly as before."""
+    import datetime
+    rng = random.Random(seed * 104729 + 17)
+    rows = []
+    for pillar in ('Supplier Development', 'Enterprise Development'):
+        def base(kind, ctype, amount):
+            row = {
+                "Data Date": DATA_DATE, "Pillar": pillar,
+                "Beneficiary Name": f"Beneficiary {first_index + len(rows) + 1}",
+                "Current Black ownership %": rng.choice([0.3, 0.51, 1.0]),
+                "Current Size": rng.choice(['EME', 'QSE']),
+                "ICT Company?": yn(rng, 0.7),
+                "Contribution Description*": f"{kind} {first_index + len(rows) + 1}",
+                "Date of Transaction * (format: dd/mm/yyyy)": rdate(rng),
+                "Contribution Type": ctype,
+                "Amount": amount,
+            }
+            if pillar == 'Enterprise Development':
+                row["Graduated to Supplier Development?"] = "No"
+            return row
+
+        above_prime = pillar == 'Enterprise Development' and seed % 2 == 1
+        loan = base("Loan below prime" if not above_prime else "Loan above prime", LOWER_INTEREST,
+                    round(rng.uniform(300_000, 2_500_000), 2))
+        loan["Prime Rate"] = 0.1075
+        loan["Actual Interest Rate"] = 0.12 if above_prime else rng.choice([0.0, 0.04, 0.06, 0.09])
+        rows.append(loan)
+        for kind, days in (("Paid within 14 days", rng.choice([0, 6, 14])),
+                           ("Paid after 14 days", rng.choice([15, 21, 40])),
+                           ("No payment dates", None)):
+            row = base(kind, SHORTER_PAYMENT, round(rng.uniform(100_000, 1_800_000), 2))
+            if days is not None:
+                inv = rdate(rng, FY_START, "2026-01-31")
+                row["Invoice date (format: dd/mm/yyyy)"] = inv
+                row["Payment date (format: dd/mm/yyyy)"] = (
+                    datetime.date.fromisoformat(inv) + datetime.timedelta(days=days)).isoformat()
+            rows.append(row)
+    return rows
 
 
 def make(seed, profile="full"):
@@ -267,6 +328,8 @@ def make(seed, profile="full"):
         esd_rows[0].update({"Number of jobs Created": 2, "Total Workforce": 40})
         if len(esd_rows) > 1:
             esd_rows[1].update({"Number of jobs Created": 9, "Total Workforce": 30})
+    if profile == "jobs":
+        esd_rows.extend(forced_esd_rows(seed, len(esd_rows)))
 
     # ---- Socio-economic development
     n_sed = 0 if profile == "empty_esd" else (rng.randint(1, 3) if small else rng.randint(2, 8))

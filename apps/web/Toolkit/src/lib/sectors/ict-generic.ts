@@ -317,6 +317,9 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
  *     that column — a defect, not ported);
  *   - SED counts ICT-specific initiatives only;
  *   - guarantees are recognised at 50% (the template's ESD table);
+ *   - the shorter-payment and lower-interest / lower-dividend factors are
+ *     computed for every such row, so a shorter-payment row without both an
+ *     invoice and a payment date counts at 0, not the table's 15%;
  *   - the ED sub-minimum, 40% of the 15-point BASE line ('Scorecard
  *     Calculations'!F8 = 15 × 40%; the API config says ED has none).
  * An ESD contribution is NOT gated on the beneficiary qualifying: the
@@ -342,6 +345,7 @@ function withEmpowerIctToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
       enhancedRecognitionRule: 'black_owned_small_supplier',
       enhancedRecognitionCountsFirstTimeSupplier: true,
     },
+    esd: { ...cfg.esd, computedFactorsForEveryRow: true },
     sed: { ...cfg.sed, sectorSpecificInitiativesOnly: true },
     benefitFactors: cfg.benefitFactors.map((bf) =>
       Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)

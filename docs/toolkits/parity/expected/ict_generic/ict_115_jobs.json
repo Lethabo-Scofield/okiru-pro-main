@@ -1528,22 +1528,22 @@
     {
      "cell": "Summary Scorecard!F58",
      "formula": "=IFERROR(SUM(F59),0)",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "Summary Scorecard!F59",
      "formula": "='ESD Scorecard'!H12",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "ESD Scorecard!H12",
      "formula": "=MIN(I12/F12*E12,E12)",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "ESD Scorecard!I12",
      "formula": "=IFERROR(J12/$D$2,0)",
-     "value": 0.007785
+     "value": 0.012548
     },
     {
      "cell": "ESD Scorecard!F12",
@@ -1564,17 +1564,17 @@
     {
      "cell": "Summary Scorecard!F59",
      "formula": "='ESD Scorecard'!H12",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "ESD Scorecard!H12",
      "formula": "=MIN(I12/F12*E12,E12)",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "ESD Scorecard!I12",
      "formula": "=IFERROR(J12/$D$2,0)",
-     "value": 0.007785
+     "value": 0.012548
     },
     {
      "cell": "ESD Scorecard!F12",
@@ -1589,7 +1589,7 @@
     {
      "cell": "ESD Scorecard!J12",
      "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I21,tblESDData[Pillar],\"Supplier Development\")",
-     "value": 227818.4684
+     "value": 367208.5442
     },
     {
      "cell": "ESD Scorecard!D2",
@@ -1605,12 +1605,12 @@
     {
      "cell": "Summary Scorecard!F61",
      "formula": "=IFERROR(SUM(F62:F65),0)",
-     "value": 17.956963
+     "value": 18.0
     },
     {
      "cell": "Summary Scorecard!F62",
      "formula": "='ESD Scorecard'!H13",
-     "value": 14.956963
+     "value": 15.0
     },
     {
      "cell": "Summary Scorecard!F65",
@@ -1620,7 +1620,7 @@
     {
      "cell": "ESD Scorecard!H13",
      "formula": "=MIN(I13/F13*E13,E13)",
-     "value": 14.956963
+     "value": 15.0
     },
     {
      "cell": "ESD Scorecard!H17",
@@ -1630,7 +1630,7 @@
     {
      "cell": "ESD Scorecard!I13",
      "formula": "=IFERROR(J13/$D$2,0)",
-     "value": 0.029914
+     "value": 0.033313
     },
     {
      "cell": "ESD Scorecard!F13",
@@ -1656,17 +1656,17 @@
     {
      "cell": "Summary Scorecard!F62",
      "formula": "='ESD Scorecard'!H13",
-     "value": 14.956963
+     "value": 15.0
     },
     {
      "cell": "ESD Scorecard!H13",
      "formula": "=MIN(I13/F13*E13,E13)",
-     "value": 14.956963
+     "value": 15.0
     },
     {
      "cell": "ESD Scorecard!I13",
      "formula": "=IFERROR(J13/$D$2,0)",
-     "value": 0.029914
+     "value": 0.033313
     },
     {
      "cell": "ESD Scorecard!F13",
@@ -1681,7 +1681,7 @@
     {
      "cell": "ESD Scorecard!J13",
      "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I21,tblESDData[Pillar],\"Enterprise Development\")",
-     "value": 875440.522
+     "value": 974919.05325
     },
     {
      "cell": "ESD Scorecard!D2",
@@ -1862,7 +1862,7 @@
     {
      "cell": "Summary Scorecard!F70",
      "formula": "=SUM(F67,F61,F58,F50,F43,F28,F19)",
-     "value": 99.861895
+     "value": 102.286421
     },
     {
      "cell": "Summary Scorecard!F67",
@@ -1872,12 +1872,12 @@
     {
      "cell": "Summary Scorecard!F61",
      "formula": "=IFERROR(SUM(F62:F65),0)",
-     "value": 17.956963
+     "value": 18.0
     },
     {
      "cell": "Summary Scorecard!F58",
      "formula": "=IFERROR(SUM(F59),0)",
-     "value": 3.892295
+     "value": 6.273784
     },
     {
      "cell": "Summary Scorecard!F50",
@@ -1907,7 +1907,7 @@
     {
      "cell": "Summary Scorecard!F62",
      "formula": "='ESD Scorecard'!H13",
-     "value": 14.956963
+     "value": 15.0
     }
    ]
   },
@@ -1918,17 +1918,17 @@
     {
      "cell": "Summary Scorecard!F74",
      "formula": "='Scorecard Calculations'!C15",
-     "value": "Level 5"
+     "value": "Level 4"
     },
     {
      "cell": "Scorecard Calculations!C15",
      "formula": "=VLOOKUP(C12,'Summary Scorecard'!F5:G13,2,FALSE)",
-     "value": "Level 5"
+     "value": "Level 4"
     },
     {
      "cell": "Scorecard Calculations!C12",
      "formula": "=MAX(IF('Summary Scorecard'!F5:F13<C10,'Summary Scorecard'!F5:F13))",
-     "value": 95.0
+     "value": 100.0
     },
     {
      "cell": "Summary Scorecard!F5",
@@ -1938,7 +1938,7 @@
     {
      "cell": "Scorecard Calculations!C10",
      "formula": "=SUM(C3:C9)",
-     "value": 99.544434
+     "value": 101.968961
     }
    ]
   },
@@ -1949,22 +1949,22 @@
     {
      "cell": "Summary Scorecard!F76",
      "formula": "=IFERROR('Scorecard Calculations'!C16,F74)",
-     "value": "Level 6"
+     "value": "Level 4"
     },
     {
      "cell": "Scorecard Calculations!C16",
      "formula": "=VLOOKUP(C14,'Summary Scorecard'!F5:G13,2,FALSE)",
-     "value": "Level 6"
+     "value": "Level 4"
     },
     {
      "cell": "Summary Scorecard!F74",
      "formula": "='Scorecard Calculations'!C15",
-     "value": "Level 5"
+     "value": "Level 4"
     },
     {
      "cell": "Scorecard Calculations!C14",
      "formula": "=IF(C12=C13,C12,MAX(IF('Summary Scorecard'!F5:F13<C13,'Summary Scorecard'!F5:F13)))",
-     "value": 90.0
+     "value": 100.0
     },
     {
      "cell": "Summary Scorecard!F5",
@@ -1974,17 +1974,17 @@
     {
      "cell": "Scorecard Calculations!C15",
      "formula": "=VLOOKUP(C12,'Summary Scorecard'!F5:G13,2,FALSE)",
-     "value": "Level 5"
+     "value": "Level 4"
     },
     {
      "cell": "Scorecard Calculations!C12",
      "formula": "=MAX(IF('Summary Scorecard'!F5:F13<C10,'Summary Scorecard'!F5:F13))",
-     "value": 95.0
+     "value": 100.0
     },
     {
      "cell": "Scorecard Calculations!C13",
      "formula": "=MAX(IF(OR(G3<F3,G5<F5,G6<F6,G7<F7,G8<F8),C12-1,C12),0)",
-     "value": 94.0
+     "value": 100.0
     }
    ]
   }
@@ -1998,10 +1998,10 @@
     "v": 140.0
    },
    "F18": {
-    "v": 99.86189470201367
+    "v": 102.28642104150285
    },
    "J18": {
-    "v": 99.54443438455337
+    "v": 101.96896072404252
    },
    "B19": {
     "v": "Ownership"
@@ -2430,10 +2430,10 @@
     "v": 10.0
    },
    "F58": {
-    "v": 3.892294561511156
+    "v": 6.27378381378886
    },
    "J58": {
-    "v": 3.892294561511156
+    "v": 6.27378381378886
    },
    "B59": {
     "v": "Annual value of all Supplier Development contributions"
@@ -2442,10 +2442,10 @@
     "v": 10.0
    },
    "F59": {
-    "v": 3.892294561511156
+    "v": 6.27378381378886
    },
    "J59": {
-    "v": 3.892294561511156
+    "v": 6.27378381378886
    },
    "B61": {
     "v": "Enterprise development"
@@ -2454,10 +2454,10 @@
     "v": 18.0
    },
    "F61": {
-    "v": 17.95696291278854
+    "v": 18.0
    },
    "J61": {
-    "v": 17.95696291278854
+    "v": 18.0
    },
    "B62": {
     "v": "Annual value of Enterprise Development contributions and Sector Specific Programms"
@@ -2466,10 +2466,10 @@
     "v": 15.0
    },
    "F62": {
-    "v": 14.95696291278854
+    "v": 15.0
    },
    "J62": {
-    "v": 14.95696291278854
+    "v": 15.0
    },
    "B63": {
     "v": "Graduation of Enterprise Development beneficiaries to Supplier Development beneficiaries"
@@ -2538,10 +2538,10 @@
     "v": 140.0
    },
    "F70": {
-    "v": 99.86189470201367
+    "v": 102.28642104150285
    },
    "J70": {
-    "v": 99.54443438455337
+    "v": 101.96896072404252
    },
    "B72": {
     "v": "YES points"
@@ -2550,37 +2550,37 @@
     "v": 140.0
    },
    "F72": {
-    "v": 99.86189470201367
+    "v": 102.28642104150285
    },
    "J72": {
-    "v": 99.54443438455337
+    "v": 101.96896072404252
    },
    "B74": {
     "v": "Achived Level"
    },
    "F74": {
-    "v": "Level 5"
+    "v": "Level 4"
    },
    "J74": {
-    "v": "Level 5"
+    "v": "Level 4"
    },
    "B76": {
     "v": "Discounted Level"
    },
    "F76": {
-    "v": "Level 6"
+    "v": "Level 4"
    },
    "J76": {
-    "v": "Level 6"
+    "v": "Level 4"
    },
    "B78": {
     "v": "YES Level"
    },
    "F78": {
-    "v": "Level 6"
+    "v": "Level 4"
    },
    "J78": {
-    "v": "Level 6"
+    "v": "Level 4"
    }
   },
   "Ownership Scorecard": {
@@ -3046,6 +3046,54 @@
      "Discounts in addition to normal business practice supporting Enterprise and Supplier Development beneficiaries",
      223179.64,
      223179.64
+    ],
+    [
+     "Supplier Development",
+     "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     2016292.6,
+     136099.75050000002
+    ],
+    [
+     "Supplier Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     329032.53,
+     3290.325299999994
+    ],
+    [
+     "Supplier Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     1048012.45,
+     0.0
+    ],
+    [
+     "Supplier Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     1313328.47,
+     0.0
+    ],
+    [
+     "Enterprise Development",
+     "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     324218.42,
+     -4052.7302499999987
+    ],
+    [
+     "Enterprise Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     690208.41,
+     103531.26150000001
+    ],
+    [
+     "Enterprise Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     363520.71,
+     0.0
+    ],
+    [
+     "Enterprise Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     753697.19,
+     0.0
     ]
    ]
   },
@@ -5854,6 +5902,118 @@
      "Graduated to Supplier Development?": "No",
      "Number of jobs Created": 2,
      "Total Workforce": 50
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 5",
+     "Current Black ownership %": 0.3,
+     "Current Size": "EME",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "Loan below prime 5",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-05-22",
+     "Contribution Type": "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     "Amount": 2016292.6,
+     "Prime Rate": 0.1075,
+     "Actual Interest Rate": 0.04
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 6",
+     "Current Black ownership %": 1.0,
+     "Current Size": "QSE",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "Paid within 14 days 6",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-08",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 329032.53,
+     "Invoice date (format: dd/mm/yyyy)": "2025-09-01",
+     "Payment date (format: dd/mm/yyyy)": "2025-09-15"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 7",
+     "Current Black ownership %": 0.51,
+     "Current Size": "EME",
+     "ICT Company?": "No",
+     "Contribution Description*": "Paid after 14 days 7",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-04-11",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 1048012.45,
+     "Invoice date (format: dd/mm/yyyy)": "2025-11-19",
+     "Payment date (format: dd/mm/yyyy)": "2025-12-04"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 8",
+     "Current Black ownership %": 0.51,
+     "Current Size": "EME",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "No payment dates 8",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-29",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 1313328.47
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 9",
+     "Current Black ownership %": 0.51,
+     "Current Size": "EME",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "Loan above prime 9",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-23",
+     "Contribution Type": "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     "Amount": 324218.42,
+     "Graduated to Supplier Development?": "No",
+     "Prime Rate": 0.1075,
+     "Actual Interest Rate": 0.12
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 10",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "Paid within 14 days 10",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-12-08",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 690208.41,
+     "Graduated to Supplier Development?": "No",
+     "Invoice date (format: dd/mm/yyyy)": "2025-11-02",
+     "Payment date (format: dd/mm/yyyy)": "2025-11-02"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 11",
+     "Current Black ownership %": 0.51,
+     "Current Size": "EME",
+     "ICT Company?": "No",
+     "Contribution Description*": "Paid after 14 days 11",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-12-03",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 363520.71,
+     "Graduated to Supplier Development?": "No",
+     "Invoice date (format: dd/mm/yyyy)": "2025-07-26",
+     "Payment date (format: dd/mm/yyyy)": "2025-08-16"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 12",
+     "Current Black ownership %": 0.3,
+     "Current Size": "EME",
+     "ICT Company?": "Yes",
+     "Contribution Description*": "No payment dates 12",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-04",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 753697.19,
+     "Graduated to Supplier Development?": "No"
     }
    ],
    "tblSED": [

@@ -286,6 +286,15 @@ export interface CalculatorConfig {
      * ownership. Other templates do not gate the amount this way.
      */
     applyBeneficiaryQualification?: boolean;
+    /**
+     * ICT Generic: the shorter-payment and lower-interest / lower-dividend
+     * factors are computed for every row of those types, as the ICT
+     * template's Benefit Factor column does ('ESD Data'!V reads AE / AF for
+     * every row, qualified or not). A shorter-payment row without both an
+     * invoice and a payment date is therefore recognised at 0, not at the
+     * table's 15%. Unset keeps the 15% for undated rows.
+     */
+    computedFactorsForEveryRow?: boolean;
   };
   sed: {
     maxPoints: number;
