@@ -1,0 +1,282 @@
+{
+ "template": "rcogp_qse",
+ "seed": null,
+ "profile": "edge:qse_rule",
+ "cells": {
+  "Ownership Scorecard!D13": "Year",
+  "Ownership Scorecard!D14": "Current YTD",
+  "MC Toolkit!C3": "Year",
+  "MC Toolkit!C4": "Current YTD",
+  "Skills Toolkit!D8": "Current YTD",
+  "Procurement Scorecard!C15": "Year",
+  "Procurement Scorecard!C16": "Current YTD",
+  "Procurement Scorecard!E6": "Actual",
+  "ESD Scorecard!F13": "Year",
+  "ESD Scorecard!F14": "Current YTD",
+  "SED Scorecard!H9": "Year",
+  "SED Scorecard!H10": "Current YTD",
+  "Client Information!C3": "QSE edge: qse_rule",
+  "Client Information!C4": "2025-03-01",
+  "Client Information!D4": "2026-02-28",
+  "Client Information!C8": 0.06,
+  "Client Information!C16": 20000000,
+  "Client Information!C17": 2000000,
+  "Client Information!G4": 5000,
+  "Client Information!G5": 5000,
+  "Client Information!G6": 5000,
+  "Client Information!G7": 5000,
+  "Client Information!G8": 5000,
+  "Client Information!G9": 5000,
+  "Client Information!G10": 5000,
+  "Client Information!G11": 5000,
+  "Client Information!G12": 5000,
+  "Client Information!G13": 5000,
+  "Client Information!G14": 5000,
+  "Client Information!G15": 5000
+ },
+ "tables": {
+  "tblOwnershipData": [
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 1",
+    "Ownership Type": "Strategic Partner",
+    "Outstaning Debt": 0,
+    "BO%": 1.0,
+    "BWO%": 0.4,
+    "BDG%": 0.05,
+    "BNE%": 0.0,
+    "Number of Share": 600,
+    "Share Value": 6000000,
+    "Original Date": "2018-06-01"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 2",
+    "Ownership Type": "Strategic Partner",
+    "Outstaning Debt": 0,
+    "BO%": 1.0,
+    "BWO%": 0.0,
+    "BDG%": 0.0,
+    "BNE%": 0.1,
+    "Number of Share": 400,
+    "Share Value": 4000000,
+    "Original Date": "2018-06-01"
+   }
+  ],
+  "tblMCData": [
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 1",
+    "Gender *": "Female",
+    "Race *": "African",
+    "Designation *": "Executive Director",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 2",
+    "Gender *": "Male",
+    "Race *": "Indian",
+    "Designation *": "Other Executive Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 3",
+    "Gender *": "Female",
+    "Race *": "Coloured",
+    "Designation *": "Senior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 4",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Middle Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 5",
+    "Gender *": "Male",
+    "Race *": "White",
+    "Designation *": "Junior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 6",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Semi-skilled",
+    "Disabled *": "Yes",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 7",
+    "Gender *": "Male",
+    "Race *": "White",
+    "Designation *": "Non-executive Director",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   }
+  ],
+  "tblSkillsData": [
+   {
+    "Data Date": "2026-02-28",
+    "Training Program Name *": "Programme 1",
+    "Category *": "B",
+    "ABET": "No",
+    "Mandatory Training?": "No",
+    "Learner Name *": "Learner 1",
+    "Gender *": "Female",
+    "Race *": "African",
+    "Disabled?*": "No",
+    "Foreign?*": "No",
+    "Age": 24,
+    "Employed?": "No",
+    "Completed?": "Yes",
+    "Absorbed?": "Yes",
+    "Course Cost": 70000,
+    "Travel Cost": 0,
+    "Accommodation Cost": 0,
+    "Catering Cost": 0,
+    "Stationery Cost": 0,
+    "Training Facility Cost": 0,
+    "Salary Cost (stipend and category B,C,D only)": 40000,
+    "Other Costs": 0,
+    "Start Date (format: dd/mm/yyyy)": "2025-04-01",
+    "End Date (format: dd/mm/yyyy)": "2026-01-31"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Training Program Name *": "Programme 2",
+    "Category *": "C",
+    "ABET": "No",
+    "Mandatory Training?": "No",
+    "Learner Name *": "Learner 2",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Disabled?*": "No",
+    "Foreign?*": "No",
+    "Age": 24,
+    "Employed?": "No",
+    "Completed?": "Yes",
+    "Absorbed?": "Yes",
+    "Course Cost": 60000,
+    "Travel Cost": 0,
+    "Accommodation Cost": 0,
+    "Catering Cost": 0,
+    "Stationery Cost": 0,
+    "Training Facility Cost": 0,
+    "Salary Cost (stipend and category B,C,D only)": 0,
+    "Other Costs": 0,
+    "Start Date (format: dd/mm/yyyy)": "2025-04-01",
+    "End Date (format: dd/mm/yyyy)": "2026-01-31"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Training Program Name *": "Programme 3",
+    "Category *": "A",
+    "ABET": "No",
+    "Mandatory Training?": "No",
+    "Learner Name *": "Learner 3",
+    "Gender *": "Female",
+    "Race *": "Coloured",
+    "Disabled?*": "Yes",
+    "Foreign?*": "No",
+    "Age": 24,
+    "Employed?": "Yes",
+    "Completed?": "Yes",
+    "Absorbed?": "No",
+    "Course Cost": 30000,
+    "Travel Cost": 0,
+    "Accommodation Cost": 0,
+    "Catering Cost": 0,
+    "Stationery Cost": 0,
+    "Training Facility Cost": 0,
+    "Salary Cost (stipend and category B,C,D only)": 0,
+    "Other Costs": 0,
+    "Start Date (format: dd/mm/yyyy)": "2025-04-01",
+    "End Date (format: dd/mm/yyyy)": "2026-01-31"
+   }
+  ],
+  "tblPPData": [
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 1",
+    "Current Company Size *": "EME",
+    "B-BBEE Level": 1,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 1.0,
+    "Current Black Female ownership": 0.6,
+    "Black Designated Group  ownership": 0.6,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 4000000
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 2",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 2,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0.6,
+    "Current Black Female ownership": 0.3,
+    "Black Designated Group  ownership": 0,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 3000000
+   }
+  ],
+  "tblInclusions": [
+   {
+    "Inclusions": "Cost of Sales",
+    "Amount": 7000000
+   }
+  ],
+  "tblESDData": [
+   {
+    "Data Date": "2026-02-28",
+    "Pillar": "Enterprise Development",
+    "Beneficiary Name": "Beneficiary 1",
+    "Current Black ownership %": 1.0,
+    "Current Size": "EME",
+    "Contribution Description*": "Contribution 1",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-15",
+    "Contribution Type": "Grant Contribution",
+    "Amount": 25000,
+    "At least 1 job created?": "No",
+    "Graduated to Supplier Development?": "No"
+   }
+  ],
+  "tblSED": [
+   {
+    "Data Date": "2026-02-28",
+    "Beneficiary Name *": "Beneficiary SED 1",
+    "Description of Spend *": "SED spend 1",
+    "Date of Transaction * (format: dd/mm/yyyy)": "2025-09-01",
+    "Contribution Type *": "Grant Contribution",
+    "% of Spend Benefiting Black Individuals *": 1.0,
+    "Amount": 8000
+   }
+  ],
+  "tblCompanyValuation": [
+   {
+    "Date": "2026-02-28",
+    "Company Asset Value": 10000000,
+    "Total Shares": 1000,
+    "Share Value": 10000.0
+   }
+  ]
+ }
+}
