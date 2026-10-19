@@ -27,15 +27,35 @@ SHEETS = {
     "ESD Scorecard": (1, 16),
     "SED & CE Scorecard": (1, 15),
     "Scorecard Calculations": (1, 20),
-    "MC Toolkit": (1, 120),
+    "MC Toolkit": (109, 113),
     "EF & ESD Scorecard - Banks": (1, 30),
     "EF & ESD Scorecard - Long Term": (1, 30),
     "AFS Scorecard - Banks": (1, 40),
     "AFS Scorecard - Long Term": (1, 40),
     "AFS Scorecard - Short Term": (1, 40),
 }
-TABLES = ("tblOwnershipData", "tblMCData", "tblSkillsData", "tblPPData", "tblESDData", "tblSEDnCEData",
-          "tblTransactionFinancingData")
+# The columns of each table the referee reads.
+NL = "\n"
+
+
+def _SCEN(k):
+    return f"{k}{NL}[Scenario].Calcs"
+
+
+TABLES = {
+    "tblOwnershipData": ["Shareholder", "Share %", "BO%", "Outstaning Debt", "Loan Term"],
+    "tblMCData": ["Data Date", "Disabled.calcs", "Black?", "Employee?"],
+    "tblSkillsData": ["Data Date", "Learner Name *", "Black", "Black Females?", "Africans?", "Disabled.calcs",
+                      "Management Position.calcs", "Cat A-F Spend", "Salaries (BCD)", "Cat G Spend",
+                      "Other Legitimate Cost", "All Spend", "LAI", "Completed LAI (Unemployed)",
+                      "Absorbed LAI [Unemployed]"],
+    "tblPPData": ["Data Date", "Supplier Name *", f"All Spend{NL}adjusted", _SCEN("Company Size"), _SCEN("Black Ownership"),
+                  _SCEN("Black Female ownership"), _SCEN("Black Designated Group  ownership"),
+                  _SCEN("Supplier development recipient? (Yes/No)"), _SCEN("3 year contract in place? (Yes/No)"),
+                  f"First-time supplier? (Yes/No){NL}[Scenario]", "First-time supplier? (Yes/No)",
+                  "Stock broker? (Yes/No)", "Fund manager? (Yes/No)", "Intermediary? (Yes/No)"],
+    "tblESDData": ["Pillar", "Contribution Type", "Amount", "Recognised Amount", "Qualify?"],
+}
 ROW = re.compile(r"[A-Z]+(\d+)$")
 
 
@@ -59,15 +79,22 @@ def export(excel_path, case_path, out_path):
         src = sheets.get(sheet)
         if not src:
             continue
+        # Values only, and of the labels only those the referee reads (sub-sector, reinsurer).
         cells[sheet] = {ref: {"v": e.get("v")} for ref, e in src.items()
-                        if lo <= int(ROW.match(ref).group(1)) <= hi and e.get("v") not in (None, "")}
-    tables = {k: {"headers": excel["tables"][k]["headers"], "rows": excel["tables"][k]["rows"]}
-              for k in TABLES if k in excel["tables"]}
+                        if lo <= int(ROW.match(ref).group(1)) <= hi and e.get("v") not in (None, "")
+                        and (not isinstance(e.get("v"), str) or sheet in ("Summary Scorecard", "Client Information"))}
+    tables = {}
+    for name, cols in TABLES.items():
+        t = excel["tables"].get(name)
+        if not t:
+            continue
+        idx = [t["headers"].index(c) for c in cols]
+        tables[name] = {"headers": cols, "rows": [[r[i] for i in idx] for r in t["rows"]]}
     sample = {k: v for k, v in case.items() if k != "tables"}
     sample["tables"] = {k: v for k, v in case["tables"].items() if k != "tblEAPAll"}
     json.dump({"template": case.get("template"), "subsector": case.get("subsector"), "lines": lines,
                "cells": cells, "tables": tables, "sampleCase": sample},
-              open(out_path, "w", encoding="utf-8"), indent=0, default=str)
+              open(out_path, "w", encoding="utf-8"), separators=(",", ":"), default=str)
     print("wrote", out_path, len(lines), "lines")
 
 
