@@ -309,7 +309,11 @@ export function refereeIctQse(sheets: ToolkitSheets, tables?: ToolkitTables): Re
     const skillsPpFailed = skillsBase < 10 || ppBase < 8;
     const toolkitLinesFailNow = value(25) < 3.2 || value(45) < 2 || value(48) < 2;
     if (skillsPpFailed && !toolkitTestFailed) {
-      discountedWhy.push(`its Skills and PP sub-minimum tests ('Scorecard Calculations'!G5, G6) add the gap and other columns to the points and always pass; here Skills scores ${fmt(skillsBase)} of the 10 needed and PP ${fmt(ppBase)} of the 8 needed`);
+      const failing = [
+        ...(skillsBase < 10 ? [`Skills scores ${fmt(skillsBase)} of the 10 needed`] : []),
+        ...(ppBase < 8 ? [`procurement scores ${fmt(ppBase)} of the 8 needed`] : []),
+      ];
+      discountedWhy.push(`its Skills and PP sub-minimum tests ('Scorecard Calculations'!G5, G6) add the gap and other columns to the points and always pass; here ${failing.join(' and ')}`);
     }
     if (toolkitLinesFailNow !== toolkitTestFailed) {
       discountedWhy.push(`the corrected net value or supplier-development line changes whether its sub-minimum is met`);
