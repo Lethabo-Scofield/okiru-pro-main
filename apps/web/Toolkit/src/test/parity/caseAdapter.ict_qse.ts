@@ -320,7 +320,11 @@ export function adaptIctQseToolkitCase(c: ToolkitCase): AdaptedCase {
       category: 'socio_economic',
       blackBenefitPercent: num(r['% of Spend Benefiting Black Individuals *']) * 100,
       transactionDate: optStr(r['Date of Transaction * (format: dd/mm/yyyy)']),
-      ictSpecificInitiative: yes(r['ICT Specific Initiative?']),
+      // A blank cell is no answer (unset), as our own entry paths keep it —
+      // the toolkit scores it 0, and so must we.
+      ...(present(r['ICT Specific Initiative?'])
+        ? { ictSpecificInitiative: yes(r['ICT Specific Initiative?']) }
+        : {}),
     })),
   };
 

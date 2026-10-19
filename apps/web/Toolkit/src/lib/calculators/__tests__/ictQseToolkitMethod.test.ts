@@ -132,9 +132,26 @@ describe('SED: ICT-specific initiatives only', () => {
     // R5,000 ÷ (1% × R1m) × 12 = 6.
     expect(calculateSedScore(sed, 1_000_000, ICT_QSE).total).toBeCloseTo(6, 6);
   });
-  it('a sector without the rule counts both', () => {
+  it('a contribution with no answer counts 0 too: the toolkit counts only a "Yes"', () => {
+    // =IF([@[ICT Specific Initiative?]]="Yes", [@Amount]*[@[Benefit Factor]], 0)
+    const unanswered: SEDData = {
+      ...sed,
+      contributions: [
+        ...sed.contributions,
+        { id: 'c', beneficiary: 'C', type: 'grant', amount: 5_000, category: 'socio_economic' },
+      ],
+    } as SEDData;
+    const r = calculateSedScore(unanswered, 1_000_000, ICT_QSE);
+    expect(r.total).toBeCloseTo(6, 6);
+    // …and says so: the No and the unanswered row are reported, not dropped silently.
+    expect(r.notIctSpecific).toEqual({ spend: 10_000, count: 2 });
+    expect(r.subLines[0].note).toContain('R10.0k across 2 contributions not counted: not marked as an ICT-specific initiative');
+  });
+  it('a sector without the rule counts both, and reports nothing about ICT', () => {
     const cfg = { ...ICT_QSE, sed: { ...ICT_QSE.sed, requireIctSpecificInitiative: undefined } };
-    expect(calculateSedScore(sed, 1_000_000, cfg).total).toBeCloseTo(12, 6);
+    const r = calculateSedScore(sed, 1_000_000, cfg);
+    expect(r.total).toBeCloseTo(12, 6);
+    expect(r.notIctSpecific).toBeUndefined();
   });
 });
 

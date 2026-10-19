@@ -16,6 +16,7 @@ import {
 } from "@/components/workbook/workbookValidation";
 import type { WorkbookSectionsInput, WorkbookRow } from "@/lib/workbookExcelNormalizer";
 import { SECTOR_CODE_OPTIONS } from "@/components/workbook/workbookValidation";
+import { coerceYesNoOrUnset } from "@/lib/yesNoValue";
 
 export type FieldConfidence = "high" | "medium" | "low";
 
@@ -1960,6 +1961,11 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
   const blackPctIdx = colIdx(headers, "benefitingblack", "benefiting black", "percentbenefitingblack");
   const amountIdx = colIdx(headers, "amount");
   const dateIdx = colIdx(headers, "dateoftransaction", "date");
+  // ICT: "ICT Specific Initiative?" decides whether the contribution scores at
+  // all (sed.requireIctSpecificInitiative). Keep the answer the sheet gives,
+  // and leave the field unset where the sheet has no such column or the cell
+  // is blank — never a "No" the client did not give.
+  const ictIdx = colIdx(headers, "ictspecificinitiative", "ictspecific");
 
   const out: WorkbookRow[] = [];
   for (let r = headerIdx + 1; r < matrix.length; r++) {
@@ -1969,11 +1975,12 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
     const amount = amountIdx !== undefined ? parseCurrency(row[amountIdx]) ?? 0 : 0;
     if (!name || amount <= 0) continue;
     const blackPct = blackPctIdx !== undefined ? parsePercent(row[blackPctIdx]) ?? 100 : 100;
+    const ictAnswer = ictIdx !== undefined ? coerceYesNoOrUnset(row[ictIdx]) : undefined;
     out.push({
       _id: uuidv4(),
       beneficiaryName: name,
       descriptionOfSpend: descIdx !== undefined ? cellStr(row[descIdx]) : "Grant",
-      ictSpecificInitiative: false,
+      ...(ictAnswer !== undefined ? { ictSpecificInitiative: ictAnswer } : {}),
       contributionType: typeIdx !== undefined ? cellStr(row[typeIdx]) || "Grant Contribution" : "Grant Contribution",
       percentBenefitingBlack: pctForWorkbook(blackPct) || 100,
       amount,
@@ -2071,7 +2078,8 @@ function ensureAggregateDetailRows(
         _id: uuidv4(),
         beneficiaryName: data.companyName ? `${data.companyName} — SED` : "Aggregate SED beneficiary",
         descriptionOfSpend: "Imported socio-economic development total",
-        ictSpecificInitiative: false,
+        // A total says nothing about whether it was spent on ICT-specific
+        // initiatives: left unanswered (an ICT client sets it on the row).
         contributionType: "Grant Contribution",
         percentBenefitingBlack: 100,
         amount: data.sedContributions ?? 0,

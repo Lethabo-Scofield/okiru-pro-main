@@ -303,9 +303,13 @@ export interface CalculatorConfig {
     maxPoints: number;
     npatTarget: number;
     /**
-     * ICT: only ICT-specific initiatives count (SED Data[Recognised Amount] is
-     * 0 unless "ICT Specific Initiative?" is Yes). A contribution answered
-     * "No" is excluded; one with no answer on record still counts.
+     * ICT: only ICT-specific initiatives count. A contribution counts only when
+     * `ictSpecificInitiative` is true; one answered No, or with no answer on
+     * record, counts 0 — the toolkit's SED Data[Recognised Amount] =
+     * IF([ICT Specific Initiative?]="Yes", Amount × Benefit Factor, 0), where a
+     * blank answer scores 0. Every entry path carries the answer (workbook
+     * grid, Excel import, Toolkit form and bulk upload), and the uncounted
+     * spend is reported on the SED line and page (SedResult.notIctSpecific).
      */
     requireIctSpecificInitiative?: boolean;
     /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */

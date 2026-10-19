@@ -42,9 +42,14 @@ export default function SED() {
     // already scores these but no UI to enter (audit Wave 3 safe subset).
     isStructuredProject: false,
     isLimitedServicesCommunity: false,
+    // ICT: only a contribution marked as an ICT-specific initiative scores.
+    ictSpecificInitiative: false,
   });
   const errs = useFieldErrors();
   const isConstructionSector = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'CONSTRUCTION';
+  // A sector that scores ICT-specific initiatives only (ICT QSE) asks the
+  // question on every contribution; without it a contribution never scores.
+  const asksIctSpecific = calculatorConfig?.sed?.requireIctSpecificInitiative === true;
 
   const npat = client.npat;
   // Drive target % and max points from the sector calculatorConfig instead of
@@ -98,9 +103,11 @@ export default function SED() {
       // sectors always pass false so the indicators stay dormant.
       isStructuredProject: newSed.isStructuredProject,
       isLimitedServicesCommunity: newSed.isLimitedServicesCommunity,
+      // Asked only where the sector scores by it; elsewhere left unset.
+      ...(asksIctSpecific ? { ictSpecificInitiative: newSed.ictSpecificInitiative } : {}),
     } as any);
 
-    setNewSed({ beneficiary: '', type: 'grant', amount: 0, isStructuredProject: false, isLimitedServicesCommunity: false });
+    setNewSed({ beneficiary: '', type: 'grant', amount: 0, isStructuredProject: false, isLimitedServicesCommunity: false, ictSpecificInitiative: false });
     setIsAddOpen(false);
     toast({ title: "Contribution Added", description: `Added to SED ledger.` });
   };
@@ -182,6 +189,23 @@ export default function SED() {
                   </SelectContent>
                 </Select>
               </div>
+              {asksIctSpecific && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-xs text-muted-foreground">ICT</Label>
+                  <div className="col-span-3 space-y-1 text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newSed.ictSpecificInitiative}
+                        onChange={e => setNewSed({...newSed, ictSpecificInitiative: e.target.checked})}
+                        data-testid="input-sed-ict-specific"
+                      />
+                      ICT-specific initiative
+                    </label>
+                    <p className="text-xs text-muted-foreground">Only ICT-specific initiatives count towards the ICT SED score.</p>
+                  </div>
+                </div>
+              )}
               {isConstructionSector && (
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-xs text-muted-foreground">Construction flags</Label>
@@ -340,6 +364,13 @@ export default function SED() {
               classified: {score.unrecognisedTypes.join(", ")}. Set the contribution type on those rows to include them.
             </div>
           )}
+          {(score.notIctSpecific?.count ?? 0) > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200" data-testid="sed-not-ict-note">
+              R{score.notIctSpecific!.spend.toLocaleString("en-ZA")} across {score.notIctSpecific!.count} contribution{score.notIctSpecific!.count === 1 ? "" : "s"} scored
+              nothing because {score.notIctSpecific!.count === 1 ? "it is" : "they are"} not marked as an ICT-specific initiative. Only ICT-specific
+              initiatives count towards ICT SED; answer Yes to "ICT-Specific?" on those that are.
+            </div>
+          )}
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
               <span>data as at <strong className="text-foreground">{client.measurementPeriodEnd ? new Date(client.measurementPeriodEnd).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>
@@ -390,6 +421,9 @@ export default function SED() {
                 <tr>
                   <th className="h-10 px-4 text-left font-medium text-muted-foreground">Beneficiary Name</th>
                   <th className="h-10 px-4 text-left font-medium text-muted-foreground">Type</th>
+                  {asksIctSpecific && (
+                    <th className="h-10 px-4 text-left font-medium text-muted-foreground">ICT-specific?</th>
+                  )}
                   <th className="h-10 px-4 text-right font-medium text-muted-foreground">Amount</th>
                   <th className="h-10 px-2"></th>
                 </tr>
@@ -397,7 +431,7 @@ export default function SED() {
               <tbody>
                 {contributions.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={asksIctSpecific ? 5 : 4} className="p-8 text-center text-muted-foreground">
                       <HeartHandshake className="h-8 w-8 mx-auto mb-2 opacity-30" />
                       <p className="font-medium">No contributions yet</p>
                       <p className="text-sm mt-1">Add your first SED contribution to start tracking.</p>
@@ -411,6 +445,11 @@ export default function SED() {
                         {c.type.replace('_', ' ')}
                       </span>
                     </td>
+                    {asksIctSpecific && (
+                      <td className="p-4 text-sm" data-testid={`sed-ict-specific-${idx}`}>
+                        {c.ictSpecificInitiative === true ? 'Yes' : c.ictSpecificInitiative === false ? 'No' : 'Not answered'}
+                      </td>
+                    )}
                     <td className="p-4 text-right font-mono font-medium">R {c.amount.toLocaleString()}</td>
                     <td className="p-2 text-right">
                       <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => removeSedContribution(c.id)}><Trash2 className="h-3 w-3" /></Button>

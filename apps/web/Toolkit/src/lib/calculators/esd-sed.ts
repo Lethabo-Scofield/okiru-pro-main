@@ -84,6 +84,12 @@ export interface SedResult {
    */
   unrecognisedTypes: string[];
   excludedSpend: number;
+  /**
+   * Where only ICT-specific initiatives count (sed.requireIctSpecificInitiative):
+   * the contributions not marked as one (answered No, or not answered) and
+   * their rand value, none of which is scored. Absent elsewhere.
+   */
+  notIctSpecific?: { spend: number; count: number };
   total: number;
   /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
   exactTotal?: number;
@@ -538,13 +544,15 @@ export function calculateSedScore(
   const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
-  // ICT: a contribution answered "not an ICT-specific initiative" counts 0.
+  // ICT: only a contribution marked as an ICT-specific initiative counts. One
+  // answered No, or with no answer, counts 0, as the toolkit's
+  // SED Data[Recognised Amount] = IF([ICT Specific Initiative?]="Yes", …, 0).
   const requireIct = sc.requireIctSpecificInitiative === true;
   let notIctSpend = 0;
   let notIctCount = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
-    if (requireIct && c.ictSpecificInitiative === false) {
+    if (requireIct && c.ictSpecificInitiative !== true) {
       notIctSpend += amount;
       notIctCount += 1;
       return acc;
@@ -599,12 +607,13 @@ export function calculateSedScore(
   const excludedClause = (excludedSpend > 0
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
     : '') + (notIctCount > 0
-    ? `; ${formatRand(notIctSpend)} across ${notIctCount} contribution${notIctCount === 1 ? '' : 's'} not counted: not an ICT-specific initiative`
+    ? `; ${formatRand(notIctSpend)} across ${notIctCount} contribution${notIctCount === 1 ? '' : 's'} not counted: not marked as an ICT-specific initiative`
     : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),
     excludedSpend: round2(excludedSpend),
+    ...(requireIct ? { notIctSpecific: { spend: round2(notIctSpend), count: notIctCount } } : {}),
     total,
     exactTotal: clampScore(score, maxPoints),
     subMinimumMet: true,

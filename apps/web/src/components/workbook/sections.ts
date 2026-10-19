@@ -1385,7 +1385,14 @@ export const ESD_COLUMNS: ColumnDef[] = [
 export const SED_COLUMNS: ColumnDef[] = [
   { key: "beneficiaryName", label: "Beneficiary Name", type: "text", required: true, width: 220 },
   { key: "descriptionOfSpend", label: "Description of Spend", type: "text", required: true, width: 260 },
-  yesNoColumn("ictSpecificInitiative", "ICT-Specific?", { width: 130 }),
+  // ICT only (hidden from other sectors via getSection). The ICT QSE score
+  // counts a contribution only when this is Yes, as the Empower toolkit's
+  // SED Data does; No or blank counts 0.
+  yesNoColumn("ictSpecificInitiative", "ICT-Specific?", {
+    width: 130,
+    aliases: ["ICT Specific Initiative?", "ICT Specific Initiative", "ICT-Specific Initiative"],
+    guidance: "ICT only: is this an ICT-specific initiative? Only contributions answered Yes count towards the ICT SED score.",
+  }),
   { key: "contributionType", label: "Contribution Type", type: "select", options: SED_CONTRIBUTION_TYPES, required: true, width: 200, guidance: "Pick the recognition category from the Codes (Statement 500). Hover an option for the definition.", optionGuidance: SED_CONTRIBUTION_GUIDANCE },
   { key: "percentBenefitingBlack", label: "% Benefiting Black", type: "number", required: true, width: 170, validate: percentValidator, validationMessage: "Enter a percentage between 0 and 100 (e.g. 80 not 0.80)" },
   { key: "amount", label: "Amount (R)", type: "number", required: true, width: 140, validate: numericValidator, validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },

@@ -501,7 +501,11 @@ export interface Contribution {
   // Construction-specific beneficiary flags (Phase 1 wiring — see docs/construction-wiring-spec.md)
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
-  /** ICT SED: "ICT Specific Initiative?" — read only where sed.requireIctSpecificInitiative is set. */
+  /**
+   * ICT SED: "ICT Specific Initiative?" — true (Yes), false (No) or unset (not
+   * answered). Read only where sed.requireIctSpecificInitiative is set, and
+   * there only true counts.
+   */
   ictSpecificInitiative?: boolean;
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
 }
