@@ -473,8 +473,11 @@ def edge(name):
         # (prime − actual), free professional services for ED (60%), SED time
         # of employees (80%); and one ED row for a beneficiary that is neither
         # an EME/QSE nor 51% black owned (the QSE template counts it anyway).
+        # Skills: stationery and training-venue costs (the two cost columns no
+        # other case fills) on the disabled learner's row.
         case = edge("qse_rule")
         case["cells"]["Client Information!C3"] = "QSE edge: contribution types"
+        case["tables"]["tblSkillsData"][2].update({"Stationery Cost": 1_500, "Training Facility Cost": 2_500})
         sd, ed = 'Supplier Development', 'Enterprise Development'
         tes = 'Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries'
         case["tables"]["tblESDData"] = [
