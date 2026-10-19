@@ -485,7 +485,7 @@ export function fscProcurement(data: ProcurementData, cfg: CalculatorConfig, sub
       dgTarget: 0.02, dgMaxPts: 2,
       blackWomenThreshold: 0.30,
       allSuppliersIgnoreEmpoweringFlag: true,
-      enhancedRecognitionRule: 'black_owned_small_supplier',
+      enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
     },
     pillarConfigs: { ...cfg.pillarConfigs, preferentialProcurement: { maxPoints: 99, subMinimumPercent: 40 } },
   };
@@ -533,7 +533,7 @@ function fscRecognisedSpend(s: Supplier, cfg: CalculatorConfig): number {
   const mult = table.find((r) => r.level === s.beeLevel)?.multiplier
     ?? ({ 1: 1.35, 2: 1.25, 3: 1.1, 4: 1, 5: 0.8, 6: 0.6, 7: 0.5, 8: 0.1 } as Record<number, number>)[s.beeLevel] ?? 0;
   const adjusted = (Number(s.spend) || 0) * mult;
-  return qualifiesForEnhancedRecognition(s, 'black_owned_small_supplier') ? adjusted * 1.2 : adjusted;
+  return qualifiesForEnhancedRecognition(s, 'black_owned_small_supplier_or_first_time') ? adjusted * 1.2 : adjusted;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

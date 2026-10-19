@@ -236,7 +236,7 @@ export interface CalculatorConfig {
      *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
      *    contract.
      */
-    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'flow_through';
+    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'black_owned_small_supplier_or_first_time' | 'flow_through';
     /**
      * RCOGP Generic only: a Generic supplier first procured as a QSE (EME),
      * ≥51% black and ≥51% flow-through black owned, still counts on the QSE
