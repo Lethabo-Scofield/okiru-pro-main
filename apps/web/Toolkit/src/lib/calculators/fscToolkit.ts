@@ -567,6 +567,10 @@ export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: 
       edGraduationBonusMax: 1, edJobsBonusMax: 1,
       edStockbrokerBonusMax: w.brokerMax, edStockbrokerTarget: w.brokerMax > 0 ? 0.005 : 0,
       applyBeneficiaryQualification: true,
+      // 'ESD and SED Calcs'!A3:D3: bad debts written off on ESD financing, at
+      // 100% (the toolkit does not apply the Code's 50%-of-target cap for
+      // banks and life offices).
+      additionalContributionFactors: { bad_debt: 1.0 },
     },
     pillarConfigs: {
       ...cfg.pillarConfigs,
@@ -792,7 +796,9 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
     discountedLevel = Math.max(1, discountedLevel - yesScore.yesBeeLevelIncrease);
   }
 
-  const toLines = (ls: Line[]): BreakdownLine[] => toBreakdownLines(ls).map((l) => ({ ...l, score: round2(l.score), weighting: round2(l.weighting) }));
+  // Line scores stay unrounded, as every other calculator's do (the page
+  // formats them): rounding here put a 0.625 line half a cent off the toolkit.
+  const toLines = (ls: Line[]): BreakdownLine[] => toBreakdownLines(ls).map((l) => ({ ...l, weighting: round2(l.weighting) }));
   const sumW = (ls: Line[], bonus = true) => round2(ls.reduce((s, l) => s + (bonus || !l.isBonus ? l.weighting : 0), 0));
   const thresholdNote = `Level thresholds scale to this scorecard's ${round2(basePoints)} base points (Level 1 from ${round2(100 / 111 * basePoints)}).`;
 

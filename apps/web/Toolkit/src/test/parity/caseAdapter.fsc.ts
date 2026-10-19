@@ -43,6 +43,7 @@ const SIZE: Record<string, Supplier['enterpriseType']> = { Generic: 'generic', Q
 export function fscContributionKey(label: string): string {
   const l = label.toLowerCase();
   if (l.startsWith('grant')) return 'grant';
+  if (l.startsWith('bad debt')) return 'bad_debt';
   if (l.startsWith('direct cost')) return 'direct_cost';
   if (l.startsWith('discounts')) return 'discounts';
   if (l.startsWith('overhead')) return 'overhead_costs';

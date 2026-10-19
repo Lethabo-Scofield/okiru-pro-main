@@ -54,8 +54,13 @@ TABLES = {
                   _SCEN("Supplier development recipient? (Yes/No)"), _SCEN("3 year contract in place? (Yes/No)"),
                   f"First-time supplier? (Yes/No){NL}[Scenario]", "First-time supplier? (Yes/No)",
                   "Stock broker? (Yes/No)", "Fund manager? (Yes/No)", "Intermediary? (Yes/No)"],
-    "tblESDData": ["Pillar", "Contribution Type", "Amount", "Recognised Amount", "Qualify?"],
+    "tblESDData": ["Pillar", "Contribution Type", "Amount", "Recognised Amount", "Qualify?", "End of Month",
+                   "Graduated to Supplier Development?", "At least 1 job created?",
+                   "Stock brokers, Fund managers or Intermediaries? (Yes/No)"],
 }
+# Text cells the referee reads beyond the Summary Scorecard and Client
+# Information: the period each ESD reading is filtered by.
+TEXT_CELLS = {("ESD Scorecard", "I16"), ("EF & ESD Scorecard - Banks", "I27"), ("EF & ESD Scorecard - Long Term", "I27")}
 ROW = re.compile(r"[A-Z]+(\d+)$")
 
 
@@ -82,7 +87,8 @@ def export(excel_path, case_path, out_path):
         # Values only, and of the labels only those the referee reads (sub-sector, reinsurer).
         cells[sheet] = {ref: {"v": e.get("v")} for ref, e in src.items()
                         if lo <= int(ROW.match(ref).group(1)) <= hi and e.get("v") not in (None, "")
-                        and (not isinstance(e.get("v"), str) or sheet in ("Summary Scorecard", "Client Information"))}
+                        and (not isinstance(e.get("v"), str) or sheet in ("Summary Scorecard", "Client Information")
+                             or (sheet, ref) in TEXT_CELLS)}
     tables = {}
     for name, cols in TABLES.items():
         t = excel["tables"].get(name)

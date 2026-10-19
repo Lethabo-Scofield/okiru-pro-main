@@ -138,6 +138,10 @@ function buildEsdBenefitFactors(config?: CalculatorConfig): Record<string, numbe
       factors[key] = bf.factor;
     }
   }
+  // Opt-in (FSC): types the sector's own toolkit recognises beyond the table.
+  for (const [key, factor] of Object.entries(config?.esd?.additionalContributionFactors ?? {})) {
+    if (Number.isFinite(factor) && !Object.prototype.hasOwnProperty.call(factors, key)) factors[key] = factor;
+  }
   return factors;
 }
 

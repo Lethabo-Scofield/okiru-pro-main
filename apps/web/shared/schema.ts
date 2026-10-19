@@ -275,6 +275,14 @@ export interface CalculatorConfig {
      * ownership. Other templates do not gate the amount this way.
      */
     applyBeneficiaryQualification?: boolean;
+    /**
+     * FSC: contribution types the sector's toolkit recognises beyond the
+     * shared ESD table, with their benefit factor — the FSC toolkit's "Bad Debt
+     * written-offs incurred from the financing of Enterprise and Supplier
+     * Development" at 100% ('ESD and SED Calcs'!D3). Absent elsewhere: an
+     * unlisted type stays unrecognised (0).
+     */
+    additionalContributionFactors?: Record<string, number>;
   };
   sed: {
     maxPoints: number;

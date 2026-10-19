@@ -403,26 +403,56 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
       const value = pts(share, v('MC Toolkit', 'F112'), v('MC Toolkit', 'G112'));
       set(48, value, `Toolkit formula fault: its count of black people with disabilities includes non-executive directors, whom its count of employees leaves out. Employees only: ${disabled} of ${employees} → ${value.toFixed(2)}; the toolkit shows ${F(48).toFixed(2)}.`);
     }
-    // Supplier development: a duplicated blank "Minority Investment" factor row.
-    const sdRows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === 'Supplier Development');
+    // Enterprise and supplier development, from the toolkit's own ESD Data
+    // rows. Two faults are reworked:
+    //  - a duplicated blank "Minority Investment" factor row recognises a
+    //    supplier-development minority investment at 0 (the ED copy says 70%);
+    //  - banks and long-term insurers: the EF & ESD scorecard's period picker
+    //    ('EF & ESD Scorecard - Banks' / '- Long Term'!I27) takes its date from
+    //    the Transaction Financing table (Validation!H168:H186), and the SD, ED
+    //    and bonus lines filter the ESD rows by it — with no transaction
+    //    financing in the period they read nothing. The ESD rows' own period is
+    //    the ESD Scorecard's (I16, Validation!H105:H123).
     const subSector = String(sheets['Client Information']?.D7?.v ?? 'Others').toLowerCase();
-    const sdTarget = subSector === 'banks' ? v('EF & ESD Scorecard - Banks', 'E17')
-      : subSector === 'long-term insurers' ? v('EF & ESD Scorecard - Long Term', 'E16')
-        : v('ESD Scorecard', 'E2') * v('ESD Scorecard', 'F7');
-    const sdMax = subSector === 'banks' ? v('EF & ESD Scorecard - Banks', 'C17')
-      : subSector === 'long-term insurers' ? v('EF & ESD Scorecard - Long Term', 'C16')
-        : v('ESD Scorecard', 'E7');
-    if (sdRows.length > 0 && sdTarget > 0) {
-      let recognised = 0;
-      let reworked = false;
-      for (const r of sdRows) {
-        const minority = /^minority investment/i.test(String(r['Contribution Type'] ?? ''));
-        if (minority && n(r['Recognised Amount']) === 0 && yes(r['Qualify?'])) { recognised += n(r['Amount']) * 0.7; reworked = true; }
-        else recognised += n(r['Recognised Amount']);
-      }
-      if (reworked) {
-        const sd = Math.min((Math.max(recognised, 0) / sdTarget) * sdMax, sdMax);
-        set(75, sd, `Toolkit formula fault: its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%). At 70%: ${sd.toFixed(2)}; the toolkit shows ${F(75).toFixed(2)}.`);
+    const ef = subSector === 'banks' ? { sheet: 'EF & ESD Scorecard - Banks', sd: 17, ed: 19, grad: 21, jobs: 22, broker: 0 }
+      : subSector === 'long-term insurers' ? { sheet: 'EF & ESD Scorecard - Long Term', sd: 16, ed: 18, grad: 20, jobs: 21, broker: 22 }
+        : null;
+    const esdPeriod = String(sheets['ESD Scorecard']?.I16?.v ?? '');
+    const efPeriod = ef ? String(sheets[ef.sheet]?.I27?.v ?? '') : esdPeriod;
+    const periodFault = ef !== null && esdPeriod !== '' && efPeriod !== esdPeriod;
+    const esdRows = tableRows(tables, 'tblESDData')
+      .filter((r) => (ef ? String(r['End of Month'] ?? '') === esdPeriod : true));
+    const sdTarget = ef ? v(ef.sheet, `E${ef.sd}`) : v('ESD Scorecard', 'E2') * v('ESD Scorecard', 'F7');
+    const sdMax = ef ? v(ef.sheet, `C${ef.sd}`) : v('ESD Scorecard', 'E7');
+    let sdRecognised = 0;
+    let minorityFault = false;
+    for (const r of esdRows.filter((x) => String(x['Pillar'] ?? '') === 'Supplier Development')) {
+      const minority = /^minority investment/i.test(String(r['Contribution Type'] ?? ''));
+      if (minority && n(r['Recognised Amount']) === 0 && yes(r['Qualify?'])) { sdRecognised += n(r['Amount']) * 0.7; minorityFault = true; }
+      else sdRecognised += n(r['Recognised Amount']);
+    }
+    const periodNote = periodFault
+      ? `its EF & ESD scorecard takes its period from the transaction-financing rows (${efPeriod.slice(0, 10) === '1899-12-30' ? 'none in this period' : efPeriod.slice(0, 10)}), so the ESD rows of ${esdPeriod.slice(0, 10)} drop out`
+      : '';
+    if ((minorityFault || periodFault) && sdTarget > 0) {
+      const sd = Math.min((Math.max(sdRecognised, 0) / sdTarget) * sdMax, sdMax);
+      const why = [minorityFault ? 'its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%)' : '', periodNote].filter(Boolean).join('; and ');
+      set(75, sd, `Toolkit formula fault: ${why}. Reworked: ${sd.toFixed(2)}; the toolkit shows ${F(75).toFixed(2)}.`);
+    }
+    if (periodFault && ef) {
+      const ed = esdRows.filter((x) => String(x['Pillar'] ?? '') === 'Enterprise Development');
+      const sum = (rs: Array<Record<string, unknown>>) => rs.reduce((a, r) => a + n(r['Recognised Amount']), 0);
+      const note = (value: number, row: number) => `Toolkit formula fault: ${periodNote}. In the ESD rows' own period: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`;
+      const edPts = pts(sum(ed), v(ef.sheet, `E${ef.ed}`), v(ef.sheet, `C${ef.ed}`));
+      set(78, edPts, note(edPts, 78));
+      const grad = esdRows.some((r) => yes(r['Graduated to Supplier Development?'])) ? v(ef.sheet, `C${ef.grad}`) : 0;
+      set(79, grad, note(grad, 79));
+      const jobs = esdRows.some((r) => yes(r['At least 1 job created?'])) ? v(ef.sheet, `C${ef.jobs}`) : 0;
+      set(80, jobs, note(jobs, 80));
+      if (ef.broker) {
+        const flagged = ed.filter((r) => yes(r['Stock brokers, Fund managers or Intermediaries? (Yes/No)']));
+        const broker = pts(sum(flagged), v(ef.sheet, `E${ef.broker}`), v(ef.sheet, `C${ef.broker}`));
+        set(81, broker, note(broker, 81));
       }
     }
   }
@@ -455,6 +485,7 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
     [70, [71, 72]],
     [89, [90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101]],
     [74, [75]],
+    [77, [78, 79, 80, 81]],
     [83, [84, 85, 86, 87]],
   ];
   let delta = 0;
@@ -481,7 +512,7 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
       ? fixed(70) < v('Summary Scorecard', 'C70') * 0.4
       : [61, 62, 63, 64, 65].reduce((a, r) => a + fixed(r), 0) < ppBaseMax * 0.4)
     || fixed(75) < v('Scorecard Calculations', 'G8')
-    || F(78) < v('Scorecard Calculations', 'G9');
+    || fixed(78) < v('Scorecard Calculations', 'G9');
   const discounted = failed ? (achieved >= 8 ? 9 : achieved + 1) : achieved;
   const exAchieved = levelNumber(sheets['Summary Scorecard']?.F109?.v);
   const exDiscounted = levelNumber(sheets['Summary Scorecard']?.F111?.v);

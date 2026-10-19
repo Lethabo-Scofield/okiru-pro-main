@@ -473,7 +473,9 @@ export type ESDContributionType =
   | 'professional_services_discounted'
   | 'employee_secondment'
   | 'employee_mentorship'
-  | 'non_core_business_transfer';
+  | 'non_core_business_transfer'
+  /** FSC: bad debts written off on ESD financing (scored only where the sector config recognises it). */
+  | 'bad_debt';
 
 export interface Contribution {
   id: string;
