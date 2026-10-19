@@ -2,7 +2,7 @@
 Master v1.0.1), written in the toolkit's own vocabulary: sheet cells + table
 rows. Synthetic only: invented names, no ID numbers, no client data.
 
-  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary|factors|coverage]
+  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary|factors|coverage|coverage-low]
   py -3 gen_case_agri_generic.py --all <out_dir>      (the standard case set)
 
 Profiles:
@@ -25,6 +25,8 @@ Profiles:
            register rows, TMPS exclusions, stationery costs, foreign black
            learners and employees, the spend declaration "No" with the
            headcount one "Yes".
+  coverage-low  the same, with black ownership well below target so the
+           later-row debt netting shows in the points.
 """
 import sys, json, random, datetime, os
 
@@ -421,25 +423,34 @@ TMPS_EXCLUSIONS = ['Taxes and Levies', 'Movements in provisions (e.g. leave, bon
                    'Enterprise and Supplier Development']
 
 
-def make_coverage(seed):
+def make_coverage(seed, low_black=False):
     """An ordinary company that also reaches the inputs the other profiles
     leave alone: acquisition debt on a non-black holder and on a partly black
     holder in LATER rows of the register (the toolkit nets those rows another
     way), TMPS exclusions, stationery costs, foreign black learners and
     employees, and the spend declaration answered "No" while the headcount one
     is "Yes". Odd seeds let spend + buffer outweigh the TMPS; even seeds keep
-    the TMPS (after exclusions) the larger."""
+    the TMPS (after exclusions) the larger.
+
+    low_black ("coverage-low"): black ownership kept well below the 25%
+    targets, so the later-row debt netting moves the economic-interest and
+    net-value points instead of disappearing under their caps; on even seeds
+    the partly black holder's loan is more than eight years old."""
     case = make(seed, "full")
     rng = random.Random(seed * 7919)
     cells, tables = case["cells"], case["tables"]
 
     # Ownership: four holders; debt on the first (black, more than 60% of its
     # stake), the second (not black) and the third (partly black).
-    shares = [rng.randint(10, 60) * 100 for _ in range(4)]
+    if low_black:
+        shares = [1000, 5000, 2500, 1500]
+        spec = [(0.5, 0.7), (0.0, 0.3), (0.3, 0.2), (0.2, 0.0)]
+    else:
+        shares = [rng.randint(10, 60) * 100 for _ in range(4)]
+        spec = [(1.0, 0.7), (0.0, 0.3), (0.4, 0.2), (0.8, 0.0)]   # (BO%, debt as a share of the stake)
     total_shares = sum(shares)
     company_value = rng.randint(50, 300) * 1_000_000
     price = round(company_value / total_shares, 2)
-    spec = [(1.0, 0.7), (0.0, 0.3), (0.4, 0.2), (0.8, 0.0)]   # (BO%, debt as a share of the stake)
     own_rows = []
     for i, (bo, debt_share) in enumerate(spec):
         stake = shares[i] * price
@@ -453,6 +464,8 @@ def make_coverage(seed):
         }
         if debt_share:
             row["Loan Date"] = d(rng.randint(2018, 2024), rng.randint(1, 12), 1)
+            if low_black and seed % 2 == 0 and i == 2:
+                row["Loan Date"] = "2014-06-01"
         own_rows.append(row)
     tables["tblOwnershipData"] = own_rows
     tables["tblCompanyValuation"] = [{"Date": DATA_DATE, "Company Asset Value": company_value,
@@ -491,7 +504,7 @@ def make_coverage(seed):
         cells.pop("Procurement Scorecard!D4", None)
     else:
         cells["Procurement Scorecard!D4"] = buffer
-    case["profile"] = "coverage"
+    case["profile"] = "coverage-low" if low_black else "coverage"
     return case
 
 
@@ -502,6 +515,8 @@ def build(seed, profile):
         return make_factors(seed)
     if profile == "coverage":
         return make_coverage(seed)
+    if profile == "coverage-low":
+        return make_coverage(seed, low_black=True)
     return make(seed, profile)
 
 
@@ -509,7 +524,7 @@ def build(seed, profile):
 STANDARD = [(101, "full"), (102, "full"), (103, "small"), (104, "edge"), (105, "full"), (106, "lean"),
             (107, "discount"), (108, "full"), (109, "small"), (110, "edge"), (111, "full"), (112, "full"),
             (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary"), (118, "factors"),
-            (119, "coverage"), (120, "coverage")]
+            (119, "coverage"), (120, "coverage"), (121, "coverage-low"), (122, "coverage-low")]
 
 
 if __name__ == "__main__":
