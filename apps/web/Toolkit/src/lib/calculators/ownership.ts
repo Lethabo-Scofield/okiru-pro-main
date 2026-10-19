@@ -520,7 +520,11 @@ function calculateToolkitOwnership(
   const votingRightsBWO = safeRatio(blackWomenShare, ot.womenVotingTarget, ot.womenVotingMaxPts);
   const economicInterestBlack = safeRatio(eiBlack, ot.economicInterestTarget, ot.economicInterestMaxPts);
   const economicInterestBWO = safeRatio(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts);
-  const designatedGroups = safeRatio(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax);
+  // A QSE template scores ONE line, "black new entrants or designated groups",
+  // whose measure is the two shares added ('Ownership Data'!Y4 + Z4); the
+  // Generic template scores them on separate lines.
+  const designatedMeasure = ot.combinedNewEntrantsDesignated ? designatedShare + newEntrantShare : designatedShare;
+  const designatedGroups = safeRatio(designatedMeasure, ot.designatedGroupsTarget, ot.designatedGroupsMax);
   const newEntrants = safeRatio(newEntrantShare, ot.newEntrantsTarget, ot.newEntrantsMaxPts);
   const netValuePoints = safeRatio(netValueMeasure, netValueTarget, ot.netValueMaxPts);
 
@@ -584,7 +588,16 @@ function calculateToolkitOwnership(
           note: `Black women's economic interest ${pointsWorking(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts)}.${eiWorking(freeBlackWomen, netIndebtedBlackWomen, 'black women')}`,
         }]
       : []),
-    ...(ot.designatedGroupsMax > 0
+    ...(ot.designatedGroupsMax > 0 && ot.combinedNewEntrantsDesignated
+      ? [{
+          name: 'Economic interest of black new entrants or designated groups',
+          target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`,
+          weighting: ot.designatedGroupsMax,
+          score: designatedGroups,
+          note: `Black new entrants' (${pctText(newEntrantShare)}) and designated groups' (${pctText(designatedShare)}) economic interest together ${pointsWorking(designatedMeasure, ot.designatedGroupsTarget, ot.designatedGroupsMax)}.`,
+        }]
+      : []),
+    ...(ot.designatedGroupsMax > 0 && !ot.combinedNewEntrantsDesignated
       ? [{
           name: 'Economic interest of black designated groups or participants in ownership schemes',
           target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`,
@@ -630,7 +643,7 @@ function calculateToolkitOwnership(
       blackWomenVotingPercentage: round2(blackWomenShare),
       economicInterestPercentage: round2(eiBlack),
       economicInterestBWOPercentage: round2(eiBlackWomen),
-      designatedGroupPercentage: round2(designatedShare),
+      designatedGroupPercentage: round2(designatedMeasure),
       netValuePercentage: round2(netValueMeasure),
       newEntrantEIPercentage: round2(newEntrantShare),
     },

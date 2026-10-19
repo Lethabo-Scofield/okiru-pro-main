@@ -664,6 +664,157 @@ function scoreToolkitMethod(data: SkillsData, p: ToolkitParams): ToolkitOutcome 
   };
 }
 
+// ---------------------------------------------------------------------------
+// RCOGP QSE toolkit method (skills.method = 'toolkit_qse') — the Empower RCOGP
+// QSE template v1.1 (tblSkillsData computed columns → 'Skills Calcs' rows 7,
+// 14, 21 and 28), checked line by line against the workbook recalculated in
+// Excel. No EAP split. Each spend line takes, for its learners:
+//   course costs of categories A–E + stipends of categories B, C, D
+//   + F & G course costs and every row's other costs, capped together at 15%
+//     of ALL training spend (every learner, every race)
+//   + 15% of the training manager's salary and training overheads, shared by
+//     the line's group's share of the workforce,
+// against target × leviable amount. The absorption bonus is the black
+// learners absorbed after a learnership they completed while unemployed, over
+// all learners who completed one while unemployed (the template's own
+// headcount cell; its formula divides by all absorbed learners instead — see
+// docs/toolkits/parity/findings/rcogp_qse.md).
+// ---------------------------------------------------------------------------
+
+interface QseRow {
+  black: boolean;
+  female: boolean;
+  disabled: boolean;
+  lai: boolean;
+  unemployed: boolean;
+  completed: boolean;
+  absorbed: boolean;
+  /** 'Cat A - E Course Cost' + 'Cat BCD Stipends/Salaries'. */
+  direct: number;
+  /** 'Cat F & G and Other Costs'. */
+  fgOther: number;
+  catCode: TrainingCategoryCode | '';
+}
+
+function qseRow(prog: TrainingProgram): QseRow {
+  const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
+  const catCode: TrainingCategoryCode | '' = (ALL_CATEGORIES as string[]).includes(raw) ? (raw as TrainingCategoryCode) : '';
+  const other =
+    (prog.travelCost || 0) + (prog.accommodationCost || 0) + (prog.cateringCost || 0) +
+    (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
+  let course = prog.courseCost || 0;
+  const salary = prog.salaryCost || 0;
+  // A row that carries only a lump-sum cost is read as its course cost.
+  if (course === 0 && salary === 0 && other === 0) {
+    const lump = prog.totalCost ?? prog.cost ?? 0;
+    if (lump > 0) course = lump;
+  }
+  const isFG = catCode === 'F' || catCode === 'G';
+  const isBCD = catCode === 'B' || catCode === 'C' || catCode === 'D';
+  return {
+    black: isBlackLearner(prog),
+    female: String(prog.gender ?? '').trim() === 'Female',
+    disabled: Boolean(prog.isDisabled),
+    lai: isBCD,
+    unemployed: isUnemployed(prog),
+    completed: Boolean(prog.isCompleted),
+    absorbed: Boolean(prog.isAbsorbed),
+    direct: (catCode !== '' && !isFG ? course : 0) + (isBCD ? salary : 0),
+    fgOther: (isFG ? course : 0) + other,
+    catCode,
+  };
+}
+
+interface QseOutcome {
+  learning: number;
+  female: number;
+  disabled: number;
+  absorption: number;
+  notes: [string, string, string, string];
+  recognised: [number, number, number];
+  absorbed: number;
+  completedUnemployed: number;
+  categoryBreakdown: CategoryBreakdown[];
+}
+
+function scoreToolkitQseMethod(
+  data: SkillsData,
+  p: {
+    leviable: number;
+    targets: [number, number, number];
+    maxPts: [number, number, number];
+    absorptionMaxPts: number;
+    absorptionTargetPct: number;
+    cap: number;
+    adminCap: number;
+  },
+): QseOutcome {
+  const rows = (data.trainingPrograms || []).map(qseRow);
+  const shares = data.workforceShares ?? {};
+  const share = (keys: string[]) => keys.reduce((a, k) => a + (shares[k] ?? 0), 0);
+  const adminCosts = (data.trainingManagerSalary ?? 0) + (data.trainingOverheadCost ?? 0);
+  const allSpend = rows.reduce((a, r) => a + r.direct + r.fgOther, 0);
+  const capAmount = allSpend * p.cap;
+
+  const groups: Array<{ label: string; pick: (r: QseRow) => boolean; workforce: number }> = [
+    { label: 'black learners', pick: (r) => r.black, workforce: share(['AM', 'CM', 'IM', 'AF', 'CF', 'IF']) },
+    { label: 'black women', pick: (r) => r.black && r.female, workforce: share(['AF', 'CF', 'IF']) },
+    { label: 'black learners with disabilities', pick: (r) => r.black && r.disabled, workforce: shares.PWD ?? 0 },
+  ];
+  const points: number[] = [];
+  const recognised: number[] = [];
+  const notes: string[] = [];
+  groups.forEach((g, i) => {
+    const sel = rows.filter(g.pick);
+    const direct = sel.reduce((a, r) => a + r.direct, 0);
+    const fgOther = sel.reduce((a, r) => a + r.fgOther, 0);
+    const fgRecognised = Math.min(fgOther, capAmount);
+    const admin = p.adminCap * adminCosts * g.workforce;
+    const total = direct + fgRecognised + admin;
+    const target = p.leviable * p.targets[i];
+    const pts = cappedRatio(total, target, p.maxPts[i]);
+    points.push(pts);
+    recognised.push(total);
+    notes.push(
+      `Spend on ${g.label}: course costs (A–E) and B/C/D stipends ${fmtRand(direct)}` +
+      ` + F & G and other costs ${fmtRand(fgRecognised)}${fgRecognised < fgOther - 0.005 ? ` (of ${fmtRand(fgOther)}, capped at ${fmtPct(p.cap)} of all training spend ${fmtRand(allSpend)})` : ''}` +
+      (admin > 0 ? ` + ${fmtPct(p.adminCap)} of training-admin costs × ${fmtPct(g.workforce)} workforce share ${fmtRand(admin)}` : '') +
+      ` = ${fmtRand(total)} ÷ ${fmtRand(target)} (${fmtPct(p.targets[i])} × ${fmtRand(p.leviable)}) × ${fmtNum(p.maxPts[i])} = ${pts.toFixed(2)} (max ${fmtNum(p.maxPts[i])}).`,
+    );
+  });
+
+  const completedUnemployed = rows.filter((r) => r.lai && r.completed && r.unemployed).length;
+  const absorbed = rows.filter((r) => r.black && r.lai && r.completed && r.absorbed && r.unemployed).length;
+  const absorptionRate = completedUnemployed > 0 ? absorbed / completedUnemployed : 0;
+  const absorption = cappedRatio(absorptionRate, p.absorptionTargetPct / 100, p.absorptionMaxPts);
+  notes.push(completedUnemployed > 0
+    ? `${absorbed} black learner(s) absorbed of ${completedUnemployed} who completed a learnership, apprenticeship or internship while unemployed ` +
+      `= ${fmtPct(absorptionRate)} vs ${fmtNum(p.absorptionTargetPct)}% → ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`
+    : 'No learner completed a learnership, apprenticeship or internship while unemployed, so nothing could be absorbed.');
+
+  const spendByCat: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.black || !r.catCode) continue;
+    spendByCat[r.catCode] = (spendByCat[r.catCode] ?? 0) + r.direct + r.fgOther;
+  }
+  const categoryBreakdown: CategoryBreakdown[] = ALL_CATEGORIES.map((code) => ({
+    code,
+    label: CATEGORY_LABELS[code].label,
+    examples: CATEGORY_LABELS[code].examples,
+    spend: spendByCat[code] ?? 0,
+    recognisedSpend: spendByCat[code] ?? 0,
+    cap: code === 'F' || code === 'G' ? p.cap : undefined,
+    capApplied: false,
+  }));
+
+  return {
+    learning: points[0], female: points[1], disabled: points[2], absorption,
+    notes: notes as [string, string, string, string],
+    recognised: recognised as [number, number, number],
+    absorbed, completedUnemployed, categoryBreakdown,
+  };
+}
+
 export function calculateSkillsScore(
   data: SkillsData,
   config?: CalculatorConfig,
@@ -722,6 +873,59 @@ export function calculateSkillsScore(
     subMinThreshold > 0 ? base >= (subMinThreshold / 100) * (learningMaxPts + bursaryMaxPts + disabledMaxPts + learnershipMaxPts) : true;
   const province = normalizeProvince(eapProvince || 'National') as Province;
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
+
+  if (sc.method === 'toolkit_qse') {
+    // The QSE template caps F & G and other costs, and shares training-admin
+    // costs, at 15% each ('Skills Calcs' O7 = all spend × 15%; 'Employee
+    // Demographics' rows 7-8 = cost × 15% × workforce share).
+    const QSE_TOOLKIT_CAP = 0.15;
+    const q = scoreToolkitQseMethod(data, {
+      leviable: leviableAmount > 0 ? leviableAmount : 0,
+      targets: [overallTargetPct, bursaryTargetPct, disabledTargetPct],
+      maxPts: [learningMaxPts, bursaryMaxPts, disabledMaxPts],
+      absorptionMaxPts,
+      absorptionTargetPct,
+      cap: QSE_TOOLKIT_CAP,
+      adminCap: QSE_TOOLKIT_CAP,
+    });
+    const base = q.learning + q.female + q.disabled;
+    const lines: SkillsSubLine[] = [
+      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(2)}% of payroll`, weighting: learningMaxPts, score: q.learning, note: q.notes[0] },
+      { name: "Expenditure on learning programmes for Black women", target: `${(bursaryTargetPct * 100).toFixed(2)}% of payroll`, weighting: bursaryMaxPts, score: q.female, note: q.notes[1] },
+      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(2)}% of payroll`, weighting: disabledMaxPts, score: q.disabled, note: q.notes[2] },
+      ...(learnershipMaxPts > 0
+        ? [{ name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: 0 }]
+        : []),
+      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(0)}% absorption`, weighting: absorptionMaxPts, score: q.absorption, isBonus: true, note: q.notes[3] },
+    ];
+    return {
+      learningProgrammes: round2(q.learning),
+      bursaries: round2(q.female),
+      disabledLearning: round2(q.disabled),
+      learnerships: 0,
+      absorption: round2(q.absorption),
+      total: round2(clampScore(base + q.absorption, maxPoints)),
+      exactTotal: clampScore(base + q.absorption, maxPoints),
+      subMinimumMet: subMinimumMetFor(base),
+      categoryBreakdown: q.categoryBreakdown,
+      subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
+      eapBreakdowns: {},
+      eapProvince: province,
+      rawStats: {
+        blackSpend: round2(q.recognised[0]),
+        bursarySpend: round2(q.recognised[1]),
+        disabledSpend: round2(q.recognised[2]),
+        learnershipCount: trainingPrograms.filter((t) => isBlackLearner(t) && isLAIProgram(t)).length,
+        absorbedCount: q.absorbed,
+        totalBlackLearners: trainingPrograms.filter(isBlackLearner).length,
+        absorptionRate: q.completedUnemployed > 0 ? q.absorbed / q.completedUnemployed : 0,
+        totalRecognisedSpend: round2(q.recognised[0]),
+        targetOverall: round2(TARGET_OVERALL),
+        targetBursaries: round2(TARGET_BURSARIES),
+        targetDisabled: round2(TARGET_DISABLED),
+      },
+    };
+  }
 
   if (sc.method === 'toolkit') {
     // No fallbacks: a missing headcount or leviable amount scores the lines

@@ -17,6 +17,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
+import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export const RCOGP_QSE_SECTOR_CODE = 'RCOGP' as const;
 export const RCOGP_QSE_SCORECARD_TYPE = 'QSE' as const;
@@ -272,9 +273,62 @@ export function sectorConfigToQseCalculatorConfig(sc: SectorConfig): CalculatorC
   };
 }
 
+/**
+ * Where RCOGP QSE follows its Empower toolkit (BBBEE Toolkit (RCOGP QSE)
+ * v1.1, checked line by line against the workbook recalculated in Excel —
+ * docs/toolkits/parity/findings/rcogp_qse.md). Each is a method choice:
+ *   - ownership by the toolkit's arithmetic (holders weighed by share value,
+ *     acquisition debt netted per black holder, net value against 100% of
+ *     black economic interest), the combined "new entrants or designated
+ *     groups" line measured as the two shares added;
+ *   - Skills by the QSE toolkit's arithmetic (skills.method 'toolkit_qse');
+ *   - the all-suppliers line counts every supplier's recognised spend (the
+ *     toolkit never reads "Empowering Supplier?"), and a first-time ≥51% black
+ *     QSE/EME supplier earns the 1.2 factor as the template means it;
+ *   - guarantees are recognised at 50% (the template's benefit-factor table;
+ *     the Codes say 3%);
+ *   - the Enterprise Development sub-minimum, 40% of the 5-point base line
+ *     ('Scorecard Calculations'!F8). RCOGP_QSE in apps/api still says 0.
+ * Discounting stays the QSE rule in the store (Ownership plus Skills or
+ * Enterprise and Supplier Development); the toolkit's own discount formula
+ * applies the large-enterprise rule, which is flagged, not ported.
+ */
+function withEmpowerQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+  const pc = cfg.pillarConfigs ?? {};
+  return {
+    ...cfg,
+    pillarConfigs: {
+      ...pc,
+      enterpriseDevelopment: {
+        ...(pc.enterpriseDevelopment ?? { maxPoints: 7 }),
+        subMinimumPercent: 40,
+      },
+    },
+    ownership: {
+      ...cfg.ownership,
+      ownershipMethod: 'toolkit',
+      netValueTarget: 1,
+    },
+    skills: {
+      ...cfg.skills,
+      method: 'toolkit_qse',
+    },
+    procurement: {
+      ...cfg.procurement,
+      allSuppliersIgnoreEmpoweringFlag: true,
+      enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
+    },
+    benefitFactors: cfg.benefitFactors.map((bf) =>
+      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
+        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
+        : bf,
+    ),
+  };
+}
+
 /** Complete RCOGP QSE config — authoritative for scorecard, tests, and sector wiring. */
 export const RCOGP_QSE_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToQseCalculatorConfig(RCOGP_QSE);
+  withEmpowerQseToolkitMethod(sectorConfigToQseCalculatorConfig(RCOGP_QSE));
 
 export function isRcogpQseSector(
   sectorCode: string,

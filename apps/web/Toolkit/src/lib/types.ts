@@ -344,6 +344,8 @@ export interface Supplier {
   isEmpoweringSupplier: boolean;         // Mandatory for Generic/QSE
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
+  /** First-time supplier (RCOGP QSE toolkit's third route to the 1.2 recognition factor). */
+  isFirstTimeSupplier?: boolean;
   
   // Dates
   firstProcurementDate?: string;
