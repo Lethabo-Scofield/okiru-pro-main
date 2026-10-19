@@ -658,6 +658,12 @@ export interface BreakdownLine {
   target: string;
   weighting: number;
   score: number;
+  /**
+   * The line's score before it was rounded to the cent for display, where the
+   * calculator gives it (the Skills toolkit method). Lets a parity check
+   * compare the arithmetic itself rather than the displayed cent.
+   */
+  exactScore?: number;
   isBonus?: boolean;
   /** Methodology note attached to this line (e.g. why a bonus scored 0). */
   note?: string;

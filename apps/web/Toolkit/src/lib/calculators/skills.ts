@@ -25,6 +25,8 @@ export interface SkillsSubLine {
   target: string;
   weighting: number;
   score: number;
+  /** The score before rounding to the cent (toolkit method). */
+  exactScore?: number;
   isBonus?: boolean;
   /** The line's arithmetic in plain words, for the reviewer. */
   note?: string;
@@ -864,7 +866,7 @@ export function calculateSkillsScore(
       exactTotal: clampScore(base + t.absorption, maxPoints),
       subMinimumMet: subMinimumMetFor(base),
       categoryBreakdown: t.categoryBreakdown,
-      subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
+      subLines: lines.map(l => ({ ...l, score: round2(l.score), exactScore: l.score })),
       eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
       eapProvince: province,
       rawStats: {

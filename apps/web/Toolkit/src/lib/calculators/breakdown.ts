@@ -16,12 +16,18 @@ export interface CalcSubLine {
   target: string;
   weighting: number;
   score: number;
+  /** The unrounded score, where the calculator gives one. */
+  exactScore?: number;
   isBonus?: boolean;
   note?: string;
 }
 
 function toBreakdown(l: CalcSubLine): BreakdownLine {
-  return { name: l.name, target: l.target, weighting: l.weighting, score: l.score, isBonus: l.isBonus, note: l.note };
+  return {
+    name: l.name, target: l.target, weighting: l.weighting, score: l.score,
+    ...(l.exactScore !== undefined ? { exactScore: l.exactScore } : {}),
+    isBonus: l.isBonus, note: l.note,
+  };
 }
 
 export function toBreakdownLines(lines: CalcSubLine[] | undefined): BreakdownLine[] {

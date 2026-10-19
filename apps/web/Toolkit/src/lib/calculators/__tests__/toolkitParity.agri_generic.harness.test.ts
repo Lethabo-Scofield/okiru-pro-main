@@ -74,7 +74,8 @@ describe.skipIf(!process.env.TOOLKIT_PARITY)('toolkit parity — AgriBEE Generic
         const ex = fix ? fix.value : summaryValue(sheets, spec.row);
         const pillar = result[spec.pillar] as { subLines?: BreakdownLine[] } | undefined;
         const line = (pillar?.subLines ?? []).find((l) => spec.names.includes(l.name));
-        const ours = line ? Number(line.score) : null;
+        // The unrounded line where the calculator gives it: the arithmetic, not the displayed cent.
+        const ours = line ? Number(line.exactScore ?? line.score) : null;
         if (ex === null && ours === null) continue;
         const diff = ex !== null && ours !== null ? ours - ex : null;
         all.push({
