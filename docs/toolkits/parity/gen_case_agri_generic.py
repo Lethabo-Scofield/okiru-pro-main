@@ -2,7 +2,7 @@
 Master v1.0.1), written in the toolkit's own vocabulary: sheet cells + table
 rows. Synthetic only: invented names, no ID numbers, no client data.
 
-  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount]
+  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary]
   py -3 gen_case_agri_generic.py --all <out_dir>      (the standard case set)
 
 Profiles:
@@ -17,6 +17,8 @@ Profiles:
   lean     empty ESD and SED tables, no training-admin costs, no debt.
   discount sub-minimums failed on purpose (tiny skills, procurement and SD
            spend), and the scarce-and-critical declarations answered "No".
+  boundary every line full or empty, so the total is exactly 80.00 (a level
+           boundary).
 """
 import sys, json, random, datetime, os
 
@@ -288,10 +290,83 @@ def make(seed, profile="full"):
         "tblESDData": esd_rows, "tblSED": sed_rows, "tblEAPAll": our_eap_rows()}}
 
 
+def make_boundary(seed):
+    """Every line full or empty, so the total lands exactly on 80.00, the
+    Level 4 boundary: Ownership 25 (no debt), Management Control 0 (an
+    all-white register), Skills 0 (white learners only — and so discounted),
+    Procurement 25 (no designated-group supplier), SD 10, ED 5 (no bonuses),
+    SED 15."""
+    rng = random.Random(seed)
+    cells = dict(PERIOD_CELLS)
+    cells.update(PROCUREMENT_BASIS)
+    cells.update({
+        "Client Information!C3": f"Agri boundary case {seed}",
+        "Client Information!C4": FY_START, "Client Information!D4": FY_END,
+        "Client Information!C7": 2025, "Client Information!C8": "Western Cape",
+        "Client Information!C10": 0.05, "Client Information!C14": DATA_DATE,
+        "Client Information!C18": 200_000_000, "Client Information!C19": 20_000_000,
+        "Skills Toolkit!D10": "Yes", "Skills Toolkit!D11": "Yes",
+    })
+    for i in range(12):
+        cells[f"Client Information!G{4 + i}"] = 40_000.0
+    for i in range(3):
+        cells[f"Financials!C{4 + i}"] = 18_000_000
+        cells[f"Financials!E{4 + i}"] = 190_000_000
+    own_rows = [{
+        "Data Date": DATA_DATE, "Shareholder": f"Holder {i + 1}", "Ownership Type": "Strategic Partner",
+        "Outstaning Debt": 0, "BO%": 1.0, "BWO%": 1.0, "BDG%": 0.1, "BNE%": 0.1,
+        "Number of Share": 500, "Share Value": 250_000.0, "Original Date": "2018-03-01",
+    } for i in range(2)]
+    own_val = [{"Date": DATA_DATE, "Company Asset Value": 500_000.0, "Total Shares": 1000, "Share Value": 500.0}]
+    mc_rows = [{"Data Date": DATA_DATE, "Full Name *": f"Employee {i + 1}", "Gender *": rng.choice(['Male', 'Female']),
+                "Race *": "White", "Designation *": DESIGS[i % len(DESIGS)], "Disabled *": "No", "Foreign *": "No"}
+               for i in range(30)]
+    directors = [r for r in mc_rows if r["Designation *"] in ('Non-executive Director', 'Executive Director')]
+    for r in directors:
+        r["Voting Rights (Directors only) *"] = round(1 / len(directors), 4)
+    sk_rows = [{
+        "Data Date": DATA_DATE, "Training Program Name *": f"Programme {i + 1}", "Category *": "B",
+        "ABET": "No", "Mandatory Training?": "No", "Training Provider": "Provider 1",
+        "Scarce or Critical Skills?": "Yes", "Learner Name *": f"Learner {i + 1}", "Gender *": "Male",
+        "Race *": "White", "Disabled?*": "No", "Foreign?*": "No", "Age": 30, "Employed?": "No",
+        "Completed?": "Yes", "Absorbed?": "Yes", "Course Cost": 20_000.0, "Travel Cost": 0, "Accommodation Cost": 0,
+        "Catering Cost": 0, "Stationery Cost": 0, "Training Facility Cost": 0,
+        "Salary Cost (stipend and category B,C,D only)": 10_000.0, "Other Costs": 0,
+        "Start Date (format: dd/mm/yyyy)": "2025-04-01", "End Date (format: dd/mm/yyyy)": "2025-12-31",
+    } for i in range(3)]
+    pp_rows = [{
+        "Data Date": DATA_DATE, "Supplier Name *": f"Supplier {i + 1}",
+        "Current Company Size *": "QSE" if i % 2 else "EME", "B-BBEE Level": 1,
+        "Empowering Supplier? (Yes/No)": "Yes", "Current Black ownership": 1.0,
+        "Current Black Female ownership": 1.0, "Black Designated Group  ownership": 0,
+        "Supplier development recipient? (Yes/No)": "No", "3 year contract in place? (Yes/No)3": "No",
+        "First-time supplier? (Yes/No)": "No", "Spend *": 1_000_000.0,
+    } for i in range(10)]
+    tmps_incl = [{"Inclusions": name, "Amount": amt} for name, amt in
+                 zip(TMPS_INCLUSIONS, [10_000_000.0, None, None, None, None])]
+    esd_rows = [{
+        "Data Date": DATA_DATE, "Pillar": pillar, "Beneficiary Name": f"Beneficiary {pillar[:2]}",
+        "Current Black ownership %": 1.0, "Current Size": "EME", "Agri Company?": "Yes",
+        "Contribution Description*": "Grant", "Date of Transaction * (format: dd/mm/yyyy)": "2025-06-30",
+        "Contribution Type": "Grant Contribution", "Amount": 50_000_000.0,
+        "At least 1 job created?": "No", "Graduated to Supplier Development?": "No",
+    } for pillar in ("Supplier Development", "Enterprise Development")]
+    sed_rows = [{
+        "Data Date": DATA_DATE, "Beneficiary Name *": "Beneficiary SED 1", "Description of Spend *": "Grant",
+        "Agri Specific Initiative?": "Yes", "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-31",
+        "Contribution Type *": "Grant Contribution", "% of Spend Benefiting Black Individuals *": 1.0,
+        "Amount": 50_000_000.0,
+    }]
+    return {"template": "agri_generic", "seed": seed, "profile": "boundary", "cells": cells, "tables": {
+        "tblOwnershipData": own_rows, "tblCompanyValuation": own_val, "tblMCData": mc_rows,
+        "tblSkillsData": sk_rows, "tblPPData": pp_rows, "tblInclusions": tmps_incl,
+        "tblESDData": esd_rows, "tblSED": sed_rows, "tblEAPAll": our_eap_rows()}}
+
+
 # The standard set: (seed, profile).
 STANDARD = [(101, "full"), (102, "full"), (103, "small"), (104, "edge"), (105, "full"), (106, "lean"),
             (107, "discount"), (108, "full"), (109, "small"), (110, "edge"), (111, "full"), (112, "full"),
-            (113, "small"), (114, "edge"), (115, "full"), (116, "discount")]
+            (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary")]
 
 
 if __name__ == "__main__":
@@ -300,11 +375,13 @@ if __name__ == "__main__":
         os.makedirs(out_dir, exist_ok=True)
         for seed, profile in STANDARD:
             p = os.path.join(out_dir, f"agri_{seed}.case.json")
-            json.dump(make(seed, profile), open(p, "w", encoding="utf-8"), indent=1)
+            case = make_boundary(seed) if profile == "boundary" else make(seed, profile)
+            json.dump(case, open(p, "w", encoding="utf-8"), indent=1)
             print("wrote", p, profile)
     else:
         seed = int(sys.argv[1])
         out = sys.argv[2]
         profile = sys.argv[sys.argv.index("--profile") + 1] if "--profile" in sys.argv else "full"
-        json.dump(make(seed, profile), open(out, "w", encoding="utf-8"), indent=1)
+        case = make_boundary(seed) if profile == "boundary" else make(seed, profile)
+        json.dump(case, open(out, "w", encoding="utf-8"), indent=1)
         print("wrote", out)
