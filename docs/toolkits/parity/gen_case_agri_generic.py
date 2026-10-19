@@ -2,7 +2,7 @@
 Master v1.0.1), written in the toolkit's own vocabulary: sheet cells + table
 rows. Synthetic only: invented names, no ID numbers, no client data.
 
-  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary]
+  py -3 gen_case_agri_generic.py <seed> <out.case.json> [--profile full|small|edge|lean|discount|boundary|factors]
   py -3 gen_case_agri_generic.py --all <out_dir>      (the standard case set)
 
 Profiles:
@@ -19,6 +19,8 @@ Profiles:
            spend), and the scarce-and-critical declarations answered "No".
   boundary every line full or empty, so the total is exactly 80.00 (a level
            boundary).
+  factors  development and socio-economic spend below target, so every
+           benefit factor (computed or fixed) shows in the points.
 """
 import sys, json, random, datetime, os
 
@@ -363,10 +365,63 @@ def make_boundary(seed):
         "tblESDData": esd_rows, "tblSED": sed_rows, "tblEAPAll": our_eap_rows()}}
 
 
+def make_factors(seed):
+    """An ordinary company whose development and socio-economic spend stays
+    BELOW target, so every benefit factor shows in the points: below-prime
+    loans, lower-dividend investments, shorter payment terms, employee time,
+    guarantees, overheads, a Supplier Development minority investment, and
+    every socio-economic contribution type (one row not an agri initiative)."""
+    case = make(seed, "full")
+    cells = case["cells"]
+    cells["Client Information!C18"] = 800_000_000
+    cells["Client Information!C19"] = 80_000_000
+    for i in range(3):
+        cells[f"Financials!C{4 + i}"] = 70_000_000
+        cells[f"Financials!E{4 + i}"] = 750_000_000
+    base = {"Data Date": DATA_DATE, "Current Black ownership %": 1.0, "Current Size": "EME", "Agri Company?": "Yes",
+            "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-15",
+            "At least 1 job created?": "No", "Graduated to Supplier Development?": "No"}
+    sd, ed = "Supplier Development", "Enterprise Development"
+    rows = [
+        (ed, LOWER_INTEREST, 900_000.0, {"Prime Rate": 0.1075, "Actual Interest Rate": 0.065}),
+        (sd, LOWER_DIVIDEND, 700_000.0, {"Prime Rate": 0.1075, "Actual Interest Rate": 0.04}),
+        (sd, SHORTER_PAYMENT, 2_500_000.0, {"Invoice date (format: dd/mm/yyyy)": "2025-09-01",
+                                            "Payment date (format: dd/mm/yyyy)": "2025-09-07"}),
+        (ed, SHORTER_PAYMENT, 1_000_000.0, {"Invoice date (format: dd/mm/yyyy)": "2025-09-01",
+                                            "Payment date (format: dd/mm/yyyy)": "2025-09-30"}),
+        (sd, SD_MINORITY, 1_200_000.0, {}),
+        (ed, EMPLOYEE_TIME, 300_000.0, {}),
+        (sd, 'Guarantees provided on behalf of Enterprise and Supplier Development beneficiaries', 400_000.0, {}),
+        (ed, 'Guarantees provided on behalf of an Enterprise and Supplier Development beneficiaries', 250_000.0, {}),
+        (ed, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries', 200_000.0, {}),
+        (sd, 'Interest free loan with no security requirements', 150_000.0, {}),
+        (ed, 'Discounts in addition to normal business practice supporting Enterprise and Supplier Development beneficiaries', 60_000.0, {}),
+    ]
+    case["tables"]["tblESDData"] = [
+        {**base, "Pillar": p, "Beneficiary Name": f"Beneficiary F{i + 1}", "Contribution Description*": f"Contribution F{i + 1}",
+         "Contribution Type": t, "Amount": a, **extra}
+        for i, (p, t, a, extra) in enumerate(rows)]
+    case["tables"]["tblSED"] = [{
+        "Data Date": DATA_DATE, "Beneficiary Name *": f"Beneficiary SED F{i + 1}", "Description of Spend *": f"SED F{i + 1}",
+        "Agri Specific Initiative?": "No" if i == 2 else "Yes", "Date of Transaction * (format: dd/mm/yyyy)": "2025-10-10",
+        "Contribution Type *": t, "% of Spend Benefiting Black Individuals *": 0.75, "Amount": 120_000.0,
+    } for i, t in enumerate(VOC['tblSEDContributions'])]
+    case["profile"] = "factors"
+    return case
+
+
+def build(seed, profile):
+    if profile == "boundary":
+        return make_boundary(seed)
+    if profile == "factors":
+        return make_factors(seed)
+    return make(seed, profile)
+
+
 # The standard set: (seed, profile).
 STANDARD = [(101, "full"), (102, "full"), (103, "small"), (104, "edge"), (105, "full"), (106, "lean"),
             (107, "discount"), (108, "full"), (109, "small"), (110, "edge"), (111, "full"), (112, "full"),
-            (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary")]
+            (113, "small"), (114, "edge"), (115, "full"), (116, "discount"), (117, "boundary"), (118, "factors")]
 
 
 if __name__ == "__main__":
@@ -375,13 +430,13 @@ if __name__ == "__main__":
         os.makedirs(out_dir, exist_ok=True)
         for seed, profile in STANDARD:
             p = os.path.join(out_dir, f"agri_{seed}.case.json")
-            case = make_boundary(seed) if profile == "boundary" else make(seed, profile)
+            case = build(seed, profile)
             json.dump(case, open(p, "w", encoding="utf-8"), indent=1)
             print("wrote", p, profile)
     else:
         seed = int(sys.argv[1])
         out = sys.argv[2]
         profile = sys.argv[sys.argv.index("--profile") + 1] if "--profile" in sys.argv else "full"
-        case = make_boundary(seed) if profile == "boundary" else make(seed, profile)
+        case = build(seed, profile)
         json.dump(case, open(out, "w", encoding="utf-8"), indent=1)
         print("wrote", out)
