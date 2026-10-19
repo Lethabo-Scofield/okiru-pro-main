@@ -474,19 +474,24 @@ def edge(name):
         # of employees (80%); and one ED row for a beneficiary that is neither
         # an EME/QSE nor 51% black owned (the QSE template counts it anyway).
         # Skills: stationery and training-venue costs (the two cost columns no
-        # other case fills) on the disabled learner's row.
+        # other case fills) on the disabled learner's row, whose course cost is
+        # cut so the disabled and black-people lines stay below their caps and
+        # those costs show in the points.
+        # Amounts are chosen so no line lands exactly on half a cent of a point
+        # (our lines show two decimals; at exactly x.xx5 the gap to the
+        # toolkit's unrounded cell is 0.005 plus binary noise).
         case = edge("qse_rule")
         case["cells"]["Client Information!C3"] = "QSE edge: contribution types"
-        case["tables"]["tblSkillsData"][2].update({"Stationery Cost": 1_500, "Training Facility Cost": 2_500})
+        case["tables"]["tblSkillsData"][2].update({"Course Cost": 4_000, "Stationery Cost": 1_500, "Training Facility Cost": 2_500})
         sd, ed = 'Supplier Development', 'Enterprise Development'
         tes = 'Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries'
         case["tables"]["tblESDData"] = [
             _esd(1, sd, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiary', 6_000),
-            _esd(2, sd, tes, 5_000),
+            _esd(2, sd, tes, 5_100),
             _esd(3, sd, 'Interest free loan with no security requirements', 8_000, size='QSE'),
             _esd(4, sd, 'Enterprise and Supplier Development Investment with lower dividend to fanacier', 50_000,
                  **{"Prime Rate": 0.11, "Actual Interest Rate": 0.08}),
-            _esd(5, ed, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries', 7_000),
+            _esd(5, ed, 'Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries', 7_100),
             _esd(6, ed, tes, 6_000, jobs='Yes'),
             _esd(7, ed, 'Professional services rendered at no cost and supporting Enterprise and Supplier Development beneficiaries', 5_000),
             _esd(8, ed, tes, 4_000, bo=0.3, size='Generic'),

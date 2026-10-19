@@ -196,7 +196,7 @@
     "Employed?": "Yes",
     "Completed?": "Yes",
     "Absorbed?": "No",
-    "Course Cost": 30000,
+    "Course Cost": 4000,
     "Travel Cost": 0,
     "Accommodation Cost": 0,
     "Catering Cost": 0,
@@ -267,7 +267,7 @@
     "Contribution Description*": "Contribution 2",
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-15",
     "Contribution Type": "Time of employees productively deployed in assisting Enterprise and Supplier Development beneficiaries",
-    "Amount": 5000,
+    "Amount": 5100,
     "At least 1 job created?": "No",
     "Graduated to Supplier Development?": "No"
    },
@@ -308,7 +308,7 @@
     "Contribution Description*": "Contribution 5",
     "Date of Transaction * (format: dd/mm/yyyy)": "2025-08-15",
     "Contribution Type": "Overhead costs incurred in supporting Enterprise and Supplier Development beneficiaries",
-    "Amount": 7000,
+    "Amount": 7100,
     "At least 1 job created?": "No",
     "Graduated to Supplier Development?": "No"
    },
