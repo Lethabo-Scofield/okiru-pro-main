@@ -27,13 +27,14 @@ SHEETS = {
     "ESD Scorecard": (1, 16),
     "SED & CE Scorecard": (1, 15),
     "Scorecard Calculations": (1, 20),
+    "MC Toolkit": (1, 120),
     "EF & ESD Scorecard - Banks": (1, 30),
     "EF & ESD Scorecard - Long Term": (1, 30),
     "AFS Scorecard - Banks": (1, 40),
     "AFS Scorecard - Long Term": (1, 40),
     "AFS Scorecard - Short Term": (1, 40),
 }
-TABLES = ("tblOwnershipData", "tblSkillsData", "tblPPData", "tblESDData", "tblSEDnCEData",
+TABLES = ("tblOwnershipData", "tblMCData", "tblSkillsData", "tblPPData", "tblESDData", "tblSEDnCEData",
           "tblTransactionFinancingData")
 ROW = re.compile(r"[A-Z]+(\d+)$")
 

@@ -46,6 +46,7 @@ import {
   benefitFactorFor,
   canonicalContributionType,
   TOOLKIT_BENEFIT_FACTORS_SED,
+  EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES,
 } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export type FscSubSector = 'Others' | 'Banks' | 'LTI' | 'STI';
@@ -552,8 +553,13 @@ export function fscEsdWeights(sub: FscSubSector) {
 
 export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: FscSubSector = 'Others') {
   const w = fscEsdWeights(sub);
+  // Guarantees at 50% of the guarantee ('ESD and SED Calcs'!D8), as every
+  // Empower template has them (the Codes: 3%).
+  const factors = cfg.benefitFactors.filter((bf) => !(bf.type in EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES));
+  for (const [type, factor] of Object.entries(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES)) factors.push({ type, factor });
   const esdCfg: CalculatorConfig = {
     ...cfg,
+    benefitFactors: factors,
     esd: {
       ...cfg.esd,
       supplierDevMax: w.sdMax, supplierDevTarget: w.sdTarget,

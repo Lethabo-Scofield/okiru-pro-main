@@ -391,6 +391,18 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
         set(row, value, `Toolkit formula fault: the 1.2 recognition factor's first-time-supplier test reads the 3-year-contract column, so ${pp.firstTimeOnly} first-time black-owned QSE/EME supplier(s) lose it. With it: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
       }
     }
+    // Management control: black employees with disabilities over all
+    // employees. The toolkit's count ('MC Toolkit'!C111) also takes in
+    // non-executive directors, whom its denominator (C7) leaves out.
+    const mcRows = tableRows(tables, 'tblMCData').filter((r) => !blankish(r['Data Date']));
+    // 'MC Toolkit'!C7 (formatted as a date in the template): the period's employees.
+    const employees = mcRows.filter((r) => yes(r['Employee?'])).length;
+    if (mcRows.length > 0) {
+      const disabled = mcRows.filter((r) => yes(r['Disabled.calcs']) && yes(r['Black?']) && yes(r['Employee?'])).length;
+      const share = employees > 0 ? disabled / employees : 0;
+      const value = pts(share, v('MC Toolkit', 'F112'), v('MC Toolkit', 'G112'));
+      set(48, value, `Toolkit formula fault: its count of black people with disabilities includes non-executive directors, whom its count of employees leaves out. Employees only: ${disabled} of ${employees} → ${value.toFixed(2)}; the toolkit shows ${F(48).toFixed(2)}.`);
+    }
     // Supplier development: a duplicated blank "Minority Investment" factor row.
     const sdRows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === 'Supplier Development');
     const subSector = String(sheets['Client Information']?.D7?.v ?? 'Others').toLowerCase();
@@ -438,6 +450,7 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
   // Element totals and the grand total, with the corrected lines.
   const groups: Array<[number, number[]]> = [
     [20, [21, 22, 23, 24, 25, 26, 27, 28, 29]],
+    [31, [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]],
     [50, [51, 52, 53, 54, 55, 56, 57, 58]],
     [70, [71, 72]],
     [89, [90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101]],
