@@ -11,11 +11,13 @@ fault below so you can rule on it.
 
 ## Result
 
-**736 of 736 compared figures agree** across the sixteen companies: on each
+**834 of 834 compared figures agree** across the sixteen companies: on each
 company, 36 indicator lines, the 7 element totals, the grand total, the
-achieved level and the discounted level.
+achieved level and the discounted level (736 figures), and the recognised
+amount of each of the 98 ESD contributions.
 
-Every one agrees to within half a cent of a point. On the lines listed under
+Every scorecard figure agrees to within half a cent of a point, and every
+recognised amount to the cent. On the lines listed under
 "Toolkit faults" the comparison is against what the faulty formula evidently
 means, worked out from the spreadsheet's own figures, not against the number
 the spreadsheet shows.
@@ -39,7 +41,7 @@ corrected (which is what our scorecard now gives):
 | 112 admin | 105.93, Level 4, discounted to 5 | 114.33, Level 3, discounted to 4 |
 | 113 rich | 115.06, Level 3 | 117.07, Level 2 |
 | 114 small | 56.28, Level 8, discounted to Non-compliant | 57.79, Level 8, discounted to Non-compliant |
-| 115 jobs | 99.86, Level 5, discounted to 6 | 101.94, Level 4, discounted to 5 |
+| 115 jobs | 102.29, Level 4 | 104.37, Level 4 |
 | 116 suppliers | 99.98, Level 5, discounted to 6 | 99.77, Level 5, discounted to 6 |
 
 The corrected totals are mostly higher, because two lines the spreadsheet
@@ -54,10 +56,24 @@ full and small companies, a company with no black ownership (net value fails
 its sub-minimum), a well-transformed company at Level 1, a loss-making year
 with no ESD or SED spend, disabled-learner spend with and without the EAP
 split, training-manager salary and overhead with disabled staff in every
-group, beneficiaries creating jobs in both bonus tiers, graduations, loans
-below prime, investments at a lower dividend, shorter payment terms, minority
+group, beneficiaries creating jobs in both bonus tiers, graduations, minority
 investments, first-time suppliers, Supplier Development and three-year
 contract suppliers, a procurement buffer and TMPS exclusions.
+
+The two "jobs" companies (108 and 115) always carry, in both Supplier and
+Enterprise Development, a loan at a lower interest rate and three
+shorter-payment contributions: one paid within 14 days (in each company one of
+them exactly on day 14), one paid after 14 days and one with no invoice or
+payment dates. Three of the four loans are below prime; company 115's
+Enterprise Development loan is above it (fault 10 below). Company 115 also has
+an investment at a lower dividend. The template's Enterprise
+Development list does not offer "Shorter payment periods"; those rows show
+what its formulas do with that value typed or pasted in, which our ESD
+register accepts for either element.
+
+An element already at its maximum points hides how it got there, so every ESD
+contribution is also compared on its own: the template's recognised amount for
+the row against ours, to the cent.
 
 ## What the toolkit does, which we now do as well
 
@@ -102,9 +118,12 @@ each of them.
   beneficiary, holds a three-year contract or is a first-time supplier.
 - **Enterprise and supplier development.** A contribution is recognised at its
   benefit factor whatever the beneficiary's size or ownership (see the
-  questions below). Guarantees count at 50%. A loan below prime counts at prime
-  less the actual rate; shorter payment terms at 15% less one point per day
-  taken to pay (nothing after 14 days). Supplier Development is 2% of NPAT for
+  questions below). Guarantees count at 50%. A loan below prime and an
+  investment at a lower dividend count at prime less the actual rate.
+  Shorter payment terms count at 15% less one point per day taken to pay,
+  worked out for every such contribution: nothing after 14 days, and nothing
+  without both an invoice and a payment date (our other scorecards give an
+  undated one the table's 15%). Supplier Development is 2% of NPAT for
   10 points; Enterprise Development 3% of NPAT for 15 points, plus 1 bonus point
   for a graduation and a jobs bonus of 1 point (jobs up to 10% of a
   beneficiary's workforce) or 2 points (11% or more).
@@ -181,6 +200,18 @@ Each one: where it is, what it does, and what we do instead.
    spreadsheet's own actual total is 115.06 (Level 2) but its projected total
    is 114.72, so it shows Level 3. We give the level of the actual points shown
    on the scorecard.
+10. **A loan above prime is recognised at a negative amount** (ESD Data, the
+   "Lower interest Rate / Lower Dividend Rate" column). The factor is the prime
+   rate less the actual rate, with no floor, so a loan charged above prime
+   subtracts from the other contributions of its element: in company 115 a loan
+   of R324,218.42 at 12% against a prime of 10.75% is recognised at minus
+   R4,052.73. The same formula reads a blank actual rate as 0%, so a loan
+   whose rate was never entered counts at the full prime rate. A contribution
+   cannot be worth less than nothing, and a missing rate is not a rate. We
+   floor the factor at 0 and recognise the row once both rates are entered.
+   Investments at a lower dividend use the same column. (Company 115's
+   Enterprise Development is at its maximum either way, so only its
+   row-by-row comparison shows this.)
 
 ## Questions for you (we follow the spreadsheet until you rule)
 
@@ -209,13 +240,46 @@ Each one: where it is, what it does, and what we do instead.
 
 ## Where our model needed a new answer
 
-Three inputs the toolkit reads had no place in our model, so we added them:
-whether a supplier is a first-time supplier, whether an SED contribution is an
-ICT-specific initiative, and whether disabled-learner spend is measured against
-the EAP split (the verifier's sign-off). For SED, a contribution recorded
-before this question existed still counts; only an explicit "No" is excluded.
-Without a first-time-supplier answer a supplier simply does not get the factor
-on that ground, and without the sign-off the disabled line is one pool.
+Three inputs the toolkit reads had no place in our calculator, so we added
+them. Each of these three rules applies only once its answer is captured. The
+workbook, the screen consultants fill in, now captures all three for ICT
+Generic:
+
+- **ICT-specific initiative** (SED). The workbook already asked this
+  ("ICT-Specific?"), but its answer never reached the calculator; now it does.
+  Only an answer counts: "No" removes the contribution, as in the template,
+  while a blank, or a contribution entered somewhere that never asks, still
+  counts. Here we part from the template, which scores a blank as 0, so that
+  contributions entered before the question mattered are not dropped without
+  anyone being asked. Should a blank count? The spreadsheet import now reads a
+  sheet's own "ICT Specific Initiative?" column, and no longer writes "No" on
+  every row it brings in.
+- **First-time supplier** (procurement). A new "First-time Supplier?" column on
+  the supplier register, shown for ICT Generic only. Unanswered means No, which
+  is safe because the answer can only add the 1.2 factor.
+- **The verification agent's sign-off on the EAP split for disabled learners**
+  (Skills). A new tick box in the Skills details, shown for ICT Generic only.
+  Unticked, the disabled line is one pool against the whole target.
+
+Two things to check before this goes live:
+
+- Rows brought in by the spreadsheet import before this change carry a "No"
+  the importer wrote itself, and the workbook shows them as "No". That "No" is
+  now scored, so those rows stop counting until someone changes it to Yes. Any
+  ICT Generic client whose SED came in through the import should be looked at
+  before release.
+- Pasting into the "ICT-Specific?" column turns a blank cell into "No", as the
+  paste does for every Yes/No column. The cell then shows "No", so the change
+  is visible, but it is scored.
+
+The Toolkit's own pillar pages do not show these three questions yet, and the
+workbook's Excel export does not write the first-time-supplier answer.
+
+One more capture gap, outside these three and in every sector: the prime and
+actual interest rates entered in the workbook do not yet reach the
+calculator, so in the live app a loan below prime or an investment at a lower
+dividend is recognised at 0. The comparison above enters the rates directly.
+It is filed as a separate fix.
 
 ## Not compared
 
