@@ -282,10 +282,53 @@ def make(seed, profile="full", subsector="Others"):
             "Amount": round(rng.uniform(20_000, 1_500_000), 2),
         })
 
+    # Banks / long-term insurers: empowerment financing and transaction
+    # financing ('EF & ESD Scorecard - Banks' / '- Long Term').
+    tf_rows = []
+    if subsector in ('Banks', 'Long-Term Insurers'):
+        sh = 'EF & ESD Scorecard - Banks' if subsector == 'Banks' else 'EF & ESD Scorecard - Long Term'
+        cells[f"{sh}!F26"] = "Year"
+        cells[f"{sh}!F27"] = "Current YTD"
+        exposure = rng.randint(500, 6000) * 1_000_000
+        tf_target = rng.randint(20, 400) * 1_000_000
+        if subsector == 'Banks':
+            extra = rng.randint(0, 80) * 1_000_000
+            cells[f"{sh}!C5"] = exposure
+            cells[f"{sh}!C6"] = extra
+            cells[f"{sh}!C7"] = round((exposure + extra) * rng.uniform(0.1, 1.2))
+            cells[f"{sh}!C9"] = tf_target
+        else:
+            cells[f"{sh}!C5"] = exposure
+            cells[f"{sh}!C6"] = round(exposure * rng.uniform(0.1, 1.2))
+            cells[f"{sh}!C8"] = tf_target
+        for i in range(rng.randint(0, 5)):
+            tf_rows.append({"Data Date": DATA_DATE, "Description *": f"Transaction {i + 1}",
+                            "Transaction Date (format: dd/mm/yyyy)": rdate(rng),
+                            "Black Ownership": rng.choice([0.26, 0.51, 1.0]),
+                            "Value": round(tf_target * rng.uniform(0.05, 0.5), 2)})
+    if subsector == 'Banks':
+        # Access to financial services: coverage shares, a point of presence,
+        # and the two lines the toolkit has no target for.
+        for r in (8, 9, 10, 11):
+            cells[f"AFS Scorecard - Banks!K{r}"] = round(rng.uniform(0.3, 1.0), 4)
+        cells["AFS Scorecard - Banks!K12"] = rng.choice(['Yes', 'No'])
+        cells["AFS Scorecard - Banks!K13"] = rng.randint(1000, 90000)
+    if subsector == 'Long-Term Insurers':
+        products = rng.randint(2, 30)
+        saia = rng.randint(20_000, 400_000)
+        cells["AFS Scorecard - Long Term!E9"] = products
+        cells["AFS Scorecard - Long Term!E10"] = rng.randint(0, products)
+        cells["AFS Scorecard - Long Term!E12"] = saia
+        cells["AFS Scorecard - Long Term!E13"] = round(saia * rng.uniform(0.2, 1.1))
+        cells["AFS Scorecard - Long Term!E14"] = round(saia * rng.uniform(0, 0.08))
+        cells["AFS Scorecard - Long Term!E16"] = round(rng.uniform(0.3, 1.0), 4)
+
     return {"template": "fsc", "subsector": subsector, "seed": seed, "cells": cells, "tables": {
         "tblOwnershipData": own_rows, "tblCompanyValuation": own_val, "tblMCData": mc_rows,
         "tblSkillsData": sk_rows, "tblPPData": pp_rows, "tblInclusions": tmps_incl,
-        "tblESDData": esd_rows, "tblSEDnCEData": sed_rows, "tblEAPAll": our_eap_rows()}}
+        "tblESDData": esd_rows, "tblSEDnCEData": sed_rows,
+        **({"tblTransactionFinancingData": tf_rows} if subsector in ('Banks', 'Long-Term Insurers') else {}),
+        "tblEAPAll": our_eap_rows()}}
 
 
 if __name__ == "__main__":

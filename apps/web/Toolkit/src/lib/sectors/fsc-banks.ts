@@ -267,8 +267,14 @@ export function sectorConfigToFscBanksCalculatorConfig(sc: SectorConfig): Calcul
 }
 
 /** Complete FSC Banks (FS701) config. */
-export const FSC_BANKS_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToFscBanksCalculatorConfig(FSC_BANKS);
+/**
+ * The scorecard scores FSC Banks the way the FSC Empower toolkit does
+ * (`fscToolkit` → calculators/fscToolkit.ts; docs/toolkits/parity/findings/fsc.md).
+ */
+export const FSC_BANKS_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...sectorConfigToFscBanksCalculatorConfig(FSC_BANKS),
+  fscToolkit: { subSector: 'Banks' },
+};
 
 /** Re-export per-level targets for test assertions. */
 export { FSC_SKILLS_PER_LEVEL_TARGETS as FSC_BANKS_SKILLS_PER_LEVEL_TARGETS };

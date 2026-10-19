@@ -615,6 +615,8 @@ export interface AfsData {
   marketPenetrationPolicies?: number;
   /** SAIA communicated reference number of policies (denominator). */
   saiaCommunicatedPolicies?: number;
+  /** FSC toolkit (LTI): credit-life policies on book — up to 0.25 extra market-penetration points. */
+  creditLifePolicies?: number;
   /** % of polygons covered (Transactional Accesses; target 80%). */
   transactionalAccessCoverage?: number;
   // ---- Short-Term Insurers (FS703) ----

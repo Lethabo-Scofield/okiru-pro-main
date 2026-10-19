@@ -331,6 +331,44 @@ export function adaptFscToolkitCase(c: ToolkitCase): AdaptedCase {
     })),
   };
 
+  // Empowerment financing (banks / long-term insurers)
+  const efSheet = subSector === 'Banks' ? 'EF & ESD Scorecard - Banks' : 'EF & ESD Scorecard - Long Term';
+  const E = (ref: string) => optNum(cell(`${efSheet}!${ref}`));
+  const tfTransactions = rows(c, 'tblTransactionFinancingData').map((r) => ({ value: num(r['Value']) }));
+  const empowermentFinancing: EmpowermentFinancingData = subSector === 'Banks'
+    ? { id: 'ef', clientId: 'parity', balanceSheetExposure: E('C5'), additionalTiExposure: E('C6'), newLoansExposure: E('C7'), tfPortfolioValue: E('C9'), tfTransactions }
+    : subSector === 'LTI'
+      ? { id: 'ef', clientId: 'parity', qualifyingExposure: E('C5'), targetedInvestmentPortion: E('C6'), tfPortfolioValue: E('C8'), tfTransactions }
+      : { id: 'ef', clientId: 'parity' };
+
+  // Access to financial services (banks): coverage shares and a point of
+  // presence. Electronic access and active accounts are entered as a share
+  // and a count the toolkit has no target for; nothing here can judge them.
+  const A = (ref: string) => cell(`AFS Scorecard - Banks!${ref}`);
+  const L = (ref: string) => cell(`AFS Scorecard - Long Term!${ref}`);
+  const afs: AfsData = subSector === 'Banks'
+    ? {
+        id: 'afs', clientId: 'parity',
+        transactionPointCoverage: num(A('K8')) * 100,
+        servicePointCoverage: num(A('K9')) * 100,
+        salesPointCoverage: num(A('K10')) * 100,
+        hasPointOfPresence: yes(A('K12')),
+      }
+    : subSector === 'LTI'
+      ? {
+          id: 'afs', clientId: 'parity',
+          appropriateProductsDenominator: num(L('E9')),
+          appropriateProductsNumerator: num(L('E10')),
+          saiaCommunicatedPolicies: num(L('E12')),
+          marketPenetrationPolicies: num(L('E13')),
+          creditLifePolicies: num(L('E14')),
+          transactionalAccessCoverage: num(L('E16')) * 100,
+        }
+      : { id: 'afs', clientId: 'parity' };
+  if (subSector === 'Banks' && (A('K11') != null || A('K13') != null)) {
+    unrepresented.push('AFS electronic access (a share) and active accounts (a count): the toolkit gives no target for either');
+  }
+
   return {
     state: {
       client,
@@ -340,8 +378,8 @@ export function adaptFscToolkitCase(c: ToolkitCase): AdaptedCase {
       procurement,
       esd,
       sed,
-      afs: { id: 'afs', clientId: 'parity' } as AfsData,
-      empowermentFinancing: { id: 'ef', clientId: 'parity' } as EmpowermentFinancingData,
+      afs,
+      empowermentFinancing,
     },
     unrepresented,
   };

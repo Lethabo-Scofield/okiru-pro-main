@@ -24,6 +24,8 @@
 import type { CalculatorConfig } from '../../../../shared/schema';
 import type { ScorecardResult } from '../types';
 import { FSC_GENERIC_CALCULATOR_CONFIG } from '../sectors/fsc-generic';
+import { FSC_BANKS_CALCULATOR_CONFIG } from '../sectors/fsc-banks';
+import { FSC_LTI_CALCULATOR_CONFIG } from '../sectors/fsc-lti';
 
 export type ParityPillarKey = keyof ScorecardResult;
 export interface ParityLine { row: number; pillar: ParityPillarKey; label: string; names: string[] }
@@ -32,6 +34,8 @@ export type ToolkitTables = Record<string, { headers: unknown[]; rows: unknown[]
 
 export function fscConfigFor(sub: string): CalculatorConfig {
   if (sub === 'Others' || !sub) return FSC_GENERIC_CALCULATOR_CONFIG;
+  if (sub === 'Banks') return FSC_BANKS_CALCULATOR_CONFIG;
+  if (sub === 'LTI') return FSC_LTI_CALCULATOR_CONFIG;
   throw new Error(`FSC parity: no toolkit config for sub-sector ${sub} yet`);
 }
 
@@ -43,6 +47,31 @@ const OWNERSHIP: ParityLine[] = [
   { row: 25, pillar: 'ownership', label: 'Economic interest: designated groups', names: ['Economic interest of black designated groups or participants in ownership schemes'] },
   { row: 26, pillar: 'ownership', label: 'Economic interest: new entrants', names: ['Economic interest of black new entrants'] },
   { row: 27, pillar: 'ownership', label: 'Net value', names: ['Net value'] },
+];
+
+const OWNERSHIP_BONUS: ParityLine[] = [
+  { row: 28, pillar: 'ownership', label: 'Voting rights above 15% (bonus)', names: ['Direct / indirect ownership in excess of 15%'] },
+  { row: 29, pillar: 'ownership', label: 'Economic interest above 32.5% (bonus)', names: ['Economic interest and voting rights above 32.5%'] },
+];
+
+const EF: ParityLine[] = [
+  { row: 71, pillar: 'empowermentFinancing', label: 'Targeted investments', names: ['Targeted investments'] },
+  { row: 72, pillar: 'empowermentFinancing', label: 'Transaction financing', names: ['Transaction financing and risk capital contributions'] },
+];
+
+const AFS_BANKS: ParityLine[] = [
+  { row: 90, pillar: 'accessToFinancialServices', label: 'Transaction points (5km)', names: ['Transaction points within 5km'] },
+  { row: 91, pillar: 'accessToFinancialServices', label: 'Service points (10km)', names: ['Service points within 10km'] },
+  { row: 92, pillar: 'accessToFinancialServices', label: 'Sales points (15km)', names: ['Sales points within 15km'] },
+  { row: 93, pillar: 'accessToFinancialServices', label: 'Electronic access', names: ['Electronic access for target-market account holders'] },
+  { row: 94, pillar: 'accessToFinancialServices', label: 'Point of presence', names: ['A point of presence per measurement unit'] },
+  { row: 95, pillar: 'accessToFinancialServices', label: 'Active accounts', names: ['Active accounts with qualifying products'] },
+];
+
+const AFS_LTI: ParityLine[] = [
+  { row: 90, pillar: 'accessToFinancialServices', label: 'Appropriate products', names: ['Appropriate products'] },
+  { row: 91, pillar: 'accessToFinancialServices', label: 'Market penetration', names: ['Market penetration'] },
+  { row: 92, pillar: 'accessToFinancialServices', label: 'Transactional access', names: ['Transactional access'] },
 ];
 
 const MC: ParityLine[] = [
@@ -108,13 +137,20 @@ const SED_REINSURER: ParityLine[] = [
 ];
 
 export function fscLinesFor(sub: string, reinsurer = false): ParityLine[] {
-  if (sub !== 'Others') throw new Error(`FSC parity: no line map for ${sub} yet`);
-  return [...OWNERSHIP, ...MC, ...SKILLS, ...PP, ...ESD, ...(reinsurer ? SED_REINSURER : SED)];
+  const sed = reinsurer ? SED_REINSURER : SED;
+  if (sub === 'Others') return [...OWNERSHIP, ...MC, ...SKILLS, ...PP, ...ESD, ...sed];
+  if (sub === 'Banks') return [...OWNERSHIP, ...OWNERSHIP_BONUS, ...MC, ...SKILLS, ...PP, ...EF, ...ESD.filter((l) => l.row !== 81), ...sed, ...AFS_BANKS];
+  if (sub === 'LTI') return [...OWNERSHIP, ...OWNERSHIP_BONUS, ...MC, ...SKILLS, ...PP, ...EF, ...ESD, ...sed, ...AFS_LTI];
+  throw new Error(`FSC parity: no line map for ${sub} yet`);
 }
 
 export function fscTotalRowsFor(sub: string): Array<{ row: number; pillar: ParityPillarKey; label: string }> {
-  if (sub !== 'Others') throw new Error(`FSC parity: no total rows for ${sub} yet`);
+  if (sub !== 'Others' && sub !== 'Banks' && sub !== 'LTI') throw new Error(`FSC parity: no total rows for ${sub} yet`);
+  const extra: Array<{ row: number; pillar: ParityPillarKey; label: string }> = sub === 'Banks' || sub === 'LTI'
+    ? [{ row: 70, pillar: 'empowermentFinancing', label: 'Empowerment financing' }, { row: 89, pillar: 'accessToFinancialServices', label: 'Access to financial services' }]
+    : [];
   return [
+    ...extra,
     { row: 20, pillar: 'ownership', label: 'Ownership' },
     { row: 31, pillar: 'managementControl', label: 'Management control' },
     { row: 50, pillar: 'skillsDevelopment', label: 'Skills development' },
@@ -197,7 +233,12 @@ function refereeOwnership(sheets: ToolkitSheets, tables: ToolkitTables) {
   const ei = free + credited;
   const eiPts = Math.min((Math.max(ei, 0) / 0.25) * eiMax, eiMax);
   const nvPts = Math.min(Math.min((free / 0.25) * nvMax, nvMax) + Math.min(formulaA, Math.min(formulaB, 8)), 8);
-  return { indebted, ei, eiPts, nvPts, lateLoan };
+  // Bonus rows (every sub-sector but Others): voting rights beyond 15%
+  // against 10% (never below 0), and economic interest at 32.5% / 40%.
+  const voting = v('Ownership Data', 'W4');
+  const above15 = Math.max(pts(voting > 0 ? voting - 0.15 : 0, 0.10, 3), 0);
+  const tier = ei >= 0.4 ? 2 : ei >= 0.325 ? 1 : 0;
+  return { indebted, ei, eiPts, nvPts, lateLoan, above15, tier };
 }
 
 interface SkillRow {
@@ -324,6 +365,12 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
 
   if (tables) {
     const own = refereeOwnership(sheets, tables);
+    if (!blankish(sheets['Summary Scorecard']?.F28?.v) && !manual('Ownership Scorecard', 'L19')) {
+      set(28, own.above15, `Toolkit formula fault: its voting-rights-above-15% bonus goes negative when black voting rights are below 15%. Floored at 0: ${own.above15.toFixed(2)}; the toolkit shows ${F(28).toFixed(2)}.`);
+    }
+    if (!blankish(sheets['Summary Scorecard']?.F29?.v) && own.indebted > 0 && !manual('Ownership Scorecard', 'L20')) {
+      set(29, own.tier, `Toolkit formula fault: this bonus reads the economic interest netted the faulty way (see economic interest). On ${(own.ei * 100).toFixed(2)}%: ${own.tier}; the toolkit shows ${F(29).toFixed(2)}.`);
+    }
     if (own.indebted > 0) {
       if (!manual('Ownership Scorecard', 'L10')) {
         set(23, own.eiPts, `Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, and counts the whole stake as black. Netted the one way and for the black share only, black economic interest is ${(own.ei * 100).toFixed(2)}% → ${own.eiPts.toFixed(2)}; the toolkit shows ${F(23).toFixed(2)}.`);
@@ -332,7 +379,7 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
         set(27, own.nvPts, `Toolkit formula fault: the net value nets indebted stakes the same faulty way${own.lateLoan ? ', and a loan in its tenth year or later finds no graduation factor and scores nothing' : ''}. Reworked: ${own.nvPts.toFixed(2)}; the toolkit shows ${F(27).toFixed(2)}.`);
       }
     }
-    for (const [row, value] of refereeSkills(sheets, tables)) {
+    for (const [row, value] of Array.from(refereeSkills(sheets, tables).entries())) {
       const frozen = row === 55 || row === 56 || row === 57;
       set(row, value, frozen
         ? `Toolkit formula faults: this line measures against 'Skills Toolkit'!${row === 57 ? 'D6 (headcount 14,212)' : 'D3 (leviable amount R6.53bn)'} — a locked cell holding another company's figure — and its "Within FY?" test drops training rows 6, 13 and 25. Against the workbook's own ${row === 57 ? 'headcount' : 'leviable amount'}, every row counted: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`
@@ -340,14 +387,20 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
     }
     const pp = refereeProcurement(sheets, tables);
     if (pp.firstTimeOnly > 0) {
-      for (const [row, value] of pp.lines) {
+      for (const [row, value] of Array.from(pp.lines.entries())) {
         set(row, value, `Toolkit formula fault: the 1.2 recognition factor's first-time-supplier test reads the 3-year-contract column, so ${pp.firstTimeOnly} first-time black-owned QSE/EME supplier(s) lose it. With it: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
       }
     }
     // Supplier development: a duplicated blank "Minority Investment" factor row.
     const sdRows = tableRows(tables, 'tblESDData').filter((r) => String(r['Pillar'] ?? '') === 'Supplier Development');
-    const npat = v('ESD Scorecard', 'E2');
-    if (sdRows.length > 0 && npat > 0) {
+    const subSector = String(sheets['Client Information']?.D7?.v ?? 'Others').toLowerCase();
+    const sdTarget = subSector === 'banks' ? v('EF & ESD Scorecard - Banks', 'E17')
+      : subSector === 'long-term insurers' ? v('EF & ESD Scorecard - Long Term', 'E16')
+        : v('ESD Scorecard', 'E2') * v('ESD Scorecard', 'F7');
+    const sdMax = subSector === 'banks' ? v('EF & ESD Scorecard - Banks', 'C17')
+      : subSector === 'long-term insurers' ? v('EF & ESD Scorecard - Long Term', 'C16')
+        : v('ESD Scorecard', 'E7');
+    if (sdRows.length > 0 && sdTarget > 0) {
       let recognised = 0;
       let reworked = false;
       for (const r of sdRows) {
@@ -356,11 +409,22 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
         else recognised += n(r['Recognised Amount']);
       }
       if (reworked) {
-        const max = v('ESD Scorecard', 'E7');
-        const sd = Math.min((Math.max(recognised / npat, 0) / v('ESD Scorecard', 'F7')) * max, max);
+        const sd = Math.min((Math.max(recognised, 0) / sdTarget) * sdMax, sdMax);
         set(75, sd, `Toolkit formula fault: its supplier-development benefit factor for a minority investment reads a duplicated blank row and recognises it at 0 (the enterprise-development copy says 70%). At 70%: ${sd.toFixed(2)}; the toolkit shows ${F(75).toFixed(2)}.`);
       }
     }
+  }
+  // Long-term insurers: transaction financing against its own target (C8, not
+  // the targeted-investment portion C6), and transactional access from the
+  // share entered (E16), not the typed, locked 80% in H26.
+  if (String(sheets['Client Information']?.D7?.v ?? '').toLowerCase() === 'long-term insurers') {
+    const L = (ref: string) => v('EF & ESD Scorecard - Long Term', ref);
+    const tf = pts(L('K14'), L('C8'), L('C14'));
+    set(72, tf, `Toolkit formula fault: transaction financing is measured against the targeted-investment portion (C6) instead of its own target (C8). Against C8: ${tf.toFixed(2)}; the toolkit shows ${F(72).toFixed(2)}.`);
+    const cover = v('AFS Scorecard - Long Term', 'E16');
+    const ta = cover < 0.5 ? 0 : cover >= 0.6 && cover < 0.7 ? 1 : cover >= 0.7 && cover < 0.8 ? 1.5 : 2;
+    const taMax = v('AFS Scorecard - Long Term', 'E26');
+    set(92, Math.min(ta, taMax), `Toolkit formula fault: transactional access reads a typed, locked 80% (H26) instead of the share of polygons entered (${(cover * 100).toFixed(1)}%). On the share entered: ${Math.min(ta, taMax).toFixed(2)}; the toolkit shows ${F(92).toFixed(2)}.`);
   }
   // Additional consumer education: above the consumer-education target, not the SED one.
   if (String(sheets['Client Information']?.D8?.v ?? '') !== 'Reinsurers') {
@@ -373,8 +437,10 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
 
   // Element totals and the grand total, with the corrected lines.
   const groups: Array<[number, number[]]> = [
-    [20, [21, 22, 23, 24, 25, 26, 27]],
+    [20, [21, 22, 23, 24, 25, 26, 27, 28, 29]],
     [50, [51, 52, 53, 54, 55, 56, 57, 58]],
+    [70, [71, 72]],
+    [89, [90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101]],
     [74, [75]],
     [83, [84, 85, 86, 87]],
   ];
@@ -394,9 +460,13 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
   const thresholds = [5, 6, 7, 8, 9, 10, 11, 12].map((r, i) => ({ level: i + 1, min: v('Summary Scorecard', `F${r}`) }));
   const achieved = thresholds.find((t) => total >= t.min)?.level ?? 9;
   const ppBaseMax = [61, 62, 63, 64, 65].reduce((a, r) => a + v('Summary Scorecard', `C${r}`), 0);
+  // Banks and long-term insurers: empowerment financing in procurement's place.
+  const efElement = !blankish(sheets['Summary Scorecard']?.C70?.v);
   const failed = fixed(27) < v('Scorecard Calculations', 'G3')
     || [51, 52, 53, 54, 55, 56, 57].reduce((a, r) => a + fixed(r), 0) < v('Scorecard Calculations', 'G5')
-    || [61, 62, 63, 64, 65].reduce((a, r) => a + fixed(r), 0) < ppBaseMax * 0.4
+    || (efElement
+      ? fixed(70) < v('Summary Scorecard', 'C70') * 0.4
+      : [61, 62, 63, 64, 65].reduce((a, r) => a + fixed(r), 0) < ppBaseMax * 0.4)
     || fixed(75) < v('Scorecard Calculations', 'G8')
     || F(78) < v('Scorecard Calculations', 'G9');
   const discounted = failed ? (achieved >= 8 ? 9 : achieved + 1) : achieved;

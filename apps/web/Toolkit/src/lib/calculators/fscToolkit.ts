@@ -28,16 +28,15 @@
  * referee (lib/parity/toolkitParity.fsc.ts) from the toolkit's own figures.
  */
 import type {
-  BreakdownLine, Client, Contribution, Employee, ManagementData, OwnershipData, ProcurementData,
+  AfsData, EmpowermentFinancingData, BreakdownLine, Client, Contribution, Employee, ManagementData, OwnershipData, ProcurementData,
   ScorecardResult, SEDData, SkillsData, Supplier, TrainingProgram, ESDData,
 } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { calculateOwnershipScore, ownershipHolderWeights } from './ownership';
+import { ownershipHolderWeights } from './ownership';
 import { calculateProcurementScore, qualifiesForEnhancedRecognition } from './procurement';
 import { calculateEsdScore } from './esd-sed';
 import { calculateYESScore } from './yes';
 import { calculateAfsScore } from './afs';
-import { calculateEmpowermentFinancingScore } from './empowermentFinancing';
 import { clampScore, isBlackRace, normalizeDesignationForScoring, round2 } from './shared';
 import { getEffectiveEap, normalizeProvince, type Province } from './eapTargets';
 import { parseCalcDate, yearFrac30360US } from './toolkitDates';
@@ -77,66 +76,86 @@ const isBlackSa = (race: string | null | undefined, foreign: boolean | undefined
 // Ownership
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 'Ownership Calcs Formula'!A3:B11 — graduation factor by loan year. */
+/**
+ * 'Ownership Calcs Formula'!A3:B11 — graduation factor by loan year. The
+ * table stops at year 9 (100%); a loan in its tenth year or later is fully
+ * graduated (the toolkit's lookup finds nothing there and scores the stake 0).
+ */
 const NET_VALUE_GRADUATION: Record<number, number> = {
   1: 0.1, 2: 0.2, 3: 0.4, 4: 0.5, 5: 0.6, 6: 0.7, 7: 0.8, 8: 0.9, 9: 1.0,
 };
+const graduationFor = (year: number) => (year >= 9 ? 1 : NET_VALUE_GRADUATION[year] ?? 0);
 
+/**
+ * Ownership ('Ownership Scorecard', 'Ownership Data', 'Oustanding Debts
+ * Calcs'): holders weighed by share value; each black holder's acquisition
+ * debt netted against the company value, the stake counting in full once its
+ * net value reaches 40% of it (the toolkit's first debt row — its later rows
+ * use another formula, and credit the whole stake as black), for the black
+ * share of the stake only.
+ */
 export function fscOwnership(data: OwnershipData, cfg: CalculatorConfig, sub: FscSubSector, dataDate: string | undefined) {
+  void cfg;
   const others = sub === 'Others';
   const eiMax = others ? 4 : 3;
   const neMax = others ? 2 : 3;
   const nvMax = others ? 8 : 6;
-  const base = calculateOwnershipScore(data, {
-    ...cfg,
-    ownership: {
-      ...cfg.ownership,
-      ownershipMethod: 'toolkit',
-      netValueTarget: 1,
-      votingRightsTarget: 0.25, votingRightsMax: 4,
-      womenVotingTarget: 0.10, womenBonusMax: 2,
-      targetEconomicInterest: 0.25, economicInterestMax: eiMax,
-      womenEITarget: 0.10, womenEIMax: 2,
-      designatedGroupsTarget: 0.03, designatedGroupsMax: 3,
-      newEntrantsTarget: 0.02, newEntrantsMax: neMax,
-      netValueMax: nvMax,
-    },
-    pillarConfigs: { ...cfg.pillarConfigs, ownership: { maxPoints: 99 } },
-  });
-
-  // Net value ('Ownership Scorecard'!J17): unencumbered black economic
-  // interest against the 25% target, plus the indebted black stakes' net value
-  // — Formula A (graduated by the loan's year) capped by Formula B — at most 8.
   const holders = data.shareholders || [];
   const { weights } = ownershipHolderWeights(holders);
   const value = Number(data.companyValue) > 0 ? Number(data.companyValue) : 0;
   const asOf = parseCalcDate(dataDate);
-  let free = 0;
-  let formulaA = 0;
-  let formulaBRaw = 0;
+  const frac = (v: unknown) => Math.max(0, Number(v) || 0);
+  let black = 0, women = 0, designated = 0, entrants = 0;
+  let free = 0, freeWomen = 0, netBlack = 0, netWomen = 0;
+  let formulaA = 0, formulaBRaw = 0;
   const debtNotes: string[] = [];
   holders.forEach((sh, i) => {
     const w = weights[i] ?? 0;
-    const bo = Math.max(0, Number(sh.blackOwnership) || 0);
-    const debt = Math.max(0, Number(sh.outstandingDebt) || 0);
-    if (!(bo > 0 && debt > 0)) { free += w * bo; return; }
+    const bo = frac(sh.blackOwnership);
+    const bwo = frac(sh.blackWomenOwnership);
+    black += w * bo;
+    women += w * bwo;
+    designated += w * (sh.designatedGroupOwnership != null ? frac(sh.designatedGroupOwnership) : sh.isDesignatedGroup ? bo : 0);
+    entrants += w * (sh.blackNewEntrantOwnership != null ? frac(sh.blackNewEntrantOwnership) : sh.blackNewEntrant ? bo : 0);
+    const debt = frac(sh.outstandingDebt);
+    if (!(bo > 0 && debt > 0)) { free += w * bo; freeWomen += w * bwo; return; }
     if (value <= 0 || w <= 0) return;
     const deemed = (value * w - debt) / value;
     const credited = w * Math.min(1, deemed / (0.4 * w)) * bo;
+    netBlack += credited;
+    netWomen += deemed * bwo;
+    // The loan's year (ROUNDUP(term + 1)); no loan date reads as year 1.
     const loan = parseCalcDate(sh.loanDate);
-    const years = loan && asOf ? Math.ceil(yearFrac30360US(loan, asOf) + 1 - 1e-12) : 0;
-    const g = NET_VALUE_GRADUATION[years] ?? 0;
-    const a = g > 0 ? Math.max(Math.min(credited * 8 / (0.25 * g), 8), 0) : 0;
+    const year = loan && asOf ? Math.ceil(yearFrac30360US(loan, asOf) + 1 - 1e-12) : 1;
+    const g = graduationFor(year);
+    const a = g > 0 ? Math.max(Math.min((credited * 8) / (0.25 * g), 8), 0) : 0;
     formulaA += a;
-    formulaBRaw += credited / 0.25 * 8;
-    debtNotes.push(`${sh.name}: net ${pct(credited, 2)} of the company, loan year ${years} (graduation ${pct(g, 0)}) → Formula A ${a.toFixed(2)}`);
+    formulaBRaw += (credited / 0.25) * 8;
+    debtNotes.push(`${sh.name}: net ${pct(credited, 2)} of the company, loan year ${year} (graduation ${pct(g, 0)}) → Formula A ${a.toFixed(2)}`);
   });
+  const ei = free + netBlack;
+  const eiWomen = freeWomen + netWomen;
+  const lines: Line[] = [];
+  const add = (name: string, measure: number, target: number, max: number, what: string, isBonus = false) => {
+    const score = Math.max(pts(measure, target, max), 0);
+    lines.push({ name, target: pct(target, 0), weighting: max, score, isBonus: isBonus || undefined,
+      note: `${what} ${pct(measure, 2)} ÷ ${pct(target, 0)} × ${max} = ${score.toFixed(2)}` });
+  };
+  add('Exercisable voting rights of black individuals', black, 0.25, 4, 'Black voting rights');
+  add('Exercisable voting rights of black females', women, 0.10, 2, "Black women's voting rights");
+  add('Economic interest of black individuals', ei, 0.25, eiMax, 'Black economic interest after acquisition debt');
+  add('Economic interest of black females', eiWomen, 0.10, 2, "Black women's economic interest after acquisition debt");
+  add('Economic interest of black designated groups or participants in ownership schemes', designated, 0.03, 3, "Designated groups' economic interest");
+  add('Economic interest of black new entrants', entrants, 0.02, neMax, "Black new entrants' economic interest");
+
+  // Net value ('Ownership Scorecard'!J17): unencumbered black economic
+  // interest against the 25% target, plus the indebted black stakes' net
+  // value — Formula A (graduated by the loan's year) or Formula B, the lesser
+  // — at most 8.
   const formulaB = Math.min(formulaBRaw, 8);
-  const unencumbered = Math.min(free / 0.25 * nvMax, nvMax);
+  const unencumbered = Math.min((free / 0.25) * nvMax, nvMax);
   const netValue = Math.min(unencumbered + Math.min(formulaA, formulaB), 8);
   const subMinThreshold = nvMax * 0.4;
-
-  const lines: Line[] = (base.subLines as Line[]).filter((l) => l.name !== 'Net value');
   lines.push({
     name: 'Net value',
     target: `≥ ${subMinThreshold} pts`,
@@ -146,8 +165,16 @@ export function fscOwnership(data: OwnershipData, cfg: CalculatorConfig, sub: Fs
       + (debtNotes.length ? `; indebted black stakes: ${debtNotes.join('; ')}; Formula A ${formulaA.toFixed(2)}, Formula B ${formulaB.toFixed(2)} → the lesser` : '')
       + `. Sub-minimum ${subMinThreshold} points: ${netValue >= subMinThreshold ? 'met' : 'not met'}.`,
   });
-  const exact = lines.reduce((s, l) => s + l.score, 0);
-  return { lines, exact, netValue, subMinimumMet: netValue >= subMinThreshold, max: lines.reduce((s, l) => s + l.weighting, 0) };
+  if (!others) {
+    // Bonus: voting rights beyond 15% (against 10%, 3 points), and economic
+    // interest at 32.5% (1 point) or 40% (2 points).
+    add('Direct / indirect ownership in excess of 15%', black > 0 ? black - 0.15 : 0, 0.10, 3, 'Black voting rights above 15%', true);
+    const tier = ei >= 0.4 ? 2 : ei >= 0.325 ? 1 : 0;
+    lines.push({ name: 'Economic interest and voting rights above 32.5%', target: '32.5% / 40%', weighting: 2, score: tier, isBonus: true,
+      note: `Black economic interest ${pct(ei, 2)}: ${tier} of 2 (1 point at 32.5%, 2 at 40%).` });
+  }
+  const exact = lines.reduce((acc, l) => acc + l.score, 0);
+  return { lines, exact, netValue, subMinimumMet: netValue >= subMinThreshold, max: lines.reduce((acc, l) => acc + l.weighting, 0) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -512,21 +539,33 @@ function fscRecognisedSpend(s: Supplier, cfg: CalculatorConfig): number {
 // Enterprise and supplier development ('ESD Scorecard')
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig) {
+/**
+ * SD and ED weightings per sub-sector: banks and long-term insurers score
+ * them on their EF & ESD scorecard (SD 7 points at 1.8% of NPAT, ED 3 at
+ * 0.2%; no stock-broker line for banks); everyone else on the ESD Scorecard.
+ */
+export function fscEsdWeights(sub: FscSubSector) {
+  if (sub === 'Banks') return { sdMax: 7, sdTarget: 0.018, edMax: 3, edTarget: 0.002, brokerMax: 0 };
+  if (sub === 'LTI') return { sdMax: 7, sdTarget: 0.018, edMax: 3, edTarget: 0.002, brokerMax: 2 };
+  return { sdMax: 10, sdTarget: 0.02, edMax: 5, edTarget: 0.01, brokerMax: 2 };
+}
+
+export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: FscSubSector = 'Others') {
+  const w = fscEsdWeights(sub);
   const esdCfg: CalculatorConfig = {
     ...cfg,
     esd: {
       ...cfg.esd,
-      supplierDevMax: 10, supplierDevTarget: 0.02,
-      enterpriseDevMax: 5, enterpriseDevTarget: 0.01,
+      supplierDevMax: w.sdMax, supplierDevTarget: w.sdTarget,
+      enterpriseDevMax: w.edMax, enterpriseDevTarget: w.edTarget,
       edGraduationBonusMax: 1, edJobsBonusMax: 1,
-      edStockbrokerBonusMax: 2, edStockbrokerTarget: 0.005,
+      edStockbrokerBonusMax: w.brokerMax, edStockbrokerTarget: w.brokerMax > 0 ? 0.005 : 0,
       applyBeneficiaryQualification: true,
     },
     pillarConfigs: {
       ...cfg.pillarConfigs,
-      supplierDevelopment: { maxPoints: 10, subMinimumPercent: 40 },
-      enterpriseDevelopment: { maxPoints: 9, basePoints: 5, subMinimumPercent: 40 },
+      supplierDevelopment: { maxPoints: w.sdMax, subMinimumPercent: 40 },
+      enterpriseDevelopment: { maxPoints: w.edMax + 2 + w.brokerMax, basePoints: w.edMax, subMinimumPercent: 40 },
     },
   };
   // The stock-broker line counts the recognised value of the Enterprise
@@ -579,6 +618,89 @@ export function fscSedCe(data: SEDData, npat: number, reinsurer: boolean) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Empowerment financing ('EF & ESD Scorecard - Banks' / '- Long Term')
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Banks: targeted investments are the exposure on new loans against the
+ * balance-sheet plus additional targeted-investment exposure (12 points);
+ * long-term insurers: the targeted-investment portion against the qualifying
+ * exposure. Transaction financing (3 points): the period's transaction
+ * financing against its target portion.
+ */
+export function fscEmpowermentFinancing(data: EmpowermentFinancingData, sub: FscSubSector) {
+  const v = (x: unknown) => (Number(x) > 0 ? Number(x) : 0);
+  const banks = sub === 'Banks';
+  const tiTarget = banks ? v(data.balanceSheetExposure) + v(data.additionalTiExposure) : v(data.qualifyingExposure);
+  const tiAchieved = banks ? v(data.newLoansExposure) : v(data.targetedInvestmentPortion);
+  const tfTarget = v(data.tfPortfolioValue);
+  const tfAchieved = (data.tfTransactions ?? []).reduce((acc, t) => acc + (Number(t.value) || 0), 0);
+  const ti = pts(tiAchieved, tiTarget, 12);
+  const tf = pts(tfAchieved, tfTarget, 3);
+  const lines: Line[] = [
+    { name: 'Targeted investments', target: '100% of exposure', weighting: 12, score: ti, note: `${formatRand(tiAchieved)} of ${formatRand(tiTarget)} → ${ti.toFixed(2)} of 12.` },
+    { name: 'Transaction financing and risk capital contributions', target: '100% of target', weighting: 3, score: tf, note: `${formatRand(tfAchieved)} of ${formatRand(tfTarget)} → ${tf.toFixed(2)} of 3.` },
+  ];
+  return { lines, exact: ti + tf, max: 15 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Access to financial services ('AFS Scorecard - Banks')
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Banks: transaction (85%, 1 pt), service (70%, 1 pt) and sales points (60%,
+ * 2 pts) by share of the qualifying area, electronic access (2 pts), a point
+ * of presence per measurement unit (3 pts) and active accounts (3 pts). The
+ * toolkit carries no target for electronic access or active accounts, so it
+ * scores neither; they score here only on a stated compliance answer.
+ */
+export function fscAfsBanks(data: AfsData) {
+  const pctOf = (x: unknown) => (Number(x) || 0) / 100;
+  const tp = pts(pctOf(data.transactionPointCoverage), 0.85, 1);
+  const sp = pts(pctOf(data.servicePointCoverage), 0.70, 1);
+  const sales = pts(pctOf(data.salesPointCoverage), 0.60, 2);
+  const ea = data.electronicAccessCompliant ? 2 : 0;
+  const pop = data.hasPointOfPresence ? 3 : 0;
+  const aa = data.activeAccountsCompliant ? 3 : 0;
+  const lines: Line[] = [
+    { name: 'Transaction points within 5km', target: '85% of qualifying area', weighting: 1, score: tp },
+    { name: 'Service points within 10km', target: '70% of qualifying area', weighting: 1, score: sp },
+    { name: 'Sales points within 15km', target: '60% of qualifying area', weighting: 2, score: sales },
+    { name: 'Electronic access for target-market account holders', target: 'National', weighting: 2, score: ea },
+    { name: 'A point of presence per measurement unit', target: 'Yes', weighting: 3, score: pop },
+    { name: 'Active accounts with qualifying products', target: 'National', weighting: 3, score: aa },
+  ];
+  return { lines, exact: lines.reduce((acc, l) => acc + l.score, 0), max: 12 };
+}
+
+/**
+ * Long-term insurers ('AFS Scorecard - Long Term'): appropriate products
+ * (compliant of developed products, 3 pts), market penetration (on-book
+ * policies against the SAIA-communicated number, 7 pts, plus up to 0.25 for
+ * credit-life policies) and transactional access by share of polygons covered
+ * (2 pts: under 50% none, 60%–70% 1, 70%–80% 1.5, otherwise 2 — the toolkit's
+ * own tiers, which leave 50%–60% at 2).
+ */
+export function fscAfsLti(data: AfsData) {
+  const num = (x: unknown) => Number(x) || 0;
+  const products = num(data.appropriateProductsDenominator);
+  const ap = products > 0 ? (num(data.appropriateProductsNumerator) / products) * 3 : 0;
+  const saia = num(data.saiaCommunicatedPolicies);
+  const mp = saia > 0
+    ? Math.min(Math.min((num(data.marketPenetrationPolicies) / saia) * 7, 7) + Math.min((num(data.creditLifePolicies) / saia) * 7, 0.25), 7)
+    : 0;
+  const cover = num(data.transactionalAccessCoverage) / 100;
+  const ta = cover < 0.5 ? 0 : cover >= 0.6 && cover < 0.7 ? 1 : cover >= 0.7 && cover < 0.8 ? 1.5 : 2;
+  const lines: Line[] = [
+    { name: 'Appropriate products', target: 'All developed products compliant', weighting: 3, score: ap },
+    { name: 'Market penetration', target: 'SAIA-communicated policies', weighting: 7, score: mp },
+    { name: 'Transactional access', target: '80% of polygons', weighting: 2, score: ta },
+  ];
+  return { lines, exact: ap + mp + ta, max: 12 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // The scorecard
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -607,25 +729,33 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
   const demographics = fscSkillsDemographics(state.management);
   const skills = fscSkills(state.skills, client.eapProvince, client.eapYear, demographics);
   const pp = fscProcurement({ ...state.procurement, measurementPeriodEnd: state.procurement.measurementPeriodEnd ?? client.measurementPeriodEnd }, cfg, sub);
-  const esd = fscEsd({ ...state.esd, measurementPeriodEnd: state.esd.measurementPeriodEnd ?? client.measurementPeriodEnd }, npat, cfg);
+  const esd = fscEsd({ ...state.esd, measurementPeriodEnd: state.esd.measurementPeriodEnd ?? client.measurementPeriodEnd }, npat, cfg, sub);
   const sed = fscSedCe(state.sed, npat, Boolean(client.fscReinsurer));
-  const afs = cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
-  const ef = cfg.empowermentFinancing ? calculateEmpowermentFinancingScore(state.empowermentFinancing, cfg) : null;
+  const ef = BANKS_OR_LTI(sub) ? fscEmpowermentFinancing(state.empowermentFinancing, sub) : null;
+  const afsFsc = sub === 'Banks' ? fscAfsBanks(state.afs) : sub === 'LTI' ? fscAfsLti(state.afs) : null;
+  const afsOther = sub === 'STI' && cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
+  const afs = afsFsc
+    ? { total: afsFsc.exact, maxPoints: 12, lines: afsFsc.lines.map((l) => ({ name: l.name, target: l.target, maxPoints: l.weighting, score: l.score })) }
+    : afsOther;
+  const esdW = fscEsdWeights(sub);
 
   const ownBaseMax = own.lines.reduce((s, l) => s + (l.isBonus ? 0 : l.weighting), 0);
   const ppBaseMax = BANKS_OR_LTI(sub) ? 15 : 20;
   const sedBaseMax = sed.lines.slice(0, 2).reduce((s, l) => s + l.weighting, 0);
   // 'Scorecard Calculations'!F12: the base points every level threshold scales by.
-  const basePoints = ownBaseMax + mc.max + 20 + ppBaseMax + 10 + 5 + sedBaseMax
-    + (ef ? ef.maxPoints : 0) + (afs ? afs.maxPoints : 0);
+  const basePoints = ownBaseMax + mc.max + 20 + ppBaseMax + esdW.sdMax + esdW.edMax + sedBaseMax
+    + (ef ? ef.max : 0) + (afs ? afs.maxPoints : 0);
 
   const total = own.exact + mc.exact + skills.exact + pp.exact + esd.sdExactTotal! + esd.edExactTotal!
-    + sed.exact + (ef?.total ?? 0) + (afs?.total ?? 0);
+    + sed.exact + (ef?.exact ?? 0) + (afs?.total ?? 0);
   const level = fscLevelForPoints(total, basePoints);
 
   const sdMet = esd.sdSubMinimumMet;
   const edMet = esd.edSubMinimumMet;
-  const anyFailed = !own.subMinimumMet || !skills.subMinimumMet || !pp.subMinimumMet || !sdMet || !edMet;
+  // Banks and long-term insurers: empowerment financing (40% of 15) is the
+  // priority element in procurement's place.
+  const ppOrEfMet = ef ? ef.exact >= ef.max * 0.4 : pp.subMinimumMet;
+  const anyFailed = !own.subMinimumMet || !skills.subMinimumMet || !ppOrEfMet || !sdMet || !edMet;
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anyFailed;
   let discountedLevel = isDiscounted ? (level >= 8 ? 9 : level + 1) : level;
   const preYesDiscountedLevel = discountedLevel;
@@ -664,13 +794,13 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
     ownership: { score: round2(own.exact), target: sumW(own.lines), weighting: sumW(own.lines), subMinimumMet: own.subMinimumMet, subLines: toLines(own.lines) },
     managementControl: { score: round2(mc.exact), target: round2(mc.max), weighting: round2(mc.max), subLines: toLines(mc.lines) },
     skillsDevelopment: { score: round2(skills.exact), target: 23, weighting: 23, subMinimumMet: skills.subMinimumMet, subLines: toLines(skills.lines) },
-    procurement: { score: round2(pp.exact), target: sumW(pp.lines.filter((l, i) => i !== 6)), weighting: sumW(pp.lines.filter((l, i) => i !== 6)), subMinimumMet: pp.subMinimumMet, subLines: toLines(pp.lines), coverageNotes: pp.coverageNotes },
-    supplierDevelopment: { score: round2(esd.sdExactTotal!), target: 10, weighting: 10, subMinimumMet: sdMet, subLines: toBreakdownLines(esd.sdSubLines) },
-    enterpriseDevelopment: { score: round2(esd.edExactTotal!), target: 9, weighting: 9, subMinimumMet: edMet, subLines: toBreakdownLines(esd.edSubLines) },
+    procurement: { score: round2(pp.exact), target: sumW(pp.lines.filter((l, i) => i !== 6)), weighting: sumW(pp.lines.filter((l, i) => i !== 6)), subMinimumMet: ef ? undefined : pp.subMinimumMet, subLines: toLines(pp.lines), coverageNotes: pp.coverageNotes },
+    supplierDevelopment: { score: round2(esd.sdExactTotal!), target: esdW.sdMax, weighting: esdW.sdMax, subMinimumMet: sdMet, subLines: toBreakdownLines(esd.sdSubLines) },
+    enterpriseDevelopment: { score: round2(esd.edExactTotal!), target: esdW.edMax + 2 + esdW.brokerMax, weighting: esdW.edMax + 2 + esdW.brokerMax, subMinimumMet: edMet, subLines: toBreakdownLines(esd.edSubLines) },
     socioEconomicDevelopment: { score: round2(sed.exact), target: sed.max, weighting: sed.max, subLines: toLines(sed.lines) },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: 0, weighting: 0 },
     ...(afs ? { accessToFinancialServices: { score: round2(afs.total), target: afs.maxPoints, weighting: afs.maxPoints, subLines: afs.lines.map((l) => ({ name: l.name, target: l.target, weighting: l.maxPoints, score: l.score })) } } : {}),
-    ...(ef ? { empowermentFinancing: { score: round2(ef.total), target: ef.maxPoints, weighting: ef.maxPoints, subLines: ef.lines.map((l) => ({ name: l.name, target: '100%', weighting: l.maxPoints, score: l.score })) } } : {}),
+    ...(ef ? { empowermentFinancing: { score: round2(ef.exact), target: 15, weighting: 15, subMinimumMet: ppOrEfMet, subLines: toLines(ef.lines) } } : {}),
     total: { score: round2(total), target: round2(basePoints), weighting: round2(basePoints), coverageNotes: [thresholdNote] },
     achievedLevel: level,
     discountedLevel,

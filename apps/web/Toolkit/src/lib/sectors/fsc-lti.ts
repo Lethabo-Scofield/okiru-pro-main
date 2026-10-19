@@ -264,8 +264,14 @@ export function sectorConfigToFscLtiCalculatorConfig(sc: SectorConfig): Calculat
 }
 
 /** Complete FSC Long-Term Insurers (FS702) config. */
-export const FSC_LTI_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToFscLtiCalculatorConfig(FSC_LTI);
+/**
+ * The scorecard scores FSC long-term insurers the way the FSC Empower toolkit
+ * does (`fscToolkit` → calculators/fscToolkit.ts; docs/toolkits/parity/findings/fsc.md).
+ */
+export const FSC_LTI_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...sectorConfigToFscLtiCalculatorConfig(FSC_LTI),
+  fscToolkit: { subSector: 'LTI' },
+};
 
 export { FSC_SKILLS_PER_LEVEL_TARGETS as FSC_LTI_SKILLS_PER_LEVEL_TARGETS };
 
