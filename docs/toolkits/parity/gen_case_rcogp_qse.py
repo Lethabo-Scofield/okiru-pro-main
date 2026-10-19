@@ -318,13 +318,17 @@ def edge(name):
                   "tblInclusions": [{"Inclusions": "Cost of Sales", "Amount": 1_500_000}],
                   "tblESDData": [], "tblSED": []}
         value = 10_000_000
-    elif name in ("threshold75", "qse_rule", "full", "skills_fail"):
+    elif name in ("threshold75", "qse_rule", "full", "skills_fail", "pp_skills_fail"):
         # threshold75: every line full or zero so the total is exactly 75.00 —
         #   the Level 5 boundary (toolkit's strict "<" drops it to Level 6);
         # qse_rule: Ownership and Skills pass, Supplier Development is empty
         #   (fails its sub-minimum) — a QSE needs Ownership plus Skills OR ESD;
         # skills_fail: Ownership and every ESD line pass, Skills misses its
         #   sub-minimum — again no discount for a QSE;
+        # pp_skills_fail: Ownership, Supplier and Enterprise Development pass,
+        #   Skills AND Preferential Procurement miss their sub-minimums — a QSE
+        #   is discounted; the toolkit's test (its Skills and Procurement checks
+        #   always pass) does not discount it;
         # full: every line at its maximum (108, Level 1).
         npat = 2_000_000
         cells = _base(f"QSE edge: {name}", npat=npat, monthly_sdl=5_000)   # leviable R6m
@@ -355,6 +359,13 @@ def edge(name):
             # black women or disabled learners: Skills scores well under 10.
             sk = [_learner(1, 'C', 'African', 'Male', 40_000)]
             pp = sup_full
+            esd = [_esd(1, 'Enterprise Development', GRANT, 15_000), _esd(2, 'Supplier Development', GRANT, 12_000)]
+            sed = [_sed(1, SED_GRANT, 8_000)]
+        elif name == "pp_skills_fail":
+            # Skills as in skills_fail; one Level 8 Generic supplier (10%
+            # recognition) leaves Procurement far under its 8-point sub-minimum.
+            sk = [_learner(1, 'C', 'African', 'Male', 40_000)]
+            pp = [_supplier(1, 'Generic', 8, 0.2, 5_000_000)]
             esd = [_esd(1, 'Enterprise Development', GRANT, 15_000), _esd(2, 'Supplier Development', GRANT, 12_000)]
             sed = [_sed(1, SED_GRANT, 8_000)]
         else:
@@ -510,7 +521,7 @@ def edge(name):
     return {"template": TEMPLATE, "seed": None, "profile": f"edge:{name}", "cells": cells, "tables": tables}
 
 
-EDGES = ["zero", "threshold75", "qse_rule", "skills_fail", "full", "own_fail_l8", "bonus", "debt", "yes", "contrib"]
+EDGES = ["zero", "threshold75", "qse_rule", "skills_fail", "pp_skills_fail", "full", "own_fail_l8", "bonus", "debt", "yes", "contrib"]
 RANDOM = [(101, "full"), (102, "small"), (103, "full"), (104, "small"), (105, "full"),
           (106, "full"), (107, "small"), (108, "full")]
 
