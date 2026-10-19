@@ -538,8 +538,17 @@ export function calculateSedScore(
   const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
+  // ICT: a contribution answered "not an ICT-specific initiative" counts 0.
+  const requireIct = sc.requireIctSpecificInitiative === true;
+  let notIctSpend = 0;
+  let notIctCount = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
+    if (requireIct && c.ictSpecificInitiative === false) {
+      notIctSpend += amount;
+      notIctCount += 1;
+      return acc;
+    }
     const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
     if (!recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
@@ -587,9 +596,11 @@ export function calculateSedScore(
 
   const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
   const total = round2(clampScore(score, maxPoints));
-  const excludedClause = excludedSpend > 0
+  const excludedClause = (excludedSpend > 0
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
-    : '';
+    : '') + (notIctCount > 0
+    ? `; ${formatRand(notIctSpend)} across ${notIctCount} contribution${notIctCount === 1 ? '' : 's'} not counted: not an ICT-specific initiative`
+    : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),

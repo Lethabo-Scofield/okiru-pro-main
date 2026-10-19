@@ -108,10 +108,14 @@ describe('ICT QSE — CalculatorConfig completeness', () => {
     expect(CONFIG.procurement.subMinThreshold).toBeCloseTo(8, 1);
   });
 
-  it('has QSE-specific ESD targets (2% NPAT for SD and ED base — AICT604, audit item 4)', () => {
-    expect(CONFIG.esd.supplierDevTarget).toBeCloseTo(0.02, 4);
+  it('has the ICT QSE toolkit ESD targets (1% NPAT for SD and ED base — ESD Scorecard F12:F13)', () => {
+    // The Empower ICT QSE toolkit is the reference (owner ruling, Oct 2026):
+    // its 'ESD Scorecard'!F12 and F13 are 1% of NPAT. The sector config's 2%
+    // (gazette AICT604, audit 2026-07-26 item 4) is recorded for the expert in
+    // docs/toolkits/parity/findings/ict_qse.md.
+    expect(CONFIG.esd.supplierDevTarget).toBeCloseTo(0.01, 4);
     expect(CONFIG.esd.supplierDevMax).toBe(5);
-    expect(CONFIG.esd.enterpriseDevTarget).toBeCloseTo(0.02, 4);
+    expect(CONFIG.esd.enterpriseDevTarget).toBeCloseTo(0.01, 4);
     expect(CONFIG.esd.enterpriseDevMax).toBe(5); // base; total 8 with bonuses (7 via calculator)
   });
 
@@ -455,60 +459,58 @@ describe('ICT QSE — Skills Development pillar', () => {
     expect(CONFIG.skills.subMinThreshold).toBeCloseTo(10, 1);
   });
 
-  it('maxed absorption bonus (5 pts) at 100% absorption (Excel Skills Calcs!J28)', () => {
-    // R22: target is 100% absorption (absorbed/completers = 1.0). All absorbed → 5 pts.
-    const r = calculateSkillsScore(
-      {
-        id: '1',
-        clientId: 'ict-qse',
-        leviableAmount: LEVIABLE,
-        trainingPrograms: [
-          { id: 'y1', name: 'Learnership', category: 'learnership', cost: 10_000,
-            isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Female', race: 'African' } as any,
-          { id: 'y2', name: 'Learnership', category: 'learnership', cost: 10_000,
-            isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Male', race: 'African' } as any,
-        ],
-        yesCandidatesCount: 0,
-        yesAbsorbedCount: 0,
-      },
-      CONFIG,
-    );
-    // 2 absorbed / 2 total learners = 100% rate × 5 = 5 (maxed only at 100%, not 1%)
-    expect(r.absorption).toBeCloseTo(5, 1);
+  // The ICT QSE toolkit's absorption bonus ('Skills Calcs'!J28 = MIN(I28 / I30 × 5, 5))
+  // is the BLACK SHARE of the unemployed learners who completed a learnership,
+  // apprenticeship or internship and were absorbed — I30 adds the black (F28)
+  // and non-black (F29) absorbed counts. Checked against Excel (parity cases
+  // docs/toolkits/parity/expected/ict_qse); the reading is recorded for the
+  // expert in docs/toolkits/parity/findings/ict_qse.md.
+  const absorbed = (id: string, race: string, isAbsorbed = true) => ({
+    id, programName: 'Learnership', categoryCode: 'D', courseCost: 10_000, race, gender: 'Female',
+    isDisabled: false, isForeign: false, employmentStatus: 'Unemployed', isEmployed: false,
+    isCompleted: true, isAbsorbed,
   });
 
-  it('R22: partial absorption scores pro-rata BELOW 5 (100% target, not 1%)', () => {
-    // Excel `Skills Calcs!J28 = MIN(absorbed/completers × 5, 5)` — full pts need 100% absorbed.
-    // 1 absorbed of 2 Black learners = 50% rate → 0.5 × 5 = 2.5 (strictly < 5).
+  it('maxed absorption bonus (5 pts) when every absorbed learner is black (Excel Skills Calcs!J28)', () => {
     const r = calculateSkillsScore(
       {
         id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE,
-        trainingPrograms: [
-          { id: 'a', name: 'LAI', category: 'learnership', cost: 1000,
-            isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Male', race: 'African' } as never,
-          { id: 'b', name: 'LAI', category: 'learnership', cost: 1000,
-            isBlack: true, isDisabled: false, isAbsorbed: false, gender: 'Female', race: 'African' } as never,
-        ],
+        trainingPrograms: [absorbed('y1', 'African'), absorbed('y2', 'Coloured')] as never,
         yesCandidatesCount: 0, yesAbsorbedCount: 0,
       },
       CONFIG,
     );
-    expect(r.absorption).toBeCloseTo(2.5, 1);
-    expect(r.absorption).toBeLessThan(5);
+    expect(r.absorption).toBeCloseTo(5, 4);
   });
 
-  it('R22: a single absorbed learner among many no longer maxes (was 2.5 under the wrong 1% target)', () => {
-    // 1 absorbed of 200 Black learners = 0.5% rate. Under the corrected 100% target:
-    // 0.005 × 5 = 0.025 ≈ 0 (was 2.5 when the target was misread as 1%, ledger D-04).
-    const programs = Array.from({ length: 200 }, (_, i) => ({
-      id: `L${i}`, name: 'LAI', category: 'learnership', cost: 1000,
-      isBlack: true, isDisabled: false, isAbsorbed: i === 0, gender: 'Male', race: 'African',
-    }));
+  it('absorption scores pro rata on the black share of absorbed learners', () => {
+    // 1 black of 2 absorbed learners = 50% → 0.5 × 5 = 2.5.
     const r = calculateSkillsScore(
-      { id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE, trainingPrograms: programs as never, yesCandidatesCount: 0, yesAbsorbedCount: 0 },
+      {
+        id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE,
+        trainingPrograms: [absorbed('a', 'African'), absorbed('b', 'White')] as never,
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
       CONFIG,
     );
-    expect(r.absorption).toBeLessThan(0.1);
+    expect(r.absorption).toBeCloseTo(2.5, 4);
+  });
+
+  it('absorption counts only unemployed learners who completed the programme and were absorbed', () => {
+    const r = calculateSkillsScore(
+      {
+        id: '1', clientId: 'ict-qse', leviableAmount: LEVIABLE,
+        trainingPrograms: [
+          absorbed('a', 'African', false),
+          { ...absorbed('b', 'African'), isCompleted: false },
+          { ...absorbed('c', 'African'), employmentStatus: 'Permanent', isEmployed: true },
+          { ...absorbed('d', 'African'), categoryCode: 'E' },
+        ] as never,
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(r.absorption).toBe(0);
   });
 });
 
@@ -602,7 +604,7 @@ describe('ICT QSE — Preferential Procurement pillar', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §6 — Supplier Development pillar (2% NPAT / 5 pts — AICT604)
+// §6 — Supplier Development pillar (1% NPAT / 5 pts — ICT QSE toolkit ESD Scorecard F12)
 // ---------------------------------------------------------------------------
 
 describe('ICT QSE — Supplier Development pillar', () => {
@@ -615,8 +617,8 @@ describe('ICT QSE — Supplier Development pillar', () => {
     expect(r.supplierDev).toBe(0);
   });
 
-  it('exactly 2% NPAT in SD → 5/5 (full score)', () => {
-    const sdAmount = NPAT * 0.02; // 2% NPAT = the AICT604 target (audit item 4)
+  it('exactly 1% NPAT in SD → 5/5 (full score)', () => {
+    const sdAmount = NPAT * 0.01; // 1% NPAT = the toolkit target ('ESD Scorecard'!F12)
     const r = calculateEsdScore(
       {
         id: '1',
@@ -659,13 +661,13 @@ describe('ICT QSE — Enterprise Development pillar (tiered jobs bonus)', () => 
     beneficiary: 'ICT Startup',
     description: 'ED mentorship',
     type: 'direct_cost' as const,
-    amount: NPAT * 0.02, // 2% NPAT = the AICT604 target (audit item 4)
+    amount: NPAT * 0.01, // 1% NPAT = the toolkit target ('ESD Scorecard'!F13)
     category: 'enterprise_development' as const,
     blackBenefitPercent: 100,
     transactionDate: '2025-08-01',
   };
 
-  it('2% NPAT + graduation + jobs ≤10% → 7/8 (lower jobs tier = 1 pt)', () => {
+  it('1% NPAT + graduation + jobs ≤10% → 7/8 (lower jobs tier = 1 pt)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'ict-qse', contributions: [edContribution],
@@ -680,7 +682,7 @@ describe('ICT QSE — Enterprise Development pillar (tiered jobs bonus)', () => 
     expect(r.edTotal).toBeCloseTo(7, 1);
   });
 
-  it('2% NPAT + graduation + jobs ≥11% → 8/8 (upper jobs tier = 2 pts)', () => {
+  it('1% NPAT + graduation + jobs ≥11% → 8/8 (upper jobs tier = 2 pts)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'ict-qse', contributions: [edContribution],

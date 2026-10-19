@@ -344,6 +344,8 @@ export interface Supplier {
   isEmpoweringSupplier: boolean;         // Mandatory for Generic/QSE
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
+  /** "First-time supplier?" — read only where the sector config says so (procurement.firstTimeSupplierEarnsEnhancedRecognition). */
+  isFirstTimeSupplier?: boolean;
   
   // Dates
   firstProcurementDate?: string;
@@ -499,6 +501,8 @@ export interface Contribution {
   // Construction-specific beneficiary flags (Phase 1 wiring — see docs/construction-wiring-spec.md)
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
+  /** ICT SED: "ICT Specific Initiative?" — read only where sed.requireIctSpecificInitiative is set. */
+  ictSpecificInitiative?: boolean;
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
 }
 

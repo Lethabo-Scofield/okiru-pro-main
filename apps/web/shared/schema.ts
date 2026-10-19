@@ -100,6 +100,14 @@ export interface CalculatorConfig {
      * Empower toolkit, and the default) or by the voting rights entered.
      */
     boardMeasure?: 'headcount' | 'votingRights';
+    /**
+     * QSE scorecards whose client combines executive and senior management:
+     * the executive lines count executive directors, other executive managers
+     * and senior managers together, and the senior/middle/junior lines count
+     * middle and junior managers only (ICT QSE toolkit 'MC Scorecard (Exco +
+     * Senior)'), each by the gender entered. Unset, a QSE ignores the choice.
+     */
+    qseCombineExcoSenior?: boolean;
     boardBlackTarget?: number;
     boardBlackMaxPts?: number;
     boardBWTarget?: number;
@@ -188,8 +196,17 @@ export interface CalculatorConfig {
      * kept out of the other spend lines), F & G course costs and other costs are
      * capped against all training spend, and training-admin costs are shared out
      * by the black workforce mix. Unset keeps the original method.
+     *
+     * 'toolkit_qse' scores Skills the way the ICT QSE Empower toolkit does (no
+     * EAP split): black, black-women and black-disabled learners' recognised
+     * spend — category A–E course costs and B–D stipends, plus F & G course
+     * costs and other costs capped together at 15% of all training spend, plus
+     * 15% of the training-admin costs shared by the matching workforce share —
+     * each against its share of the leviable amount; the absorption bonus is
+     * the black share of the unemployed learners who completed a learnership,
+     * apprenticeship or internship and were absorbed.
      */
-    method?: 'toolkit';
+    method?: 'toolkit' | 'toolkit_qse';
     /**
      * 'headcount': the absorption bonus measures absorbed learners against the
      * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
@@ -243,6 +260,12 @@ export interface CalculatorConfig {
      * (EME) line within five years of first procurement.
      */
     countGraduatedSuppliersAsSmall?: boolean;
+    /**
+     * A first-time supplier (a QSE/EME at least 51% black owned) also earns
+     * the 1.2 recognition factor, as the templates' "First-time supplier?"
+     * column means it to (ICT QSE). Unset, the answer is not consulted.
+     */
+    firstTimeSupplierEarnsEnhancedRecognition?: boolean;
   };
   esd: {
     supplierDevMax: number;
@@ -279,6 +302,12 @@ export interface CalculatorConfig {
   sed: {
     maxPoints: number;
     npatTarget: number;
+    /**
+     * ICT: only ICT-specific initiatives count (SED Data[Recognised Amount] is
+     * 0 unless "ICT Specific Initiative?" is Yes). A contribution answered
+     * "No" is excluded; one with no answer on record still counts.
+     */
+    requireIctSpecificInitiative?: boolean;
     /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
     sedBaseMaxPts?: number;
     /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */
@@ -308,6 +337,13 @@ export interface CalculatorConfig {
   discounting: {
     dropLevels: number;
     maxDropLevel: number;
+    /**
+     * A QSE is discounted when ANY priority-element sub-minimum fails, as a
+     * Generic entity is (ICT QSE toolkit 'Scorecard Calculations'!C13 tests
+     * net value, Skills, PP, SD and ED together). Unset, a QSE needs Ownership
+     * plus either Skills or the ESD element (Statement 000 §3.3).
+     */
+    qseRequiresAllPriorityElements?: boolean;
   };
   recognitionTable?: { level: number; multiplier: number }[];
   levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;

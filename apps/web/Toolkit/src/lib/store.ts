@@ -942,7 +942,10 @@ export function calculateScorecard(
   // The old rule demanded all five for everyone, discounting QSEs the codes
   // say are compliant.
   const esdElementSubMinMet = prSubMinMet && sdSubMinMet && edSubMinMet;
-  const isQseScorecard = /qse/i.test(String(state.client.scorecardType ?? ""));
+  // A sector whose toolkit discounts a QSE like a Generic entity opts out of
+  // the either-or rule (discounting.qseRequiresAllPriorityElements, ICT QSE).
+  const isQseScorecard = /qse/i.test(String(state.client.scorecardType ?? ""))
+    && cfg.discounting?.qseRequiresAllPriorityElements !== true;
   const anySubMinFailed = isQseScorecard
     ? (!ownSubMinMet || !(skSubMinMet || esdElementSubMinMet))
     : (!ownSubMinMet || !skSubMinMet || !esdElementSubMinMet);

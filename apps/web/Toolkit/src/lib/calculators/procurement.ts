@@ -138,12 +138,13 @@ export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'flow_throu
  *
  * 'black_owned_small_supplier' — RCOGP QSE, ICT, FSC and AgriBEE templates:
  *   a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or
- *   holds a 3-year contract. (Their "first-time supplier" branch has no field
- *   in our supplier record, so it cannot be applied.)
+ *   holds a 3-year contract — or, where the sector reads the templates'
+ *   "First-time supplier?" answer (firstTimeSupplier), is a first-time supplier.
  */
 export function qualifiesForEnhancedRecognition(
   sup: Supplier,
   rule: EnhancedRecognitionRule = 'black_owned_small_supplier',
+  firstTimeSupplier = false,
 ): boolean {
   const size = normaliseSize(sup.enterpriseType);
   if (!size) return false;
@@ -151,7 +152,8 @@ export function qualifiesForEnhancedRecognition(
   const bo = Number(sup.blackOwnership) || 0;
   if (rule === 'black_owned_small_supplier') {
     return small && bo >= OWNED_51
-      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract));
+      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract)
+        || (firstTimeSupplier && sup.isFirstTimeSupplier === true));
   }
   const ft = Number(sup.flowThroughOwnership) || 0;
   if (bo >= OWNED_51 && ft >= OWNED_51) return true;
@@ -279,6 +281,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const ignoreEmpoweringFlag = pc.allSuppliersIgnoreEmpoweringFlag === true;
   const enhancedRule: EnhancedRecognitionRule = pc.enhancedRecognitionRule ?? 'black_owned_small_supplier';
   const countGraduates = pc.countGraduatedSuppliersAsSmall === true;
+  const firstTimeSupplier = pc.firstTimeSupplierEarnsEnhancedRecognition === true;
 
   const blackWomenThreshold = pc.blackWomenThreshold ?? 0.30;
   // No configured sub-minimum means NO sub-minimum (audit 2026-07-26 item 15).
@@ -329,7 +332,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     // Procurement Data[All Spend adjusted] × 1.2 where the supplier qualifies
     // ([All Spend adjusted PLUS x1.2 Factor]) — the figure every line sums.
     const adjusted = spend * getRecognitionMultiplier(sup.beeLevel, config);
-    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule);
+    const enhanced = qualifiesForEnhancedRecognition(sup, enhancedRule, firstTimeSupplier);
     if (enhanced && adjusted > 0) enhancedCount += 1;
     const recognised = enhanced ? adjusted * ENHANCED_RECOGNITION : adjusted;
     recognisedSpend += recognised;
@@ -429,7 +432,9 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       `${enhancedCount} supplier${enhancedCount === 1 ? "'s" : "s'"} recognised spend carries the 1.2 factor ` +
       (enhancedRule === 'flow_through'
         ? '(≥51% black and ≥51% flow-through black owned, or a QSE/EME Supplier Development beneficiary on a 3-year contract).'
-        : '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or holds a 3-year contract).'),
+        : firstTimeSupplier
+          ? '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary, holds a 3-year contract or is a first-time supplier).'
+          : '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or holds a 3-year contract).'),
     );
   }
   if (unjudgedGraduates.length > 0) {

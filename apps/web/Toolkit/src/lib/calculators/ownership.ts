@@ -520,7 +520,10 @@ function calculateToolkitOwnership(
   const votingRightsBWO = safeRatio(blackWomenShare, ot.womenVotingTarget, ot.womenVotingMaxPts);
   const economicInterestBlack = safeRatio(eiBlack, ot.economicInterestTarget, ot.economicInterestMaxPts);
   const economicInterestBWO = safeRatio(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts);
-  const designatedGroups = safeRatio(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax);
+  // QSE templates score one combined "black new entrants or designated
+  // groups" line: the two shares added ('Ownership Scorecard'!I9 = Y4 + Z4).
+  const designatedMeasure = ot.combinedNewEntrantsDesignated ? designatedShare + newEntrantShare : designatedShare;
+  const designatedGroups = safeRatio(designatedMeasure, ot.designatedGroupsTarget, ot.designatedGroupsMax);
   const newEntrants = safeRatio(newEntrantShare, ot.newEntrantsTarget, ot.newEntrantsMaxPts);
   const netValuePoints = safeRatio(netValueMeasure, netValueTarget, ot.netValueMaxPts);
 
@@ -590,7 +593,9 @@ function calculateToolkitOwnership(
           target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`,
           weighting: ot.designatedGroupsMax,
           score: designatedGroups,
-          note: `Designated groups' economic interest ${pointsWorking(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax)}.`,
+          note: ot.combinedNewEntrantsDesignated
+            ? `Economic interest of black new entrants or designated groups (${pctText(newEntrantShare)} + ${pctText(designatedShare)}) ${pointsWorking(designatedMeasure, ot.designatedGroupsTarget, ot.designatedGroupsMax)}.`
+            : `Designated groups' economic interest ${pointsWorking(designatedShare, ot.designatedGroupsTarget, ot.designatedGroupsMax)}.`,
         }]
       : []),
     ...(ot.newEntrantsMaxPts > 0
@@ -630,7 +635,7 @@ function calculateToolkitOwnership(
       blackWomenVotingPercentage: round2(blackWomenShare),
       economicInterestPercentage: round2(eiBlack),
       economicInterestBWOPercentage: round2(eiBlackWomen),
-      designatedGroupPercentage: round2(designatedShare),
+      designatedGroupPercentage: round2(designatedMeasure),
       netValuePercentage: round2(netValueMeasure),
       newEntrantEIPercentage: round2(newEntrantShare),
     },
