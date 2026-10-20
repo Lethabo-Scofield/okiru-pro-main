@@ -293,7 +293,7 @@ function buildLineEAPBreakdowns(
   year?: number,
 ): Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> {
   const result: Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> = {};
-  for (const [indicatorIdx, filtered] of learnersByLine.entries()) {
+  learnersByLine.forEach((filtered, indicatorIdx) => {
     const byLevel = {} as Record<SkillsEAPLevel, DemographicBreakdown[]>;
     for (const level of SKILLS_EAP_LEVELS) {
       // Province + year effective EAP (was national-only — same bug fixed in MC).
@@ -304,7 +304,7 @@ function buildLineEAPBreakdowns(
       );
     }
     result[indicatorIdx] = byLevel;
-  }
+  });
   return result;
 }
 
