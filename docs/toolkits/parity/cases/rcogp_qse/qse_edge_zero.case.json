@@ -1,0 +1,139 @@
+{
+ "template": "rcogp_qse",
+ "seed": null,
+ "profile": "edge:zero",
+ "cells": {
+  "Ownership Scorecard!D13": "Year",
+  "Ownership Scorecard!D14": "Current YTD",
+  "MC Toolkit!C3": "Year",
+  "MC Toolkit!C4": "Current YTD",
+  "Skills Toolkit!D8": "Current YTD",
+  "Procurement Scorecard!C15": "Year",
+  "Procurement Scorecard!C16": "Current YTD",
+  "Procurement Scorecard!E6": "Actual",
+  "ESD Scorecard!F13": "Year",
+  "ESD Scorecard!F14": "Current YTD",
+  "SED Scorecard!H9": "Year",
+  "SED Scorecard!H10": "Current YTD",
+  "Client Information!C3": "QSE edge: zero",
+  "Client Information!C4": "2025-03-01",
+  "Client Information!D4": "2026-02-28",
+  "Client Information!C8": 0.06,
+  "Client Information!C16": 20000000,
+  "Client Information!C17": -300000,
+  "Client Information!G4": 5000,
+  "Client Information!G5": 5000,
+  "Client Information!G6": 5000,
+  "Client Information!G7": 5000,
+  "Client Information!G8": 5000,
+  "Client Information!G9": 5000,
+  "Client Information!G10": 5000,
+  "Client Information!G11": 5000,
+  "Client Information!G12": 5000,
+  "Client Information!G13": 5000,
+  "Client Information!G14": 5000,
+  "Client Information!G15": 5000
+ },
+ "tables": {
+  "tblOwnershipData": [
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 1",
+    "Ownership Type": "Strategic Partner",
+    "Outstaning Debt": 0,
+    "BO%": 0,
+    "BWO%": 0,
+    "BDG%": 0,
+    "BNE%": 0,
+    "Number of Share": 1000,
+    "Share Value": 10000000,
+    "Original Date": "2018-06-01"
+   }
+  ],
+  "tblMCData": [
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 1",
+    "Gender *": "Male",
+    "Race *": "White",
+    "Designation *": "Executive Director",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 2",
+    "Gender *": "Female",
+    "Race *": "White",
+    "Designation *": "Senior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 3",
+    "Gender *": "Male",
+    "Race *": "White",
+    "Designation *": "Middle Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 4",
+    "Gender *": "Male",
+    "Race *": "White",
+    "Designation *": "Semi-skilled",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   }
+  ],
+  "tblSkillsData": [],
+  "tblPPData": [
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 1",
+    "Current Company Size *": "Generic",
+    "B-BBEE Level": "Non-compliant",
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0,
+    "Current Black Female ownership": 0,
+    "Black Designated Group  ownership": 0,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 900000
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 2",
+    "Current Company Size *": "Generic",
+    "B-BBEE Level": 8,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0,
+    "Current Black Female ownership": 0,
+    "Black Designated Group  ownership": 0,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 400000
+   }
+  ],
+  "tblInclusions": [
+   {
+    "Inclusions": "Cost of Sales",
+    "Amount": 1500000
+   }
+  ],
+  "tblESDData": [],
+  "tblSED": [],
+  "tblCompanyValuation": [
+   {
+    "Date": "2026-02-28",
+    "Company Asset Value": 10000000,
+    "Total Shares": 1000,
+    "Share Value": 10000.0
+   }
+  ]
+ }
+}

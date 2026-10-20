@@ -363,11 +363,15 @@ export interface Supplier {
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
   /**
-   * FSC toolkit supplier flags (Procurement Data): a first-time supplier (one
-   * of the 1.2 recognition-factor grounds), and the stock broker / fund
-   * manager / intermediary suppliers its two bonus lines count.
+   * "First-time supplier?" (the templates' Procurement Data): one of the 1.2
+   * recognition-factor grounds, read only where the sector's config uses the
+   * rule 'black_owned_small_supplier_or_first_time'.
    */
   isFirstTimeSupplier?: boolean;
+  /**
+   * FSC toolkit supplier flags (Procurement Data): the stock broker / fund
+   * manager / intermediary suppliers its two bonus lines count.
+   */
   isStockBroker?: boolean;
   isFundManager?: boolean;
   isIntermediary?: boolean;

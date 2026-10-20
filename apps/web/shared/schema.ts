@@ -188,8 +188,15 @@ export interface CalculatorConfig {
      * kept out of the other spend lines), F & G course costs and other costs are
      * capped against all training spend, and training-admin costs are shared out
      * by the black workforce mix. Unset keeps the original method.
+     *
+     * 'toolkit_qse' is the Empower RCOGP QSE toolkit's arithmetic: no EAP split;
+     * per line (black, black women, black people with disabilities) course costs
+     * A–E plus B/C/D stipends, plus F & G and other costs capped at 15% of all
+     * training spend, plus 15% of training-admin costs shared by that group's
+     * share of the workforce; the absorption bonus is black learners absorbed
+     * over the learners who completed a learnership while unemployed.
      */
-    method?: 'toolkit';
+    method?: 'toolkit' | 'toolkit_qse';
     /**
      * 'headcount': the absorption bonus measures absorbed learners against the
      * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
@@ -234,9 +241,13 @@ export interface CalculatorConfig {
      *    beneficiary or holds a 3-year contract;
      *  - 'flow_through' (RCOGP Generic v1.4): ≥51% black AND ≥51% flow-through
      *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
-     *    contract.
+     *    contract;
+     *  - 'black_owned_small_supplier_or_first_time' (RCOGP QSE v1.1 and FSC
+     *    v1.0, as the templates mean it): a QSE/EME ≥51% black owned that is a Supplier
+     *    Development beneficiary, holds a 3-year contract, or is a first-time
+     *    supplier (Supplier.isFirstTimeSupplier).
      */
-    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'black_owned_small_supplier_or_first_time' | 'flow_through';
+    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'flow_through' | 'black_owned_small_supplier_or_first_time';
     /**
      * RCOGP Generic only: a Generic supplier first procured as a QSE (EME),
      * ≥51% black and ≥51% flow-through black owned, still counts on the QSE

@@ -123,7 +123,10 @@ const ENHANCED_RECOGNITION = 1.2;
 /** Procurement Data[QSE Spend] / [EME Spend]: "Years of being a supplier" ≤ 5. */
 const GRADUATION_WINDOW_YEARS = 5;
 
-export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'black_owned_small_supplier_or_first_time' | 'flow_through';
+export type EnhancedRecognitionRule =
+  | 'black_owned_small_supplier'
+  | 'flow_through'
+  | 'black_owned_small_supplier_or_first_time';
 
 /**
  * The 1.2 recognition factor (Procurement Data, the "Qualify for 1.2
@@ -138,8 +141,14 @@ export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'black_owne
  *
  * 'black_owned_small_supplier' — RCOGP QSE, ICT, FSC and AgriBEE templates:
  *   a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or
- *   holds a 3-year contract. (Their "first-time supplier" branch has no field
- *   in our supplier record, so it cannot be applied.)
+ *   holds a 3-year contract. Their "first-time supplier" branch is the rule
+ *   below, which a sector opts into.
+ *
+ * 'black_owned_small_supplier_or_first_time' — RCOGP QSE v1.1 and FSC v1.0
+ *   as they mean it: the rule above, or a QSE/EME ≥51% black owned first-time
+ *   supplier (Supplier.isFirstTimeSupplier). The RCOGP QSE template's own
+ *   first-time test reads the 3-year-contract answer instead (a copy slip), so
+ *   in that spreadsheet the first-time answer never counts.
  */
 export function qualifiesForEnhancedRecognition(
   sup: Supplier,
@@ -149,14 +158,10 @@ export function qualifiesForEnhancedRecognition(
   if (!size) return false;
   const small = size === 'qse' || size === 'eme';
   const bo = Number(sup.blackOwnership) || 0;
-  if (rule === 'black_owned_small_supplier') {
+  if (rule === 'black_owned_small_supplier' || rule === 'black_owned_small_supplier_or_first_time') {
+    const firstTime = rule === 'black_owned_small_supplier_or_first_time' && Boolean(sup.isFirstTimeSupplier);
     return small && bo >= OWNED_51
-      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract));
-  }
-  // FSC toolkit: a first-time supplier earns it too.
-  if (rule === 'black_owned_small_supplier_or_first_time') {
-    return small && bo >= OWNED_51
-      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract) || Boolean(sup.isFirstTimeSupplier));
+      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract) || firstTime);
   }
   const ft = Number(sup.flowThroughOwnership) || 0;
   if (bo >= OWNED_51 && ft >= OWNED_51) return true;
@@ -434,7 +439,9 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
       `${enhancedCount} supplier${enhancedCount === 1 ? "'s" : "s'"} recognised spend carries the 1.2 factor ` +
       (enhancedRule === 'flow_through'
         ? '(≥51% black and ≥51% flow-through black owned, or a QSE/EME Supplier Development beneficiary on a 3-year contract).'
-        : '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or holds a 3-year contract).'),
+        : enhancedRule === 'black_owned_small_supplier_or_first_time'
+          ? '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary, holds a 3-year contract or is a first-time supplier).'
+          : '(a QSE/EME ≥51% black owned that is a Supplier Development beneficiary or holds a 3-year contract).'),
     );
   }
   if (unjudgedGraduates.length > 0) {
