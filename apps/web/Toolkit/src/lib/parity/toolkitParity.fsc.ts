@@ -30,7 +30,9 @@
  *    portion, and transactional access from a typed, locked 80%;
  *  - short-term insurers: commercial lines measured against the wrong target
  *    policies cell;
- *  - a voting-rights-above-15% bonus that goes negative.
+ *  - a voting-rights-above-15% bonus that goes negative;
+ *  - banks and insurers: the net value line (weighted 6) capped at, and its
+ *    Formula A and B scaled by, a hard-coded 8.
  */
 import type { CalculatorConfig } from '../../../../shared/schema';
 import type { ScorecardResult } from '../types';
@@ -239,9 +241,17 @@ function refereeOwnership(sheets: ToolkitSheets, tables: ToolkitTables) {
   const holders = tableRows(tables, 'tblOwnershipData');
   const value = v('Ownership Scorecard', 'C3');
   const free = v('Ownership Data', 'W3');
+  const eiMax = v('Ownership Scorecard', 'F10');
+  // The net value line's own weighting (F17: 8 for Others, 6 elsewhere). The
+  // toolkit's J17 outer MIN and 'Oustanding Debts Calcs' K, L and N columns
+  // use a hard-coded 8 instead, so a 6-point line can score 8.
+  const nvMax = v('Ownership Scorecard', 'F17');
   let credited = 0;
   let formulaA = 0;
   let formulaB = 0;
+  /** Formula A and B the toolkit's way, scaled by its hard-coded 8. */
+  let formulaA8 = 0;
+  let formulaB8 = 0;
   let indebted = 0;
   let lateLoan = false;
   for (const h of holders) {
@@ -256,20 +266,25 @@ function refereeOwnership(sheets: ToolkitSheets, tables: ToolkitTables) {
     const year = Math.ceil(n(h['Loan Term']) + 1 - 1e-12);
     const g = year >= 9 ? 1 : GRADUATION[year] ?? 0;
     if (year > 9) lateLoan = true;
-    formulaA += g > 0 ? Math.max(Math.min((hBlack * 8) / (0.25 * g), 8), 0) : 0;
-    formulaB += (hBlack / 0.25) * 8;
+    formulaA += g > 0 ? Math.max(Math.min((hBlack * nvMax) / (0.25 * g), nvMax), 0) : 0;
+    formulaA8 += g > 0 ? Math.max(Math.min((hBlack * 8) / (0.25 * g), 8), 0) : 0;
+    formulaB += (hBlack / 0.25) * nvMax;
+    formulaB8 += (hBlack / 0.25) * 8;
   }
-  const eiMax = v('Ownership Scorecard', 'F10');
-  const nvMax = v('Ownership Scorecard', 'F17');
   const ei = free + credited;
   const eiPts = Math.min((Math.max(ei, 0) / 0.25) * eiMax, eiMax);
-  const nvPts = Math.min(Math.min((free / 0.25) * nvMax, nvMax) + Math.min(formulaA, Math.min(formulaB, 8)), 8);
+  const unencumbered = Math.min((free / 0.25) * nvMax, nvMax);
+  const nvPts = Math.min(unencumbered + Math.min(formulaA, Math.min(formulaB, nvMax)), nvMax);
+  // The same rework with the toolkit's 8s. Above the weighting — or the
+  // toolkit's own figure above it — only the hard-coded 8 explains.
+  const nvPts8 = Math.min(unencumbered + Math.min(formulaA8, Math.min(formulaB8, 8)), 8);
+  const aboveWeighting = nvPts8 > nvMax + 1e-9 || n(sheets['Summary Scorecard']?.F27?.v) > nvMax + 1e-9;
   // Bonus rows (every sub-sector but Others): voting rights beyond 15%
   // against 10% (never below 0), and economic interest at 32.5% / 40%.
   const voting = v('Ownership Data', 'W4');
   const above15 = Math.max(pts(voting > 0 ? voting - 0.15 : 0, 0.10, 3), 0);
   const tier = ei >= 0.4 ? 2 : ei >= 0.325 ? 1 : 0;
-  return { indebted, ei, eiPts, nvPts, lateLoan, above15, tier };
+  return { indebted, ei, eiPts, nvMax, nvPts, lateLoan, aboveWeighting, above15, tier };
 }
 
 interface SkillRow {
@@ -415,7 +430,12 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
         set(23, own.eiPts, `Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, and counts the whole stake as black. Netted the one way and for the black share only, black economic interest is ${(own.ei * 100).toFixed(2)}% → ${own.eiPts.toFixed(2)}; the toolkit shows ${F(23).toFixed(2)}.`);
       }
       if (!manual('Ownership Scorecard', 'L17')) {
-        set(27, own.nvPts, `Toolkit formula fault: the net value nets indebted stakes the same faulty way${own.lateLoan ? ', and a loan in its tenth year or later finds no graduation factor and scores nothing' : ''}. Reworked: ${own.nvPts.toFixed(2)}; the toolkit shows ${F(27).toFixed(2)}.`);
+        const faults = [
+          'the net value nets indebted stakes the same faulty way',
+          own.lateLoan ? 'a loan in its tenth year or later finds no graduation factor and scores nothing' : '',
+          own.aboveWeighting ? `the line is capped at 8 points, and Formula A and B are scaled by 8, where its weighting is ${own.nvMax}` : '',
+        ].filter(Boolean);
+        set(27, own.nvPts, `Toolkit formula fault${faults.length > 1 ? 's' : ''}: ${faults.join('; and ')}. Reworked: ${own.nvPts.toFixed(2)} of ${own.nvMax}; the toolkit shows ${F(27).toFixed(2)}.`);
       }
     }
     // Skills: the training rows its "Within FY?" test drops (dated in the

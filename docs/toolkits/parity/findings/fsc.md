@@ -42,7 +42,7 @@ was earned by at least seven of them.
 "Match" means: equal to the toolkit's own figure, or — on the lines listed
 under *Toolkit formula faults* below — equal to what the faulty formula
 evidently means, worked out from the toolkit's own figures. That happened on
-157 line values, and it moves the level: on 19 of the 27 companies the
+163 line values, and it moves the level: on 19 of the 27 companies the
 toolkit, as shipped, prints a different achieved or discounted level from the
 one its formulas evidently intend. On the skills and procurement lines, where
 the rework recomputes the whole line, the faulty formula is first recomputed
@@ -68,10 +68,11 @@ Not checked:
   company value: the stake counts in full once its net value is at least 40% of
   the stake, and proportionally below that. **Net value** is the unencumbered
   black economic interest against 25% (8 points; 6 for the other sub-sectors),
-  plus each indebted black stake's net value, graduated by the year of its loan
-  (10% in year 1 rising to 100% in year 9), capped at 8. The sub-sectors other
-  than Others carry two bonus lines (voting rights beyond 15%; economic interest
-  at 32.5% / 40%).
+  plus each indebted black stake's net value — Formula A, graduated by the year
+  of its loan (10% in year 1 rising to 100% in year 9), or Formula B, the lesser
+  — capped at the line's own weighting (8, or 6; see fault 18). The sub-sectors
+  other than Others carry two bonus lines (voting rights beyond 15%; economic
+  interest at 32.5% / 40%).
 - **Management control** is measured by headcount, board included (the voting
   rights column is not read). The 14 points for other executive, senior, middle
   and junior management move between bands: a band with nobody in it gives its
@@ -234,6 +235,20 @@ figures, and our scorecard scores what the formula evidently means.
     (0.4%, F8). We use the consumer-education target.
 17. **Levels: a total exactly on a threshold drops a level.** The round-down
     ('Scorecard Calculations'!C14) uses a strict "<". (Same as RCOGP Generic.)
+18. **Banks and insurers: the net value line scores above its own
+    weighting.** For banks, long-term and short-term insurers the net value
+    line weighs 6 points (Summary Scorecard C27; 'Ownership Scorecard'!F17 =
+    IF(Others, 8, 6)), but the formulas that score it use a hard-coded 8: the
+    outer MIN of 'Ownership Scorecard'!J17, and 'Oustanding Debts Calcs'
+    columns K and L (Formula A, × 8, capped at 8) and N (Formula B, × 8, capped
+    at 8 in N1). So the line can score 8 of 6, and ownership more than its
+    weighting. Excel showed net value 8 of 6 on seven of our eleven bank and
+    insurer companies (and ownership 30 of 28 on two of them), each adding up
+    to 2 points to the grand total; on an eighth, faults 7 and 8 hide it (the
+    toolkit shows 3.57), and correcting them with the 8s left in gives 8 of 6.
+    We score the line, and Formula A and B, against the line's own weighting,
+    at most 6. Others (weighted 8) is unaffected. **Please confirm** the cap is
+    the weighting, not 8.
 
 ## Also seen in the template
 
@@ -287,5 +302,7 @@ Nothing that was compared. What was not compared, and why:
 4. A target for banks' electronic access and active accounts.
 5. Short-term insurers' appropriate products: policy volume per product, or
    the share of products that are compliant.
-6. Each of the 17 formula faults above: confirm that what we score is what the
+6. Banks and insurers' net value: capped at the line's weighting (6), as we
+   score it, or at 8 as the toolkit's formulas do (fault 18).
+7. Each of the 18 formula faults above: confirm that what we score is what the
    toolkit means.

@@ -10,7 +10,8 @@
  * What is FSC's own lives here:
  *  - net value: unencumbered black ownership against 25%, plus each indebted
  *    black stake's net value graduated by its loan term (Formula A, capped by
- *    Formula B) — 'Ownership Scorecard'!J17, 'Oustanding Debts Calcs';
+ *    Formula B), at most the line's weighting — 'Ownership Scorecard'!J17,
+ *    'Oustanding Debts Calcs';
  *  - management control by headcount, with the management bands' points
  *    moving to other bands when a band has nobody in it ('MC Calcs
  *    (Toolkit)'), and African sub-lines against the African share of the EAP;
@@ -129,9 +130,9 @@ export function fscOwnership(data: OwnershipData, cfg: CalculatorConfig, sub: Fs
     const loan = parseCalcDate(sh.loanDate);
     const year = loan && asOf ? Math.ceil(yearFrac30360US(loan, asOf) + 1 - 1e-12) : 1;
     const g = graduationFor(year);
-    const a = g > 0 ? Math.max(Math.min((credited * 8) / (0.25 * g), 8), 0) : 0;
+    const a = g > 0 ? Math.max(Math.min((credited * nvMax) / (0.25 * g), nvMax), 0) : 0;
     formulaA += a;
-    formulaBRaw += (credited / 0.25) * 8;
+    formulaBRaw += (credited / 0.25) * nvMax;
     debtNotes.push(`${sh.name}: net ${pct(credited, 2)} of the company, loan year ${year} (graduation ${pct(g, 0)}) → Formula A ${a.toFixed(2)}`);
   });
   const ei = free + netBlack;
@@ -152,10 +153,13 @@ export function fscOwnership(data: OwnershipData, cfg: CalculatorConfig, sub: Fs
   // Net value ('Ownership Scorecard'!J17): unencumbered black economic
   // interest against the 25% target, plus the indebted black stakes' net
   // value — Formula A (graduated by the loan's year) or Formula B, the lesser
-  // — at most 8.
-  const formulaB = Math.min(formulaBRaw, 8);
+  // — at most the line's own weighting (F17: 8 for Others, 6 elsewhere). The
+  // toolkit scales Formula A and B by a hard-coded 8 and caps the line at 8,
+  // so a bank or insurer can score 8 on a 6-point line; that is not copied
+  // (findings/fsc.md, fault 18).
+  const formulaB = Math.min(formulaBRaw, nvMax);
   const unencumbered = Math.min((free / 0.25) * nvMax, nvMax);
-  const netValue = Math.min(unencumbered + Math.min(formulaA, formulaB), 8);
+  const netValue = Math.min(unencumbered + Math.min(formulaA, formulaB), nvMax);
   const subMinThreshold = nvMax * 0.4;
   lines.push({
     name: 'Net value',
