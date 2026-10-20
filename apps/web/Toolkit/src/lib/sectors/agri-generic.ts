@@ -21,7 +21,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
+import { withEmpowerToolkitEsdFactors } from './empowerToolkitFactors';
 
 export const AGRI_GENERIC_SECTOR_CODE = 'AGRI' as const;
 export const AGRI_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -335,11 +335,7 @@ function withEmpowerAgriToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
       enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
     },
     sed: { ...cfg.sed, sectorSpecificInitiatives: 'exclude_no' },
-    benefitFactors: cfg.benefitFactors.map((bf) =>
-      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
-        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
-        : bf,
-    ),
+    benefitFactors: withEmpowerToolkitEsdFactors(cfg.benefitFactors),
   };
 }
 

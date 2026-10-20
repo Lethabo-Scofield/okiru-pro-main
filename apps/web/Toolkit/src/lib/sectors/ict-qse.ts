@@ -24,7 +24,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
+import { withEmpowerToolkitEsdFactors } from './empowerToolkitFactors';
 
 export const ICT_QSE_SECTOR_CODE = 'ICT' as const;
 export const ICT_QSE_SCORECARD_TYPE = 'QSE' as const;
@@ -328,11 +328,7 @@ function withEmpowerIctQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig
         subMinimumPercent: 40,
       },
     },
-    benefitFactors: cfg.benefitFactors.map((bf) =>
-      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
-        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
-        : bf,
-    ),
+    benefitFactors: withEmpowerToolkitEsdFactors(cfg.benefitFactors),
   };
 }
 

@@ -17,7 +17,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
+import { withEmpowerToolkitEsdFactors } from './empowerToolkitFactors';
 
 export const RCOGP_QSE_SECTOR_CODE = 'RCOGP' as const;
 export const RCOGP_QSE_SCORECARD_TYPE = 'QSE' as const;
@@ -319,11 +319,7 @@ function withEmpowerQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
       allSuppliersIgnoreEmpoweringFlag: true,
       enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
     },
-    benefitFactors: cfg.benefitFactors.map((bf) =>
-      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
-        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
-        : bf,
-    ),
+    benefitFactors: withEmpowerToolkitEsdFactors(cfg.benefitFactors),
   };
 }
 

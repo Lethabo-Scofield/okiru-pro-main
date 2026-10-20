@@ -23,7 +23,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
+import { withEmpowerToolkitEsdFactors } from './empowerToolkitFactors';
 
 export const ICT_GENERIC_SECTOR_CODE = 'ICT' as const;
 export const ICT_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -346,11 +346,7 @@ function withEmpowerIctToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
     },
     esd: { ...cfg.esd, computedFactorsForEveryRow: true },
     sed: { ...cfg.sed, sectorSpecificInitiatives: 'exclude_no' },
-    benefitFactors: cfg.benefitFactors.map((bf) =>
-      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
-        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
-        : bf,
-    ),
+    benefitFactors: withEmpowerToolkitEsdFactors(cfg.benefitFactors),
   };
 }
 

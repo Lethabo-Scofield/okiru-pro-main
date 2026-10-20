@@ -8,7 +8,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
+import { withEmpowerToolkitEsdFactors } from './empowerToolkitFactors';
 
 export const RCOGP_GENERIC_SECTOR_CODE = 'RCOGP' as const;
 export const RCOGP_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -308,11 +308,7 @@ function withEmpowerToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
       absorptionBasis: 'headcount',
       absorptionTargetPercent: 5,
     },
-    benefitFactors: cfg.benefitFactors.map((bf) =>
-      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
-        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
-        : bf,
-    ),
+    benefitFactors: withEmpowerToolkitEsdFactors(cfg.benefitFactors),
   };
 }
 
