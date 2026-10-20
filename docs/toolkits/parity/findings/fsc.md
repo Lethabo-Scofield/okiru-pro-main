@@ -19,7 +19,36 @@ Summary Scorecard was compared with our scorecard for the same company — each
 line, each element total, the grand total, the achieved level and the
 discounted level, to within half a cent of a point.
 
-RESULTS_PLACEHOLDER
+**Result: every line matches.** 27 synthetic companies, 1,693 comparisons
+(each line, each element total, the grand total and both levels), all within
+half a cent of a point:
+
+| Scorecard | Companies | Comparisons | Match |
+|---|---|---|---|
+| Others (generic FSC), 7 of them reinsurers | 16 | 930 | 930 |
+| Banks | 4 | 280 | 280 |
+| Long-term insurers | 3 | 204 | 204 |
+| Short-term insurers (personal, commercial, both, and FSTC-exempt) | 4 | 279 | 279 |
+| **All** | **27** | **1,693** | **1,693** |
+
+The companies range from complete, strong entities to sparse ones (a handful
+of rows per table), edge cases (zeros and blanks, values sitting on targets
+and thresholds, loans past their ninth year, a first-time supplier, a
+combined management band with no senior manager) and weak ones that fail
+sub-minimums: 15 of the 27 are discounted, two are non-compliant before
+discounting, one is a Level 8 discounted to non-compliant. Every bonus line
+was earned by at least seven of them.
+
+"Match" means: equal to the toolkit's own figure, or — on the lines listed
+under *Toolkit formula faults* below — equal to what the faulty formula
+evidently means, worked out from the toolkit's own figures. That happened on
+157 line values, and it moves the level: on 19 of the 27 companies the
+toolkit, as shipped, prints a different achieved or discounted level from the
+one its formulas evidently intend. On the skills and procurement lines, where
+the rework recomputes the whole line, the faulty formula is first recomputed
+the toolkit's own way and must reproduce the toolkit's number exactly before
+the reworked figure is accepted, so a difference with any other cause would
+still show as a difference.
 
 Not checked:
 
@@ -97,7 +126,9 @@ Not checked:
   100 / 95 / 90 / 80 / 75 / 70 / 55 / 40 is multiplied by base points ÷ 111.
   Base points (bonus points excluded): Others 106 (Level 1 from 95.50); banks
   and long-term insurers 121 (Level 1 from 109.01); short-term insurers 116
-  (114 when exempt from appropriate products). A failed priority element (net
+  (114 when exempt from appropriate products); 4 fewer in each when the
+  combined management band loses its senior points (see *Also seen*). A failed
+  priority element (net
   value, skills, procurement — empowerment financing for banks and long-term
   insurers — supplier development, enterprise development) drops the level by
   one; a discounted Level 8 is non-compliant.
@@ -122,9 +153,10 @@ figures, and our scorecard scores what the formula evidently means.
 1. **Skills: the "within the financial year" test moves down the page.**
    Skills Data, column "Within FY?" (and "Prior Year"), compares each training
    row with Validation!C2 as a *relative* reference, so row 2 compares with C3,
-   row 3 with C4, and so on. Rows 6, 13 and 25 meet a text label there and drop
-   out of every skills sum; other rows are compared with unrelated dates. We
-   count every row in the year.
+   row 3 with C4, and so on. The 6th, 13th and 25th training rows meet a text
+   label there and drop out of every skills sum (every one of our companies
+   with six or more training rows lost at least one); other rows are compared
+   with unrelated dates. We count every row in the year.
 2. **Skills: the leviable amount and headcount are another company's.**
    'Skills Toolkit'!D3 (leviable amount, R6,531,144,233) and D6 (headcount,
    14,212) are typed values, not linked to Client Information, and they sit in
@@ -212,8 +244,9 @@ figures, and our scorecard scores what the formula evidently means.
   senior band's 4 points are passed neither to it nor to middle or junior
   management ('MC Calcs (Toolkit)'!K4:M4, K19:M19). Management control is then
   out of 17 instead of 21, and the level thresholds scale to 4 fewer base
-  points. It is not clear what the intended split is, so we follow the
-  toolkit; **please rule**.
+  points (Excel confirmed it on two of our companies: an Others entity on 102
+  base points, Level 1 from 91.89, and a long-term insurer on 117). It is not
+  clear what the intended split is, so we follow the toolkit; **please rule**.
 - **Banks: electronic access and active accounts** ('AFS Scorecard - Banks'
   rows 11 and 13) have no target, so the toolkit scores them 0 whatever is
   entered. We have no target to score them against either; they score only on
@@ -228,4 +261,31 @@ figures, and our scorecard scores what the formula evidently means.
   ('AFS Scorecard - Short Term'!H34:H35), blank in the shipped template: until
   someone picks "Current YTD" the actual column reads nothing.
 
-STILL_DIFFERENT_PLACEHOLDER
+## Still different
+
+Nothing that was compared. What was not compared, and why:
+
+- **YES**, **Stock Exchanges**, and the **Prior Year / Projected** columns (see
+  *Not checked* above).
+- **QSE financial institutions.** This workbook has no QSE scorecard, so our
+  FSC QSE scorecard was not checked against it.
+- **Banks: electronic access and active accounts** score 0 on both sides in
+  every company (no target in the toolkit; see *Also seen*).
+- **Training manager's salary and training overhead**: the toolkit shares them
+  out by a typed workforce row (fault 3); our companies type that row from
+  their own employees, so both sides share them the same way.
+
+## Rulings needed
+
+1. Bad debts written off on ESD financing at 100% for banks and long-term
+   insurers, or capped (*How the FSC toolkit scores*, ESD).
+2. The long-term insurers' transactional-access tier between 50% and 60%
+   (fault 14).
+3. The combined other-executive / senior band that loses 4 points when no
+   senior manager is employed (*Also seen*). Two of our companies hit it; both
+   match the toolkit's 17-point management control.
+4. A target for banks' electronic access and active accounts.
+5. Short-term insurers' appropriate products: policy volume per product, or
+   the share of products that are compliant.
+6. Each of the 17 formula faults above: confirm that what we score is what the
+   toolkit means.
