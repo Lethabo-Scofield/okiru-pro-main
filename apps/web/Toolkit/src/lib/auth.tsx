@@ -16,12 +16,14 @@ interface AuthUser {
   isVerified: boolean;
   twofaEnabled: boolean;
   lastLogin: string | null;
+  initialProduct?: 'esg' | 'bbbee' | 'certificates' | null;
 }
 
 interface RegisterData {
   password: string;
   fullName: string;
   email: string;
+  productCode: 'esg' | 'bbbee' | 'certificates';
 }
 
 interface TwoFAResponse {
@@ -43,7 +45,7 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  register: (data: RegisterData) => Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string; rememberDeviceDays?: number }>;
+  register: (data: RegisterData) => Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string; rememberDeviceDays?: number; initialProduct?: string | null }>;
   logout: () => Promise<void>;
   verifyOtp: (otp: string, options?: { rememberDevice?: boolean }) => Promise<void>;
   resendOtp: () => Promise<string>;
@@ -205,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result?.user) {
       setUser(result.user);
     }
-    return {};
+    return { initialProduct: result?.user?.initialProduct ?? null };
   }, [queryClient]);
 
   const logout = useCallback(async () => {

@@ -12,6 +12,7 @@ const userSchema = new Schema({
   organizationId: { type: String, default: null },
   profilePicture: { type: String, default: null },
   isDemo: { type: Boolean, default: false },
+  lastLoginAt: { type: Date, default: null, index: true },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "users" });
 
@@ -244,6 +245,28 @@ const supplierSchema = new Schema({
   certificateExpiryDate: { type: String, default: '' },
   firstProcurementDate: { type: String, default: '' },
   vatNumber: { type: String, default: '' },
+  tradingName: { type: String, default: '' },
+  province: { type: String, default: '' },
+  city: { type: String, default: '' },
+  serviceLocations: { type: [String], default: [] },
+  industry: { type: String, default: '' },
+  productsServices: { type: [String], default: [] },
+  categories: { type: [String], default: [] },
+  description: { type: String, default: '' },
+  website: { type: String, default: '' },
+  dataSource: { type: String, default: 'Okiru supplier records' },
+  sourceUrl: { type: String, default: '' },
+  sourceRecordId: { type: String, default: '' },
+  evidenceReference: { type: String, default: '' },
+  certificateType: { type: String, default: '' },
+  certificateIssueDate: { type: String, default: '' },
+  beeRecognitionPercentage: { type: Number, default: null },
+  verificationStatus: { type: String, default: 'unverified' },
+  verificationSource: { type: String, default: '' },
+  lastVerifiedAt: { type: Date, default: null },
+  dataConfidence: { type: String, default: 'unverified' },
+  accreditations: { type: [String], default: [] },
+  procurementExperience: { type: [String], default: [] },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({
@@ -482,6 +505,38 @@ processorSessionSchema.set("toJSON", {
 
 export const UserModel = mongoose.model("User", userSchema);
 export const OrganizationModel = mongoose.model("Organization", organizationSchema);
+
+const PRODUCT_CODES = ["esg", "bbbee", "certificates"] as const;
+
+const userProductInterestSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  userId: { type: String, required: true, index: true },
+  productCode: { type: String, enum: PRODUCT_CODES, required: true, index: true },
+  isInitialSelection: { type: Boolean, default: false, index: true },
+  selectedAt: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now },
+}, { collection: "user_product_interests" });
+userProductInterestSchema.index({ userId: 1, isInitialSelection: 1 });
+
+const userActivityEventSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  userId: { type: String, required: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  companyId: { type: String, default: null, index: true },
+  eventType: { type: String, required: true, index: true },
+  productCode: { type: String, enum: [...PRODUCT_CODES, null], default: null, index: true },
+  sessionId: { type: String, default: null, index: true },
+  dedupeKey: { type: String, default: null, unique: true, sparse: true },
+  metadata: { type: Schema.Types.Mixed, default: {} },
+  createdAt: { type: Date, default: Date.now, index: true },
+}, { collection: "user_activity_events" });
+userActivityEventSchema.index({ userId: 1, createdAt: -1 });
+userActivityEventSchema.index({ organizationId: 1, createdAt: -1 });
+userActivityEventSchema.index({ eventType: 1, productCode: 1, createdAt: -1 });
+userActivityEventSchema.index({ productCode: 1, createdAt: -1 });
+
+export const UserProductInterestModel = mongoose.models.UserProductInterest || mongoose.model("UserProductInterest", userProductInterestSchema);
+export const UserActivityEventModel = mongoose.models.UserActivityEvent || mongoose.model("UserActivityEvent", userActivityEventSchema);
 export const ClientModel = mongoose.model("Client", clientSchema);
 export const FinancialYearModel = mongoose.model("FinancialYear", financialYearSchema);
 export const ShareholderModel = mongoose.model("Shareholder", shareholderSchema);
@@ -489,6 +544,75 @@ export const OwnershipDataModel = mongoose.model("OwnershipData", ownershipDataS
 export const EmployeeModel = mongoose.model("Employee", employeeSchema);
 export const TrainingProgramModel = mongoose.model("TrainingProgram", trainingProgramSchema);
 export const SupplierModel = mongoose.model("Supplier", supplierSchema);
+
+// Shared public-reference directory. This is deliberately separate from
+// `suppliers`, which is tenant-scoped and may contain confidential spend,
+// certificates, and scorecard evidence.
+const supplierDirectorySchema = new Schema({
+  directoryId: { type: String, default: uuid, unique: true, index: true },
+  registeredName: { type: String, required: true },
+  normalizedName: { type: String, required: true, index: true },
+  tradingName: { type: String, default: '' },
+  registrationNumber: { type: String, default: '', index: true, sparse: true },
+  vatNumber: { type: String, default: '' },
+  province: { type: String, default: '', index: true },
+  city: { type: String, default: '' },
+  physicalLocation: { type: String, default: '' },
+  serviceCoverage: { type: [String], default: [] },
+  industry: { type: String, default: '', index: true },
+  categories: { type: [String], default: [] },
+  productsServices: { type: [String], default: [] },
+  description: { type: String, default: '' },
+  website: { type: String, default: '' },
+  publicContact: { type: Schema.Types.Mixed, default: null },
+  beeLevel: { type: Number, default: null },
+  beeRecognitionPercentage: { type: Number, default: null },
+  blackOwnership: { type: Number, default: null },
+  womenOwnership: { type: Number, default: null },
+  certificateIssueDate: { type: String, default: '' },
+  certificateExpiryDate: { type: String, default: '' },
+  verificationStatus: { type: String, enum: ['imported', 'unverified', 'evidence_available', 'independently_verified', 'expired', 'outdated', 'unknown'], default: 'imported', index: true },
+  source: { type: String, required: true, index: true },
+  sourceUrl: { type: String, default: '' },
+  sourceRecordId: { type: String, default: '', index: true },
+  sourceEvidence: { type: [Schema.Types.Mixed], default: [] },
+  lastSourceUpdatedAt: { type: Date, default: null },
+  lastImportedAt: { type: Date, default: Date.now },
+  freshnessStatus: { type: String, enum: ['current', 'outdated', 'unknown'], default: 'unknown', index: true },
+  procurementHistory: { type: [Schema.Types.Mixed], default: [] },
+  possibleDuplicateOf: { type: String, default: null },
+}, { collection: 'supplier_directory', timestamps: true });
+supplierDirectorySchema.index({ source: 1, sourceRecordId: 1 }, { unique: true, sparse: true });
+supplierDirectorySchema.index({ registeredName: 'text', tradingName: 'text', industry: 'text', description: 'text', productsServices: 'text', categories: 'text' });
+
+const supplierDirectorySourceSchema = new Schema({
+  source: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  sourceUrl: { type: String, required: true },
+  licence: { type: String, default: '' },
+  accessMethod: { type: String, enum: ['api', 'download', 'manual', 'not_authorised'], required: true },
+  enabled: { type: Boolean, default: false },
+  lastImportedAt: { type: Date, default: null },
+  lastSuccessfulImportAt: { type: Date, default: null },
+  lastError: { type: String, default: null },
+}, { collection: 'supplier_directory_sources', timestamps: true });
+
+const supplierDirectoryImportJobSchema = new Schema({
+  jobId: { type: String, default: uuid, unique: true, index: true },
+  source: { type: String, required: true, index: true },
+  status: { type: String, enum: ['queued', 'running', 'completed', 'failed', 'partial'], default: 'queued', index: true },
+  processed: { type: Number, default: 0 },
+  imported: { type: Number, default: 0 },
+  updated: { type: Number, default: 0 },
+  skipped: { type: Number, default: 0 },
+  errors: { type: [Schema.Types.Mixed], default: [] },
+  startedAt: { type: Date, default: null },
+  completedAt: { type: Date, default: null },
+}, { collection: 'supplier_directory_import_jobs', timestamps: true });
+
+export const SupplierDirectoryModel = mongoose.models.SupplierDirectory || mongoose.model('SupplierDirectory', supplierDirectorySchema);
+export const SupplierDirectorySourceModel = mongoose.models.SupplierDirectorySource || mongoose.model('SupplierDirectorySource', supplierDirectorySourceSchema);
+export const SupplierDirectoryImportJobModel = mongoose.models.SupplierDirectoryImportJob || mongoose.model('SupplierDirectoryImportJob', supplierDirectoryImportJobSchema);
 export const ProcurementDataModel = mongoose.model("ProcurementData", procurementDataSchema);
 export const EsdContributionModel = mongoose.model("EsdContribution", esdContributionSchema);
 export const SedContributionModel = mongoose.model("SedContribution", sedContributionSchema);
@@ -584,6 +708,7 @@ const certificateMetadataSchema = new Schema({
   status: { type: String, enum: ['valid', 'expiring', 'expired', 'unknown'], default: 'unknown' },
   extractedText: { type: String, default: null },
   extractionStatus: { type: String, enum: ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'], default: 'pending' },
+  textExtractionStatus: { type: String, enum: ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'], default: 'pending', index: true },
   extractionMode: { type: String, enum: ['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr', 'filename_only', 'none', 'failed'], default: 'none' },
   extractedTextLength: { type: Number, default: 0 },
   extractionError: { type: String, default: null },
@@ -596,11 +721,19 @@ const certificateMetadataSchema = new Schema({
     default: 'pending',
     index: true,
   },
+  metadataStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'complete', 'needs_review', 'pending_text_recovery', 'failed'],
+    default: 'pending',
+    index: true,
+  },
   lastEnrichedAt: { type: Date, default: null },
   enrichmentVersion: { type: String, default: null },
   fieldConfidence: { type: Schema.Types.Mixed, default: {} },
   reviewFields: { type: [String], default: [] },
   reviewCandidates: { type: Schema.Types.Mixed, default: {} },
+  // Values a person rejected, per field, so enrichment never proposes them again.
+  rejectedCandidates: { type: Schema.Types.Mixed, default: {} },
   auditLog: {
     type: [Schema.Types.Mixed],
     default: [],

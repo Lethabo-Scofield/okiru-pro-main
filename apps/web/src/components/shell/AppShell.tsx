@@ -140,7 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onHub ? (
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-white/65 bg-white/55 px-3 py-1.5 text-[12px] text-zinc-700 shadow-[0_10px_26px_-22px_rgba(24,24,27,0.45)] backdrop-blur-xl transition hover:bg-white/75"
+                className="inline-flex items-center gap-2 rounded-full border border-white/65 bg-white/55 px-3 py-1.5 text-[12px] text-zinc-700 shadow-[0_10px_26px_-22px_rgba(24,24,27,0.45)] backdrop-blur-xl transition hover:bg-white/75 dark:border-white/10 dark:bg-white/10 dark:text-[color:var(--ef-text)] dark:hover:bg-white/15"
                 data-testid="user-menu"
               >
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-950 text-[9px] font-semibold text-white">

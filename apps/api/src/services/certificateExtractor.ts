@@ -1,17 +1,14 @@
 import { BlobServiceClient } from '@azure/storage-blob';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
-import { writeFileSync, readdirSync, mkdirSync, existsSync, rmSync } from 'fs';
+import { execFileSync, execSync } from 'child_process';
+import { writeFileSync, readFileSync, readdirSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Tesseract from 'tesseract.js';
 import { CertificateMetadataModel } from '../../models.js';
 import { createLogger } from '../logger.js';
-import { normalizeVat } from './certificateStore.js';
 import { extractTextWithDocIntelligence, isDocumentIntelligenceConfigured } from './documentIntelligence.js';
-import { extractCertificateWithLLM, extractCertificatePreviewWithLLM, type CertificatePreviewExtraction } from './llmExtractor.js';
-import { indexCertificate, isChromaConfigured } from './chromaStore.js';
+import { extractCertificatePreviewWithLLM, type CertificatePreviewExtraction } from './llmExtractor.js';
 import {
   getCertBlobServiceClient,
   getCertContainerClient,
@@ -20,6 +17,7 @@ import {
   type CertificateExtractionMode,
   extractionStatusForText,
   hasUsefulExtractedText,
+  storedCertificateText,
   usefulExtractedTextLength,
 } from './certificateExtractionStatus.js';
 
@@ -410,24 +408,24 @@ export function extractDatesFromText(text: string, fileName: string): ExtractedD
   };
 }
 
-async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
+async function extractTextFromPdf(buffer: Buffer, fileName: string): Promise<string> {
+  const workDir = join(TMP_DIR, `${createHash('md5').update(fileName).digest('hex')}-text`);
+  if (!existsSync(workDir)) mkdirSync(workDir, { recursive: true });
+  const pdfPath = join(workDir, 'input.pdf');
+  const textPath = join(workDir, 'output.txt');
+  writeFileSync(pdfPath, buffer);
   try {
-    const pdf = await getDocument({
-      data: new Uint8Array(buffer),
-      useSystemFonts: true,
-      disableFontFace: true,
-    }).promise;
-
-    const pages: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: any) => item.str || '').join(' ');
-      pages.push(pageText);
-    }
-    return pages.join('\n');
+    // Keep native PDF parsing outside the API process. Some malformed PDFs can
+    // terminate pdfjs/Node before a JavaScript catch handler gets control.
+    execFileSync('pdftotext', ['-layout', pdfPath, textPath], {
+      timeout: 30_000,
+      stdio: 'pipe',
+    });
+    return readFileSync(textPath, 'utf8');
   } catch {
     return '';
+  } finally {
+    try { rmSync(workDir, { recursive: true, force: true }); } catch {}
   }
 }
 
@@ -473,15 +471,6 @@ async function ocrPdf(pdfBuffer: Buffer, fileName: string): Promise<string> {
   }
 }
 
-function computeStatus(expiryDate: Date | null): 'valid' | 'expiring' | 'expired' | 'unknown' {
-  if (!expiryDate) return 'unknown';
-  const now = new Date();
-  const sixtyDays = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-  if (expiryDate < now) return 'expired';
-  if (expiryDate <= sixtyDays) return 'expiring';
-  return 'valid';
-}
-
 export async function processOneCertificate(
   blobServiceClient: BlobServiceClient,
   blobName: string,
@@ -508,7 +497,7 @@ export async function processOneCertificate(
         if (hasUsefulExtractedText(text)) extractionMode = 'pdf_text';
       }
       if (!hasUsefulExtractedText(text)) {
-        text = await extractTextFromPdf(downloaded.buffer as ArrayBuffer);
+        text = await extractTextFromPdf(downloaded, fileName);
         if (hasUsefulExtractedText(text)) extractionMode = 'pdf_text';
       }
       if (!hasUsefulExtractedText(text)) {
@@ -543,6 +532,8 @@ export async function processOneCertificate(
           blobName,
           fileName,
           extractionStatus: 'failed',
+          textExtractionStatus: 'failed',
+          metadataStatus: 'failed',
           extractionMode: 'failed',
           extractionError: err.message,
           extractedTextLength: 0,
@@ -564,6 +555,9 @@ export async function processOneCertificate(
       blobName,
       fileName,
       extractionStatus,
+      textExtractionStatus: extractionStatus,
+      metadataStatus: 'pending_text_recovery',
+      enrichmentStatus: 'pending',
       extractionMode: companySize ? 'filename_only' : extractionMode,
       extractedTextLength,
       extractionError: `No usable extracted text (${extractedTextLength} chars)`,
@@ -593,39 +587,25 @@ export async function processOneCertificate(
     return { blobName, status: extractionStatus, expiryDate: null };
   }
 
-  const extracted = await extractCertificateWithLLM(text, fileName);
-  const blobDerivedName = cleanNameFromBlobPath(blobName);
-  if (blobDerivedName) extracted.supplierName = blobDerivedName;
-
-  const certStatus = computeStatus(extracted.expiryDate);
-  const vatNumberNormalized = normalizeVat(extracted.vatNumber);
-
+  // This stage deliberately persists text only. Structured metadata is handled
+  // by the deterministic enrichment pipeline so manual values cannot be
+  // overwritten by null or lower-confidence legacy extraction results.
   await CertificateMetadataModel.findOneAndUpdate(
     { blobName },
-    {
+    { $set: {
       blobName,
       fileName,
-      expiryDate: extracted.expiryDate,
-      issueDate: extracted.issueDate,
-      supplierName: extracted.supplierName,
-      vatNumber: extracted.vatNumber,
-      vatNumberNormalized,
-      companySize: extracted.companySize,
-      bbbeeLevel: extracted.bbbeeLevel,
-      bbbeeScore: extracted.bbbeeScore,
-      blackOwnership: extracted.blackOwnership,
-      blackWomenOwnership: extracted.blackWomenOwnership,
-      verificationAgency: extracted.verificationAgency,
-      certificateNumber: extracted.certificateNumber,
-      status: certStatus,
-      extractedText: text.substring(0, 4000),
+      extractedText: storedCertificateText(text),
       extractionStatus: 'completed',
+      textExtractionStatus: 'completed',
+      enrichmentStatus: 'pending',
+      metadataStatus: 'pending',
       extractionMode,
       extractedTextLength,
       extractionError: null,
       extractedAt: new Date(),
       processedAt: new Date(),
-    },
+    } },
     { upsert: true, new: true },
   );
 
@@ -633,28 +613,12 @@ export async function processOneCertificate(
     blobName,
     fileName,
     downloadSucceeded: true,
-    expiryDate: extracted.expiryDate?.toISOString() ?? null,
-    bbbeeLevel: extracted.bbbeeLevel,
-    vatNumber: extracted.vatNumber,
-    companySize: extracted.companySize,
-    status: certStatus,
     extractionMode,
     extractedTextLength,
     extractionStatus: 'completed',
   });
 
-  if (isChromaConfigured() && text.trim()) {
-    void indexCertificate(blobName, text, {
-      supplierName: extracted.supplierName ?? '',
-      vatNumber: extracted.vatNumber ?? '',
-      bbbeeLevel: extracted.bbbeeLevel ?? '',
-      companySize: extracted.companySize ?? '',
-      status: certStatus,
-      expiryDate: extracted.expiryDate?.toISOString() ?? '',
-    });
-  }
-
-  return { blobName, status: certStatus, expiryDate: extracted.expiryDate };
+  return { blobName, status: 'text_extracted', expiryDate: existing?.expiryDate ?? null };
 }
 
 export async function processAllCertificates(
@@ -750,7 +714,7 @@ export async function extractPreviewFromBuffer(
   buffer: Buffer,
   fileName: string,
   mimeType: string,
-): Promise<CertificatePreviewExtraction & { sectorDetected: boolean }> {
+): Promise<CertificatePreviewExtraction & { sectorDetected: boolean; extractedText: string }> {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   let text = '';
 
@@ -759,7 +723,7 @@ export async function extractPreviewFromBuffer(
       text = await extractTextWithDocIntelligence(buffer, fileName);
     }
     if (!text.trim()) {
-      text = await extractTextFromPdf(buffer.buffer as ArrayBuffer);
+      text = await extractTextFromPdf(buffer, fileName);
     }
     if (!text.trim()) {
       text = await ocrPdf(buffer, fileName);
@@ -780,6 +744,7 @@ export async function extractPreviewFromBuffer(
     ...extracted,
     companySize: normalizePreviewCompanySize(extracted.companySize),
     sectorDetected,
+    extractedText: storedCertificateText(text),
   };
 }
 

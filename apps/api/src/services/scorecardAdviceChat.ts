@@ -2,6 +2,7 @@ import { chatCompletion, isAzureOpenAIConfigured } from '../../pipeline/extracti
 import { createLogger } from '../logger.js';
 import type { ScorecardAdviceContext, ScorecardAdviceSource } from './scorecardAdviceContext.js';
 import { getScorecardAdviceKnowledge, type ScorecardKnowledgeChunk } from './scorecardAdviceKnowledge.js';
+import { isSupplierQuestion, parseSupplierCriteria, parseSupplierScope, searchSuppliers, type SupplierSearchResult } from './supplierIntelligence.js';
 
 const logger = createLogger('ScorecardAdviceChat');
 
@@ -12,6 +13,7 @@ export type ScorecardAdviceChatResult = {
   warnings: string[];
   tables: ScorecardAdviceTable[];
   actions: ScorecardAdviceAction[];
+  supplierResults: SupplierSearchResult[];
 };
 
 export type ScorecardAdviceTable = {
@@ -138,7 +140,7 @@ export function validateAdviceMessage(message: unknown): string {
   return clean;
 }
 
-function compactContext(context: ScorecardAdviceContext): string {
+function compactContext(context: ScorecardAdviceContext, supplierResults: SupplierSearchResult[] = []): string {
   return JSON.stringify({
     toolkitId: context.toolkitId,
     organisation: context.organisation,
@@ -158,6 +160,7 @@ function compactContext(context: ScorecardAdviceContext): string {
     })),
     scenarios: context.scenarios,
     sources: context.sources,
+    supplierResults,
   });
 }
 
@@ -172,7 +175,7 @@ function compactKnowledge(chunks: ScorecardKnowledgeChunk[]): string {
   })));
 }
 
-function parseModelResponse(raw: string, context: ScorecardAdviceContext, knowledge: ScorecardKnowledgeChunk[]): ScorecardAdviceChatResult {
+function parseModelResponse(raw: string, context: ScorecardAdviceContext, knowledge: ScorecardKnowledgeChunk[], supplierResults: SupplierSearchResult[]): ScorecardAdviceChatResult {
   try {
     const parsed = JSON.parse(raw) as {
       answer?: unknown;
@@ -208,6 +211,7 @@ function parseModelResponse(raw: string, context: ScorecardAdviceContext, knowle
         : [],
       tables: sanitizeTables(parsed.tables),
       actions: sanitizeActions(parsed.actions),
+      supplierResults,
     };
   } catch (error) {
     logger.warn('Invalid scorecard advice model output', { error: error instanceof Error ? error.message : String(error) });
@@ -225,6 +229,7 @@ function parseModelResponse(raw: string, context: ScorecardAdviceContext, knowle
       warnings: ['The model returned an unstructured response; sources were attached from the authorised scorecard context.'],
       tables: [],
       actions: [],
+      supplierResults,
     };
   }
 }
@@ -276,18 +281,37 @@ export async function runScorecardAdviceChat(args: {
   message: string;
   context: ScorecardAdviceContext;
 }): Promise<ScorecardAdviceChatResult> {
-  if (!isAzureOpenAIConfigured()) {
-    throw Object.assign(new Error('Azure OpenAI is not configured for scorecard advice.'), { status: 503 });
-  }
-
   const knowledge = getScorecardAdviceKnowledge({
     message: args.message,
     context: args.context,
     limit: 5,
   });
+  const supplierResults = isSupplierQuestion(args.message)
+    ? await searchSuppliers({
+      clientIds: args.context.supplierClientIds ?? [],
+      criteria: { ...parseSupplierCriteria(args.message), scope: parseSupplierScope(args.message) },
+    })
+    : [];
+
+  if (!isAzureOpenAIConfigured()) {
+    if (isSupplierQuestion(args.message)) {
+      return {
+        answer: supplierResults.length
+          ? `I found ${supplierResults.length} supplier record${supplierResults.length === 1 ? '' : 's'}. The cards identify whether each result is from your suppliers or the shared discovery directory. Review the evidence status before relying on it.`
+          : 'I could not find a matching supplier in the selected supplier scope. No record was invented or substituted.',
+        sources: supplierResults.map((supplier) => ({ type: 'supplier' as const, id: supplier.id, label: supplier.name })),
+        suggestedQuestions: ['Compare the returned suppliers', 'Which evidence is still unverified?', 'How could procurement affect our score?'],
+        warnings: supplierResults.length ? [] : ['The selected supplier scope does not contain a matching record.'],
+        tables: [],
+        actions: [{ label: 'Open Procurement', route: '/toolkit/pillars/procurement', reason: 'Review the current procurement inputs.' }],
+        supplierResults,
+      };
+    }
+    throw Object.assign(new Error('Azure OpenAI is not configured for scorecard advice.'), { status: 503 });
+  }
 
   const userPrompt = `Authorised scorecard context:
-${compactContext(args.context)}
+${compactContext(args.context, supplierResults)}
 
 Approved B-BBEE knowledge:
 ${compactKnowledge(knowledge)}
@@ -295,7 +319,7 @@ ${compactKnowledge(knowledge)}
 User question:
 ${args.message}
 
-Answer using only the authorised scorecard context and approved B-BBEE knowledge. If a value is unavailable, say it is unavailable. If you use approved knowledge, include its knowledge id in sourceIds.`;
+Answer using only the authorised scorecard context, retrieved supplier records and approved B-BBEE knowledge. Never invent a supplier, certificate, ownership value or verification status. If a value is unavailable, say it is unavailable. If you use approved knowledge, include its knowledge id in sourceIds. If you use a supplier record, include its stable supplier id in sourceIds.`;
 
   const raw = await chatCompletion(
     [
@@ -305,5 +329,5 @@ Answer using only the authorised scorecard context and approved B-BBEE knowledge
     { temperature: 0.2, maxTokens: 900, responseFormat: { type: 'json_object' } },
   );
 
-  return parseModelResponse(raw, args.context, knowledge);
+  return parseModelResponse(raw, args.context, knowledge, supplierResults);
 }

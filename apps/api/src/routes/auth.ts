@@ -8,9 +8,17 @@ import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 import { recordAudit, validateBody } from '../security/index.js';
 import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from '../../../web/shared/workEmail.js';
+import { recordUserActivity, saveInitialProductInterest, type ProductCode } from '../services/userActivity.js';
+import { UserModel, UserProductInterestModel } from '../../models.js';
 
 const logger = createLogger("Auth");
 const DEMO_USER_ID = "demo-offline-user";
+
+async function getInitialProduct(userId: string): Promise<ProductCode | null> {
+  const interest = await UserProductInterestModel.findOne({ userId, isInitialSelection: true }).lean();
+  const productCode = interest?.productCode;
+  return productCode === "esg" || productCode === "bbbee" || productCode === "certificates" ? productCode : null;
+}
 
 function isDemoLoginEnabled(): boolean {
   return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
@@ -50,6 +58,7 @@ const registerSchema = z.object({
     },
     z.string().email(),
   ),
+  productCode: z.enum(["esg", "bbbee", "certificates"]),
 }).passthrough();
 
 const loginSchema = z.object({
@@ -157,7 +166,7 @@ router.post('/check-email', checkLimiter, async (req: Request, res: Response) =>
 router.post('/register', authLimiter, validateBody(registerSchema), async (req: Request, res: Response) => {
   const start = Date.now();
   try {
-    const { password, fullName, email } = req.body;
+    const { password, fullName, email, productCode } = req.body;
     if (!isWorkEmail(email)) {
       return res.status(400).json({ message: WORK_EMAIL_REQUIRED_MESSAGE });
     }
@@ -204,6 +213,16 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req: 
     req.session.userId = user.id;
     req.session.organizationId = org.id;
 
+    await saveInitialProductInterest(user.id, productCode as ProductCode);
+    await recordUserActivity(req, {
+      eventType: "user_registered",
+      userId: user.id,
+      organizationId: org.id,
+      productCode: productCode as ProductCode,
+      dedupeKey: `user_registered:${user.id}`,
+      metadata: { source: "signup" },
+    });
+
     logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
 
     await recordAudit(req, {
@@ -217,7 +236,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req: 
     });
 
     return res.json({
-      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: org.id, profilePicture: user.profilePicture },
+      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: org.id, profilePicture: user.profilePicture, initialProduct: productCode },
       organization: org,
     });
   } catch (error: unknown) {
@@ -248,6 +267,13 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
       const demoUser = getDemoUser();
       req.session.userId = demoUser.id;
       req.session.organizationId = demoUser.organizationId;
+      await recordUserActivity(req, {
+        eventType: "login_success",
+        userId: demoUser.id,
+        organizationId: demoUser.organizationId,
+        dedupeKey: `login_success:${demoUser.id}:${req.sessionID}`,
+        metadata: { demo: true },
+      });
       logger.warn("Demo login used", { userId: demoUser.id, durationMs: Date.now() - start });
       return res.json({ user: demoUser, demo: true });
     }
@@ -266,6 +292,11 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
         organizationId: null,
         metadata: { reason: "user_not_found", loginIdentifier },
       });
+      await recordUserActivity(req, {
+        eventType: "login_failed",
+        userId: null,
+        metadata: { reason: "user_not_found" },
+      });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -282,12 +313,20 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
         organizationId: user.organizationId ?? null,
         metadata: { reason: "password_mismatch" },
       });
+      await recordUserActivity(req, {
+        eventType: "login_failed",
+        userId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { reason: "password_mismatch" },
+      });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
     req.session.userId = user.id;
     req.session.organizationId = user.organizationId || '';
+    await UserModel.findOneAndUpdate({ id: user.id }, { $set: { lastLoginAt: new Date() } });
+    const initialProduct = await getInitialProduct(user.id);
     logger.debug('Session set', { userId: req.session.userId, organizationId: req.session.organizationId });
 
     await recordAudit(req, {
@@ -298,9 +337,15 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
       actorUserId: user.id,
       organizationId: user.organizationId ?? null,
     });
+    await recordUserActivity(req, {
+      eventType: "login_success",
+      userId: user.id,
+      organizationId: user.organizationId ?? null,
+      dedupeKey: `login_success:${user.id}:${req.sessionID}`,
+    });
 
     return res.json({
-      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture },
+      user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture, lastLoginAt: new Date().toISOString(), initialProduct },
     });
   } catch (error: unknown) {
     logger.error('Login error', error);
@@ -311,6 +356,12 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
 router.post('/logout', (req: Request, res: Response) => {
   const userId = req.session.userId ?? null;
   const orgId = req.session.organizationId ?? null;
+  void recordUserActivity(req, {
+    eventType: "logout",
+    userId,
+    organizationId: orgId,
+    dedupeKey: userId ? `logout:${userId}:${req.sessionID}` : null,
+  });
   req.session.destroy(() => {
     res.clearCookie('okiru.web.sid', {
       path: '/',
@@ -345,9 +396,10 @@ router.get('/me', async (req: Request, res: Response) => {
     logger.warn('/me: User not found in database', { userId: req.session.userId });
     return res.status(401).json({ message: "User not found" });
   }
+  const initialProduct = await getInitialProduct(user.id);
   logger.debug('/me: Returning user', { userId: user.id });
   return res.json({
-    user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture },
+    user: { id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, secondaryRoles: (user as any).secondaryRoles ?? [], organizationId: user.organizationId, profilePicture: user.profilePicture, initialProduct },
   });
 });
 

@@ -396,11 +396,40 @@ html.light .okiru-create-scorecard-shell [class~="bg-zinc-900"],
 html.light .okiru-create-scorecard-shell [class~="bg-neutral-950"],
 html.light .okiru-create-scorecard-shell [class~="bg-neutral-900"],
 html.light .okiru-create-scorecard-shell [class~="bg-[#08090b]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#0c0c0e]"],
 html.light .okiru-create-scorecard-shell [class~="bg-[#0d0d10]"],
 html.light .okiru-create-scorecard-shell [class~="bg-[#101012]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#141414]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#17151d]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#18181a]"],
 html.light .okiru-create-scorecard-shell [class~="bg-[#111114]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#1c1c1e]"],
 html.light .okiru-create-scorecard-shell [class*="bg-[color:var(--ink"] {
   background-color: #ffffff !important;
+}
+
+html.light .okiru-create-scorecard-shell [class*="bg-white/"],
+html.light .okiru-create-scorecard-shell [class*="bg-white\\["] {
+  background-color: #f4f4f5 !important;
+}
+
+html.light .okiru-create-scorecard-shell [class*="border-white/"],
+html.light .okiru-create-scorecard-shell [class*="border-white\\["] {
+  border-color: #e4e4e7 !important;
+}
+
+html.light .okiru-create-scorecard-shell input,
+html.light .okiru-create-scorecard-shell select,
+html.light .okiru-create-scorecard-shell textarea,
+html.light .okiru-create-scorecard-shell option {
+  background-color: #ffffff !important;
+  border-color: #d4d4d8 !important;
+  color: #18181b !important;
+}
+
+html.light .okiru-create-scorecard-shell input::placeholder,
+html.light .okiru-create-scorecard-shell textarea::placeholder {
+  color: #a1a1aa !important;
 }
 
 html.dark .okiru-app,

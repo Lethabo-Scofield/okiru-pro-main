@@ -31,6 +31,15 @@ export default function AuthWrapper() {
   const [gate, setGate] = useState<"anon" | "checking" | "team" | "leaving">("anon");
 
   const { defaultMode, redirectTo } = readAuthQuery();
+  const selectedProduct = (user as any)?.initialProduct as string | null | undefined;
+  const productDestination = selectedProduct === "esg"
+    ? "/esg"
+    : selectedProduct === "certificates"
+      ? "/certificates"
+      : selectedProduct === "bbbee"
+        ? "/bbbee"
+        : null;
+  const postAuthDestination = redirectTo || productDestination;
 
   useEffect(() => {
     if (!user) {
@@ -72,7 +81,7 @@ export default function AuthWrapper() {
     return (
       <Onboarding
         startAtTeam
-        redirectProp={redirectTo}
+        redirectProp={postAuthDestination}
         onFullyDone={(path) => {
           clearOnboardingFlowVisible();
           try {

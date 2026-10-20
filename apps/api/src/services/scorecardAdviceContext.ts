@@ -7,7 +7,7 @@ import {
 } from '../../models.js';
 
 export type ScorecardAdviceSource = {
-  type: 'scorecard' | 'scorecard_element' | 'organisation' | 'evidence' | 'scenario';
+  type: 'scorecard' | 'scorecard_element' | 'organisation' | 'evidence' | 'scenario' | 'supplier';
   id: string;
   label: string;
 };
@@ -28,6 +28,8 @@ export type ScorecardAdviceElement = {
 
 export type ScorecardAdviceContext = {
   toolkitId: 'bbbee';
+  organizationId?: string;
+  supplierClientIds?: string[];
   organisation: {
     id: string;
     name: string;
@@ -290,6 +292,8 @@ export async function buildScorecardAdviceContext(args: {
     const elements = buildElement(scorecard, session.pillarData, args.runtimeSnapshot?.missingEvidence);
     return {
       toolkitId: 'bbbee',
+      organizationId: session.organizationId || undefined,
+      supplierClientIds: [clientInfo.clientId, companyInfo.clientId, cleanId].filter(Boolean).map(String),
       organisation: {
         id: session.organizationId || 'personal',
         name: org?.name || str(companyInfo.name) || str(clientInfo.companyName) || 'Organisation',
@@ -334,6 +338,8 @@ export async function buildScorecardAdviceContext(args: {
 
   return {
     toolkitId: 'bbbee',
+    organizationId: client.organizationId || undefined,
+    supplierClientIds: [cleanId],
     organisation: {
       id: client.organizationId || 'personal',
       name: org?.name || client.name || 'Organisation',
@@ -365,5 +371,30 @@ export async function buildScorecardAdviceContext(args: {
       actions: [],
     })),
     sources: buildSources(elements, args.scorecardId),
+  };
+}
+
+export async function buildSupplierOnlyAdviceContext(args: {
+  userId: string;
+  organizationId?: string | null;
+}): Promise<ScorecardAdviceContext | null> {
+  if (!args.organizationId) return null;
+  const [org, clients] = await Promise.all([
+    OrganizationModel.findOne({ id: args.organizationId }).lean() as Promise<{ name?: string } | null>,
+    ClientModel.find({ organizationId: args.organizationId }).lean() as Promise<Array<{ id?: string; clientId?: string }>>,
+  ]);
+  const supplierClientIds = clients
+    .flatMap((client) => [client.id, client.clientId])
+    .filter((id): id is string => Boolean(id))
+    .map(String);
+  return {
+    toolkitId: 'bbbee',
+    organizationId: args.organizationId,
+    supplierClientIds,
+    organisation: { id: args.organizationId, name: org?.name || 'Current organisation' },
+    scorecard: { id: 'current', source: 'partial_platform_data' },
+    elements: [],
+    scenarios: [],
+    sources: [],
   };
 }

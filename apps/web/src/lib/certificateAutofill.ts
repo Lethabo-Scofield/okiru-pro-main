@@ -34,7 +34,7 @@
  *     scorecard without a traceable origin, and an autofill can always be
  *     explained — or undone.
  *
- * Matching itself is server-side (`POST /api/certificates/match`), where the
+ * Matching itself is server-side (`POST /internal/records/match`), where the
  * whole registry is in hand and the conservative identifier/name precedence
  * lives. This module only decides what to DO with a match.
  */
@@ -258,7 +258,7 @@ export async function fetchCertificateMatches(
   const doFetch = options.fetchImpl ?? fetch;
   const base = options.apiBase ?? '';
 
-  const response = await doFetch(`${base}/api/certificates/match`, {
+  const response = await doFetch(`${base}/internal/records/match`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
