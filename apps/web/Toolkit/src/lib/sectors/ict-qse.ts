@@ -24,6 +24,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
+import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export const ICT_QSE_SECTOR_CODE = 'ICT' as const;
 export const ICT_QSE_SCORECARD_TYPE = 'QSE' as const;
@@ -281,9 +282,63 @@ export function sectorConfigToIctQseCalculatorConfig(sc: SectorConfig): Calculat
   };
 }
 
+/**
+ * Where ICT QSE follows its Empower toolkit (BBBEE Toolkit (ICT QSE) v1.1,
+ * checked line by line against Excel on synthetic cases — see
+ * docs/toolkits/parity/findings/ict_qse.md). Each is that template's own rule:
+ *   - ownership by the toolkit's arithmetic (holders weighed by share value,
+ *     acquisition debt netted per black shareholder, net value against 100% of
+ *     the debt-netted black economic interest); the combined "new entrants or
+ *     designated groups" line adds the two shares;
+ *   - a client that combines executive and senior management: senior managers
+ *     count on the executive lines, and the senior/middle/junior lines count
+ *     middle and junior managers only;
+ *   - Skills by the QSE toolkit's method ('toolkit_qse'), including the
+ *     absorption bonus as the black share of absorbed unemployed learners;
+ *   - the all-suppliers line counts every supplier's recognised spend (the
+ *     toolkit never reads "Empowering Supplier?"), and a first-time supplier
+ *     earns the 1.2 factor like an SD beneficiary or a 3-year contract;
+ *   - supplier and enterprise development targets are 1% of NPAT each (the
+ *     toolkit's 'ESD Scorecard'!F12:F13; the sector config's 2% is the
+ *     gazette reading of the July audit), guarantees at 50%;
+ *   - the ED sub-minimum is 40% of its 5-point base line;
+ *   - SED counts ICT-specific initiatives only;
+ *   - a QSE is discounted when any priority sub-minimum fails (net value,
+ *     Skills, PP, SD, ED), as the toolkit tests them all.
+ */
+function withEmpowerIctQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+  const pc = cfg.pillarConfigs ?? {};
+  return {
+    ...cfg,
+    ownership: { ...cfg.ownership, ownershipMethod: 'toolkit', netValueTarget: 1 },
+    managementControl: { ...(cfg.managementControl ?? { maxPoints: 15 }), qseCombineExcoSenior: true },
+    skills: { ...cfg.skills, method: 'toolkit_qse', absorptionBasis: 'absorbedLearners' },
+    procurement: {
+      ...cfg.procurement,
+      allSuppliersIgnoreEmpoweringFlag: true,
+      enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
+    },
+    esd: { ...cfg.esd, supplierDevTarget: 0.01, enterpriseDevTarget: 0.01 },
+    sed: { ...cfg.sed, requireIctSpecificInitiative: true },
+    discounting: { ...cfg.discounting, qseRequiresAllPriorityElements: true },
+    pillarConfigs: {
+      ...pc,
+      enterpriseDevelopment: {
+        ...(pc.enterpriseDevelopment ?? { maxPoints: 8 }),
+        subMinimumPercent: 40,
+      },
+    },
+    benefitFactors: cfg.benefitFactors.map((bf) =>
+      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
+        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
+        : bf,
+    ),
+  };
+}
+
 /** Complete ICT QSE config — authoritative for scorecard, tests, and sector wiring. */
 export const ICT_QSE_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToIctQseCalculatorConfig(ICT_QSE);
+  withEmpowerIctQseToolkitMethod(sectorConfigToIctQseCalculatorConfig(ICT_QSE));
 
 export function isIctQseSector(
   sectorCode: string,

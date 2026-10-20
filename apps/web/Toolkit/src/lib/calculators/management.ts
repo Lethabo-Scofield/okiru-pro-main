@@ -232,15 +232,19 @@ export function calculateManagementScore(
   const employees = data.employees || [];
   const grouped = groupByDesignation(employees);
   const combineExcoSenior = data.combineExcoSenior === true;
-  // The toolkit's combined sheet reads gender from the ID number; its separate
-  // sheet reads the gender entered. Each layout is reproduced as written.
-  const genderOf = combineExcoSenior ? verifiedGender : (e: Employee) => e.gender;
-  const countBW = countBlackWomenBy(genderOf);
-  const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
   // QSE scorecards score Senior+Middle+Junior management as ONE combined band
   // against flat 60%/30% targets (no provincial-EAP split). See the isQse branch
   // below. (TOOLKIT-RESOLVED.md S4; DISCREPANCY-LEDGER rcogp/qse D-01, ict/qse D-02.)
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
+  // A QSE whose sector follows the combined layout (managementControl.
+  // qseCombineExcoSenior): senior managers move into the executive band.
+  const qseCombined = isQse && combineExcoSenior && managementControl?.qseCombineExcoSenior === true;
+  // The toolkit's combined sheet reads gender from the ID number; its separate
+  // sheet reads the gender entered. Each layout is reproduced as written. (The
+  // ICT QSE combined sheet reads the gender entered.)
+  const genderOf = combineExcoSenior && !qseCombined ? verifiedGender : (e: Employee) => e.gender;
+  const countBW = countBlackWomenBy(genderOf);
+  const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
   const rcogp = MANAGEMENT_RCOGP_DEFAULTS;
 
   const cfg = managementControl;
@@ -319,6 +323,7 @@ export function calculateManagementScore(
         ...(grouped['Executive'] || []),
         ...(grouped['Executive Director'] || []),
         ...(grouped['Other Executive Management'] || []),
+        ...(qseCombined ? grouped['Senior'] || [] : []),
       ]
     : [
         ...(grouped['Executive'] || []),
@@ -415,7 +420,8 @@ export function calculateManagementScore(
     //   G29 = MIN(F29 / 0.60 × 6, 6);  the black-female row uses 0.30 × 2.
     // seniorMaxPts (6) + seniorBWMaxPts (2) carry the whole 8-pt SMJ band;
     // middle/junior maxPts are 0, so their EAP-split results stay 0.
-    const smj = [...senior, ...middle, ...junior];
+    // Combined layout (qseCombined): senior managers are in the executive band.
+    const smj = qseCombined ? [...middle, ...junior] : [...senior, ...middle, ...junior];
     const smjBlackPct = pctOf(smj, countBlack);
     const smjBWOPct = pctOf(smj, countBW);
     otherExecBlackScore = clampScore(safeRatio(otherExecBlackPct, otherExecBlackTarget, otherExecBlackMaxPts), otherExecBlackMaxPts);

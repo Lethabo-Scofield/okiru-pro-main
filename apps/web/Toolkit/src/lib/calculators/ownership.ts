@@ -520,9 +520,10 @@ function calculateToolkitOwnership(
   const votingRightsBWO = safeRatio(blackWomenShare, ot.womenVotingTarget, ot.womenVotingMaxPts);
   const economicInterestBlack = safeRatio(eiBlack, ot.economicInterestTarget, ot.economicInterestMaxPts);
   const economicInterestBWO = safeRatio(eiBlackWomen, ot.womenEITarget, ot.womenEIMaxPts);
-  // A QSE template scores ONE line, "black new entrants or designated groups",
-  // whose measure is the two shares added ('Ownership Data'!Y4 + Z4); the
-  // Generic template scores them on separate lines.
+  // A QSE template (RCOGP QSE, ICT QSE) scores ONE line, "black new entrants
+  // or designated groups", whose measure is the two shares added ('Ownership
+  // Data'!Y4 + Z4; 'Ownership Scorecard'!I9); the Generic template scores them
+  // on separate lines.
   const designatedMeasure = ot.combinedNewEntrantsDesignated ? designatedShare + newEntrantShare : designatedShare;
   const designatedGroups = safeRatio(designatedMeasure, ot.designatedGroupsTarget, ot.designatedGroupsMax);
   const newEntrants = safeRatio(newEntrantShare, ot.newEntrantsTarget, ot.newEntrantsMaxPts);

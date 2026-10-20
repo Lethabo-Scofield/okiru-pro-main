@@ -100,6 +100,14 @@ export interface CalculatorConfig {
      * Empower toolkit, and the default) or by the voting rights entered.
      */
     boardMeasure?: 'headcount' | 'votingRights';
+    /**
+     * QSE scorecards whose client combines executive and senior management:
+     * the executive lines count executive directors, other executive managers
+     * and senior managers together, and the senior/middle/junior lines count
+     * middle and junior managers only (ICT QSE toolkit 'MC Scorecard (Exco +
+     * Senior)'), each by the gender entered. Unset, a QSE ignores the choice.
+     */
+    qseCombineExcoSenior?: boolean;
     boardBlackTarget?: number;
     boardBlackMaxPts?: number;
     boardBWTarget?: number;
@@ -189,12 +197,14 @@ export interface CalculatorConfig {
      * capped against all training spend, and training-admin costs are shared out
      * by the black workforce mix. Unset keeps the original method.
      *
-     * 'toolkit_qse' is the Empower RCOGP QSE toolkit's arithmetic: no EAP split;
-     * per line (black, black women, black people with disabilities) course costs
-     * A–E plus B/C/D stipends, plus F & G and other costs capped at 15% of all
-     * training spend, plus 15% of training-admin costs shared by that group's
-     * share of the workforce; the absorption bonus is black learners absorbed
-     * over the learners who completed a learnership while unemployed.
+     * 'toolkit_qse' is the Empower QSE toolkits' arithmetic (RCOGP QSE and ICT
+     * QSE share it): no EAP split; per line (black, black women, black people
+     * with disabilities) course costs A–E plus B/C/D stipends, plus F & G and
+     * other costs capped together at 15% of all training spend, plus 15% of
+     * training-admin costs shared by that group's share of the workforce, each
+     * against its share of the leviable amount. The absorption bonus counts
+     * black learners absorbed after a learnership, apprenticeship or internship
+     * completed while not employed, over the denominator absorptionBasis names.
      */
     method?: 'toolkit' | 'toolkit_qse';
     /**
@@ -205,8 +215,17 @@ export interface CalculatorConfig {
      * 'laiCompleters' (AgriBEE Generic toolkit, 'Skills Calcs'!J53; read by the
      * 'toolkit' method only): absorbed unemployed black learners over every
      * black learner who completed a learnership, apprenticeship or internship.
+     *
+     * Read by the 'toolkit_qse' method:
+     *  - 'unemployedLaiCompleters' (RCOGP QSE; the method's default): over every
+     *    learner, of any race, who completed one while not employed — the
+     *    template's own headcount cell ('Skills Calcs'!D28), as it evidently
+     *    means it (its formula divides by all absorbed learners);
+     *  - 'absorbedLearners' (ICT QSE): over every absorbed learner, i.e. the
+     *    black share of those absorbed — the template's formula as written
+     *    ('Skills Calcs'!J28), pending the sector expert's ruling.
      */
-    absorptionBasis?: 'headcount' | 'laiCompleters';
+    absorptionBasis?: 'headcount' | 'laiCompleters' | 'unemployedLaiCompleters' | 'absorbedLearners';
     /**
      * AgriBEE Generic toolkit ('toolkit' method only): F & G course costs and
      * the other training costs (travel, accommodation, catering, stationery,
@@ -277,8 +296,8 @@ export interface CalculatorConfig {
      *  - 'flow_through' (RCOGP Generic v1.4): ≥51% black AND ≥51% flow-through
      *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
      *    contract;
-     *  - 'black_owned_small_supplier_or_first_time' (RCOGP QSE v1.1, FSC v1.0
-     *    and AgriBEE Generic v1.0.1, as the templates mean it): a QSE/EME ≥51% black owned that is a Supplier
+     *  - 'black_owned_small_supplier_or_first_time' (RCOGP QSE v1.1, ICT QSE
+     *    v1.1, FSC v1.0 and AgriBEE Generic v1.0.1, as the templates mean it): a QSE/EME ≥51% black owned that is a Supplier
      *    Development beneficiary, holds a 3-year contract, or is a first-time
      *    supplier (Supplier.isFirstTimeSupplier).
      */
@@ -333,6 +352,16 @@ export interface CalculatorConfig {
   sed: {
     maxPoints: number;
     npatTarget: number;
+    /**
+     * ICT: only ICT-specific initiatives count. A contribution counts only when
+     * `ictSpecificInitiative` is true; one answered No, or with no answer on
+     * record, counts 0 — the toolkit's SED Data[Recognised Amount] =
+     * IF([ICT Specific Initiative?]="Yes", Amount × Benefit Factor, 0), where a
+     * blank answer scores 0. Every entry path carries the answer (workbook
+     * grid, Excel import, Toolkit form and bulk upload), and the uncounted
+     * spend is reported on the SED line and page (SedResult.notIctSpecific).
+     */
+    requireIctSpecificInitiative?: boolean;
     /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
     sedBaseMaxPts?: number;
     /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */
@@ -368,6 +397,13 @@ export interface CalculatorConfig {
   discounting: {
     dropLevels: number;
     maxDropLevel: number;
+    /**
+     * A QSE is discounted when ANY priority-element sub-minimum fails, as a
+     * Generic entity is (ICT QSE toolkit 'Scorecard Calculations'!C13 tests
+     * net value, Skills, PP, SD and ED together). Unset, a QSE needs Ownership
+     * plus either Skills or the ESD element (Statement 000 §3.3).
+     */
+    qseRequiresAllPriorityElements?: boolean;
   };
   recognitionTable?: { level: number; multiplier: number }[];
   levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;

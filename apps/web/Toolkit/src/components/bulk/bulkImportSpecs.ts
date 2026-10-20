@@ -506,6 +506,12 @@ function contributionSpec(
         // than defaulting to full benefit.
         blackBenefitPercent:
           which === "sed" ? pctOf100(row.percentBenefitingBlack) || undefined : undefined,
+        // ICT scores a SED contribution only when it is marked an ICT-specific
+        // initiative (sed.requireIctSpecificInitiative), so the sheet's answer
+        // is kept — and left unset where the sheet does not give one.
+        ...(which === "sed" && statedBool(row.ictSpecificInitiative) !== undefined
+          ? { ictSpecificInitiative: statedBool(row.ictSpecificInitiative) }
+          : {}),
       } as Contribution;
     },
     identity: (c) => `${c.beneficiary.toLowerCase()}|${c.amount}`,

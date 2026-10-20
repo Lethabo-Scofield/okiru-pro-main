@@ -1,0 +1,326 @@
+{
+ "template": "ict_qse",
+ "seed": 102,
+ "profile": "empty",
+ "cells": {
+  "Ownership Scorecard!D13": "Year",
+  "Ownership Scorecard!D14": "Current YTD",
+  "MC Toolkit!C3": "Year",
+  "MC Toolkit!C4": "Current YTD",
+  "MC Scorecard!J17": "Year",
+  "MC Scorecard!J18": "Current YTD",
+  "MC Scorecard (Exco + Senior)!J17": "Year",
+  "MC Scorecard (Exco + Senior)!J18": "Current YTD",
+  "Skills Toolkit!D8": "Current YTD",
+  "Skills Scorecard!M12": "Current YTD",
+  "Procurement Scorecard!C15": "Year",
+  "Procurement Scorecard!C16": "Current YTD",
+  "Procurement Scorecard!E6": "Actual",
+  "ESD Scorecard!F20": "Year",
+  "ESD Scorecard!F21": "Current YTD",
+  "SED Scorecard!H9": "Year",
+  "SED Scorecard!H10": "Current YTD",
+  "Client Information!C3": "Parity case ICT QSE 102",
+  "Client Information!C4": "2025-03-01",
+  "Client Information!D4": "2026-02-28",
+  "Client Information!C8": 0.0865,
+  "Client Information!C16": 17000000,
+  "Client Information!C17": 2128716,
+  "Client Information!C23": "Yes",
+  "Client Information!G4": 8713.45,
+  "Client Information!G5": 8213.63,
+  "Client Information!G6": 8111.35,
+  "Client Information!G7": 7543.84,
+  "Client Information!G8": 7806.37,
+  "Client Information!G9": 9067.3,
+  "Client Information!G10": 7604.83,
+  "Client Information!G11": 8651.74,
+  "Client Information!G12": 8470.66,
+  "Client Information!G13": 8602.97,
+  "Client Information!G14": 8962.45,
+  "Client Information!G15": 8646.21,
+  "Client Information!C14": 13052605.4,
+  "Financials!C4": -326906,
+  "Financials!E4": 15958703,
+  "Financials!C5": 721966,
+  "Financials!E5": 15707782,
+  "Financials!C6": -602162,
+  "Financials!E6": 15669063,
+  "Financials!C7": 2043844,
+  "Financials!E7": 16718361,
+  "Skills Toolkit!D6": 151756.71,
+  "Skills Toolkit!D7": 56209.87,
+  "Procurement Scorecard!D4": 0.1
+ },
+ "tables": {
+  "tblOwnershipData": [
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 1",
+    "Ownership Type": "Strategic Partner",
+    "Outstaning Debt": 0,
+    "BO%": 0.0,
+    "BWO%": 0.0,
+    "BDG%": 0.0,
+    "BNE%": 0.0,
+    "Number of Share": 1300,
+    "Share Value": 3140943.0,
+    "Original Date": "2017-01-01"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 2",
+    "Ownership Type": "Strategic Partner",
+    "Outstaning Debt": 4386638,
+    "BO%": 0.75,
+    "BWO%": 0.375,
+    "BDG%": 0.0,
+    "BNE%": 0.0375,
+    "Number of Share": 8500,
+    "Share Value": 20536935.0,
+    "Original Date": "2021-08-01",
+    "Loan Date": "2017-05-01"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Shareholder": "Holder 3",
+    "Ownership Type": "Broad Based Ownership Scheme (BBOS)",
+    "Outstaning Debt": 7360970,
+    "BO%": 0.25,
+    "BWO%": 0.25,
+    "BDG%": 0.0,
+    "BNE%": 0.0,
+    "Number of Share": 5100,
+    "Share Value": 12322161.0,
+    "Original Date": "2017-04-01",
+    "Loan Date": "2025-11-01"
+   }
+  ],
+  "tblCompanyValuation": [
+   {
+    "Date": "2026-02-28",
+    "Company Asset Value": 36000000,
+    "Total Shares": 14900,
+    "Share Value": 2416.11
+   }
+  ],
+  "tblMCData": [
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 1",
+    "Gender *": "Female",
+    "Race *": "Indian",
+    "Designation *": "Semi-skilled",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 2",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Semi-skilled",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 3",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Junior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 4",
+    "Gender *": "Female",
+    "Race *": "African",
+    "Designation *": "Senior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 5",
+    "Gender *": "Female",
+    "Race *": "Coloured",
+    "Designation *": "Executive Director",
+    "Disabled *": "No",
+    "Foreign *": "Yes",
+    "Voting Rights (Directors only) *": 0.25
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 6",
+    "Gender *": "Female",
+    "Race *": "African",
+    "Designation *": "Non-executive Director",
+    "Disabled *": "No",
+    "Foreign *": "No",
+    "Voting Rights (Directors only) *": 0.5
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 7",
+    "Gender *": "Male",
+    "Race *": "Indian",
+    "Designation *": "Non-executive Director",
+    "Disabled *": "No",
+    "Foreign *": "No",
+    "Voting Rights (Directors only) *": 0.25
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 8",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Unskilled",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 9",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Middle Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 10",
+    "Gender *": "Female",
+    "Race *": "White",
+    "Designation *": "Junior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 11",
+    "Gender *": "Female",
+    "Race *": "African",
+    "Designation *": "Junior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Full Name *": "Employee 12",
+    "Gender *": "Male",
+    "Race *": "African",
+    "Designation *": "Senior Manager",
+    "Disabled *": "No",
+    "Foreign *": "No"
+   }
+  ],
+  "tblSkillsData": [],
+  "tblPPData": [
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 1",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 4,
+    "Empowering Supplier? (Yes/No)": "No",
+    "Current Black ownership": 1.0,
+    "Current Black Female ownership": 1.0,
+    "Black Designated Group  ownership": 0.9,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "Yes",
+    "Spend *": 2014619.36
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 2",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 2,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0.3,
+    "Current Black Female ownership": 0.0,
+    "Black Designated Group  ownership": 0.3,
+    "Supplier development recipient? (Yes/No)": "Yes",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 266738.39
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 3",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 1,
+    "Empowering Supplier? (Yes/No)": "No",
+    "Current Black ownership": 0.51,
+    "Current Black Female ownership": 0.255,
+    "Black Designated Group  ownership": 0.51,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 441616.58
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 4",
+    "Current Company Size *": "Generic",
+    "B-BBEE Level": 6,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0,
+    "Current Black Female ownership": 0.0,
+    "Black Designated Group  ownership": 0.0,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 1298600.33
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 5",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 4,
+    "Empowering Supplier? (Yes/No)": "No",
+    "Current Black ownership": 0.6,
+    "Current Black Female ownership": 0.3,
+    "Black Designated Group  ownership": 0.6,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "Yes",
+    "Spend *": 1693861.8
+   },
+   {
+    "Data Date": "2026-02-28",
+    "Supplier Name *": "Supplier 6",
+    "Current Company Size *": "QSE",
+    "B-BBEE Level": 8,
+    "Empowering Supplier? (Yes/No)": "Yes",
+    "Current Black ownership": 0.6,
+    "Current Black Female ownership": 0.6,
+    "Black Designated Group  ownership": 0.54,
+    "Supplier development recipient? (Yes/No)": "No",
+    "3 year contract in place? (Yes/No)3": "No",
+    "First-time supplier? (Yes/No)": "No",
+    "Spend *": 2284026.96
+   }
+  ],
+  "tblInclusions": [
+   {
+    "Inclusions": "Cost of Sales",
+    "Amount": 7333900.5
+   },
+   {
+    "Inclusions": "Operating Expenses",
+    "Amount": 3143100.22
+   }
+  ],
+  "tblESDData": [],
+  "tblSED": [],
+  "tblExclusions": [
+   {
+    "Exclusions": "Salaries and wages",
+    "Amount": 399973.17
+   }
+  ]
+ }
+}

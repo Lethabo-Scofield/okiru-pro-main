@@ -312,6 +312,7 @@ function withEmpowerQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
     skills: {
       ...cfg.skills,
       method: 'toolkit_qse',
+      absorptionBasis: 'unemployedLaiCompleters',
     },
     procurement: {
       ...cfg.procurement,

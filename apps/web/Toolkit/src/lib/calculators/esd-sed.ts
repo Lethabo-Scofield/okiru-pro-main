@@ -84,6 +84,12 @@ export interface SedResult {
    */
   unrecognisedTypes: string[];
   excludedSpend: number;
+  /**
+   * Where only ICT-specific initiatives count (sed.requireIctSpecificInitiative):
+   * the contributions not marked as one (answered No, or not answered) and
+   * their rand value, none of which is scored. Absent elsewhere.
+   */
+  notIctSpecific?: { spend: number; count: number };
   total: number;
   /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
   exactTotal?: number;
@@ -546,10 +552,21 @@ export function calculateSedScore(
   // agri-specific initiative counts nothing; an unanswered one still counts.
   const initiativesOnly = sc.sectorSpecificInitiativesOnly === true;
   let notInitiativeSpend = 0;
+  // ICT: only a contribution marked as an ICT-specific initiative counts. One
+  // answered No, or with no answer, counts 0, as the toolkit's
+  // SED Data[Recognised Amount] = IF([ICT Specific Initiative?]="Yes", …, 0).
+  const requireIct = sc.requireIctSpecificInitiative === true;
+  let notIctSpend = 0;
+  let notIctCount = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
     if (initiativesOnly && c.isSectorSpecificInitiative === false) {
       notInitiativeSpend += amount;
+      return acc;
+    }
+    if (requireIct && c.ictSpecificInitiative !== true) {
+      notIctSpend += amount;
+      notIctCount += 1;
       return acc;
     }
     const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
@@ -603,11 +620,14 @@ export function calculateSedScore(
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
     : '') + (notInitiativeSpend > 0
     ? `; ${formatRand(notInitiativeSpend)} not counted: not a sector-specific initiative`
+    : '') + (notIctCount > 0
+    ? `; ${formatRand(notIctSpend)} across ${notIctCount} contribution${notIctCount === 1 ? '' : 's'} not counted: not marked as an ICT-specific initiative`
     : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),
     excludedSpend: round2(excludedSpend),
+    ...(requireIct ? { notIctSpecific: { spend: round2(notIctSpend), count: notIctCount } } : {}),
     total,
     exactTotal: clampScore(score, maxPoints),
     subMinimumMet: true,

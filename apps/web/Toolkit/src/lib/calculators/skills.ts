@@ -767,28 +767,40 @@ function scoreToolkitMethod(data: SkillsData, p: ToolkitParams): ToolkitOutcome 
 }
 
 // ---------------------------------------------------------------------------
-// RCOGP QSE toolkit method (skills.method = 'toolkit_qse') — the Empower RCOGP
-// QSE template v1.1 (tblSkillsData computed columns → 'Skills Calcs' rows 7,
-// 14, 21 and 28), checked line by line against the workbook recalculated in
-// Excel. No EAP split. Each spend line takes, for its learners:
+// QSE toolkit method (skills.method = 'toolkit_qse') — the Empower RCOGP QSE
+// v1.1 and ICT QSE v1.1 templates, whose Skills arithmetic is the same
+// (tblSkillsData computed columns → 'Skills Calcs' rows 7, 14, 21 and 28),
+// checked line by line against each workbook recalculated in Excel. No EAP
+// split. Each spend line takes, for its learners:
 //   course costs of categories A–E + stipends of categories B, C, D
 //   + F & G course costs and every row's other costs, capped together at 15%
 //     of ALL training spend (every learner, every race)
 //   + 15% of the training manager's salary and training overheads, shared by
 //     the line's group's share of the workforce,
-// against target × leviable amount. The absorption bonus is the black
-// learners absorbed after a learnership they completed while unemployed, over
-// all learners who completed one while unemployed (the template's own
-// headcount cell; its formula divides by all absorbed learners instead — see
-// docs/toolkits/parity/findings/rcogp_qse.md).
+// against target × leviable amount. The absorption bonus counts the black
+// learners absorbed after a learnership, apprenticeship or internship they
+// completed while not employed ("Employed?" = No: unemployed or on a
+// fixed-term contract), over the sector's chosen denominator
+// (skills.absorptionBasis):
+//   'unemployedLaiCompleters' (RCOGP QSE, and the default): every learner who
+//     completed one while not employed — the template's own headcount cell
+//     (D28); its formula divides by all absorbed learners instead
+//     (docs/toolkits/parity/findings/rcogp_qse.md);
+//   'absorbedLearners' (ICT QSE): every absorbed learner, i.e. the black share
+//     of those absorbed — the formula as written, pending the expert's ruling
+//     (docs/toolkits/parity/findings/ict_qse.md).
 // ---------------------------------------------------------------------------
+
+/** 'Skills Calcs'!O7: F & G course costs and other costs together, capped at 15% of all training spend; the same 15% of training-admin costs is shared out. */
+const QSE_TOOLKIT_CAP = 0.15;
 
 interface QseRow {
   black: boolean;
   female: boolean;
   disabled: boolean;
+  /** Category B, C or D (the toolkit's LAI). */
   lai: boolean;
-  unemployed: boolean;
+  notEmployed: boolean;
   completed: boolean;
   absorbed: boolean;
   /** 'Cat A - E Course Cost' + 'Cat BCD Stipends/Salaries'. */
@@ -818,7 +830,7 @@ function qseRow(prog: TrainingProgram): QseRow {
     female: String(prog.gender ?? '').trim() === 'Female',
     disabled: Boolean(prog.isDisabled),
     lai: isBCD,
-    unemployed: isUnemployed(prog),
+    notEmployed: isNotEmployed(prog),
     completed: Boolean(prog.isCompleted),
     absorbed: Boolean(prog.isAbsorbed),
     direct: (catCode !== '' && !isFG ? course : 0) + (isBCD ? salary : 0),
@@ -826,6 +838,8 @@ function qseRow(prog: TrainingProgram): QseRow {
     catCode,
   };
 }
+
+type QseAbsorptionBasis = 'unemployedLaiCompleters' | 'absorbedLearners';
 
 interface QseOutcome {
   learning: number;
@@ -835,7 +849,9 @@ interface QseOutcome {
   notes: [string, string, string, string];
   recognised: [number, number, number];
   absorbed: number;
-  completedUnemployed: number;
+  absorptionDenominator: number;
+  learnershipCount: number;
+  totalBlackLearners: number;
   categoryBreakdown: CategoryBreakdown[];
 }
 
@@ -847,8 +863,7 @@ function scoreToolkitQseMethod(
     maxPts: [number, number, number];
     absorptionMaxPts: number;
     absorptionTargetPct: number;
-    cap: number;
-    adminCap: number;
+    absorptionBasis: QseAbsorptionBasis;
   },
 ): QseOutcome {
   const rows = (data.trainingPrograms || []).map(qseRow);
@@ -856,7 +871,7 @@ function scoreToolkitQseMethod(
   const share = (keys: string[]) => keys.reduce((a, k) => a + (shares[k] ?? 0), 0);
   const adminCosts = (data.trainingManagerSalary ?? 0) + (data.trainingOverheadCost ?? 0);
   const allSpend = rows.reduce((a, r) => a + r.direct + r.fgOther, 0);
-  const capAmount = allSpend * p.cap;
+  const capAmount = allSpend * QSE_TOOLKIT_CAP;
 
   const groups: Array<{ label: string; pick: (r: QseRow) => boolean; workforce: number }> = [
     { label: 'black learners', pick: (r) => r.black, workforce: share(['AM', 'CM', 'IM', 'AF', 'CF', 'IF']) },
@@ -871,7 +886,7 @@ function scoreToolkitQseMethod(
     const direct = sel.reduce((a, r) => a + r.direct, 0);
     const fgOther = sel.reduce((a, r) => a + r.fgOther, 0);
     const fgRecognised = Math.min(fgOther, capAmount);
-    const admin = p.adminCap * adminCosts * g.workforce;
+    const admin = QSE_TOOLKIT_CAP * adminCosts * g.workforce;
     const total = direct + fgRecognised + admin;
     const target = p.leviable * p.targets[i];
     const pts = cappedRatio(total, target, p.maxPts[i]);
@@ -879,41 +894,56 @@ function scoreToolkitQseMethod(
     recognised.push(total);
     notes.push(
       `Spend on ${g.label}: course costs (A–E) and B/C/D stipends ${fmtRand(direct)}` +
-      ` + F & G and other costs ${fmtRand(fgRecognised)}${fgRecognised < fgOther - 0.005 ? ` (of ${fmtRand(fgOther)}, capped at ${fmtPct(p.cap)} of all training spend ${fmtRand(allSpend)})` : ''}` +
-      (admin > 0 ? ` + ${fmtPct(p.adminCap)} of training-admin costs × ${fmtPct(g.workforce)} workforce share ${fmtRand(admin)}` : '') +
+      ` + F & G and other costs ${fmtRand(fgRecognised)}${fgRecognised < fgOther - 0.005 ? ` (of ${fmtRand(fgOther)}, capped at ${fmtPct(QSE_TOOLKIT_CAP)} of all training spend ${fmtRand(allSpend)})` : ''}` +
+      (admin > 0 ? ` + ${fmtPct(QSE_TOOLKIT_CAP)} of training-admin costs × ${fmtPct(g.workforce)} workforce share ${fmtRand(admin)}` : '') +
       ` = ${fmtRand(total)} ÷ ${fmtRand(target)} (${fmtPct(p.targets[i])} × ${fmtRand(p.leviable)}) × ${fmtNum(p.maxPts[i])} = ${pts.toFixed(2)} (max ${fmtNum(p.maxPts[i])}).`,
     );
   });
 
-  const completedUnemployed = rows.filter((r) => r.lai && r.completed && r.unemployed).length;
-  const absorbed = rows.filter((r) => r.black && r.lai && r.completed && r.absorbed && r.unemployed).length;
-  const absorptionRate = completedUnemployed > 0 ? absorbed / completedUnemployed : 0;
+  // Learners who completed a learnership, apprenticeship or internship while not employed.
+  const completers = rows.filter((r) => r.lai && r.completed && r.notEmployed);
+  const absorbedAll = completers.filter((r) => r.absorbed);
+  const absorbed = absorbedAll.filter((r) => r.black).length;
+  const denominator = p.absorptionBasis === 'absorbedLearners' ? absorbedAll.length : completers.length;
+  const absorptionRate = denominator > 0 ? absorbed / denominator : 0;
   const absorption = cappedRatio(absorptionRate, p.absorptionTargetPct / 100, p.absorptionMaxPts);
-  notes.push(completedUnemployed > 0
-    ? `${absorbed} black learner(s) absorbed of ${completedUnemployed} who completed a learnership, apprenticeship or internship while unemployed ` +
-      `= ${fmtPct(absorptionRate)} vs ${fmtNum(p.absorptionTargetPct)}% → ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`
-    : 'No learner completed a learnership, apprenticeship or internship while unemployed, so nothing could be absorbed.');
+  const working = `= ${fmtPct(absorptionRate)} vs ${fmtNum(p.absorptionTargetPct)}% → ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`;
+  notes.push(p.absorptionBasis === 'absorbedLearners'
+    ? (denominator > 0
+      ? `${absorbed} of the ${denominator} learner(s) absorbed after completing a learnership, apprenticeship or internship while not employed are black ${working}`
+      : 'No learner who completed a learnership, apprenticeship or internship while not employed was absorbed.')
+    : (denominator > 0
+      ? `${absorbed} black learner(s) absorbed of ${denominator} who completed a learnership, apprenticeship or internship while not employed ${working}`
+      : 'No learner completed a learnership, apprenticeship or internship while not employed, so nothing could be absorbed.'));
 
-  const spendByCat: Record<string, number> = {};
-  for (const r of rows) {
-    if (!r.black || !r.catCode) continue;
-    spendByCat[r.catCode] = (spendByCat[r.catCode] ?? 0) + r.direct + r.fgOther;
-  }
-  const categoryBreakdown: CategoryBreakdown[] = ALL_CATEGORIES.map((code) => ({
-    code,
-    label: CATEGORY_LABELS[code].label,
-    examples: CATEGORY_LABELS[code].examples,
-    spend: spendByCat[code] ?? 0,
-    recognisedSpend: spendByCat[code] ?? 0,
-    cap: code === 'F' || code === 'G' ? p.cap : undefined,
-    capApplied: false,
-  }));
+  // Per-category view of black learners' spend; F & G and other costs scaled by the cap.
+  const black = rows.filter((r) => r.black);
+  const blackFgOther = black.reduce((a, r) => a + r.fgOther, 0);
+  const fgFactor = blackFgOther > 0 ? Math.min(blackFgOther, capAmount) / blackFgOther : 1;
+  const categoryBreakdown: CategoryBreakdown[] = ALL_CATEGORIES.map((code) => {
+    const rs = black.filter((r) => r.catCode === code);
+    const spend = rs.reduce((a, r) => a + r.direct + r.fgOther, 0);
+    const recognisedSpend = rs.reduce((a, r) => a + r.direct + r.fgOther * fgFactor, 0);
+    return {
+      code,
+      label: CATEGORY_LABELS[code].label,
+      examples: CATEGORY_LABELS[code].examples,
+      spend,
+      recognisedSpend,
+      cap: code === 'F' || code === 'G' ? QSE_TOOLKIT_CAP : undefined,
+      capApplied: recognisedSpend < spend - 0.005,
+    };
+  });
 
   return {
     learning: points[0], female: points[1], disabled: points[2], absorption,
     notes: notes as [string, string, string, string],
     recognised: recognised as [number, number, number],
-    absorbed, completedUnemployed, categoryBreakdown,
+    absorbed,
+    absorptionDenominator: denominator,
+    learnershipCount: black.filter((r) => r.lai).length,
+    totalBlackLearners: black.length,
+    categoryBreakdown,
   };
 }
 
@@ -977,18 +1007,15 @@ export function calculateSkillsScore(
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
 
   if (sc.method === 'toolkit_qse') {
-    // The QSE template caps F & G and other costs, and shares training-admin
-    // costs, at 15% each ('Skills Calcs' O7 = all spend × 15%; 'Employee
-    // Demographics' rows 7-8 = cost × 15% × workforce share).
-    const QSE_TOOLKIT_CAP = 0.15;
+    const absorptionBasis: QseAbsorptionBasis =
+      sc.absorptionBasis === 'absorbedLearners' ? 'absorbedLearners' : 'unemployedLaiCompleters';
     const q = scoreToolkitQseMethod(data, {
       leviable: leviableAmount > 0 ? leviableAmount : 0,
       targets: [overallTargetPct, bursaryTargetPct, disabledTargetPct],
       maxPts: [learningMaxPts, bursaryMaxPts, disabledMaxPts],
       absorptionMaxPts,
       absorptionTargetPct,
-      cap: QSE_TOOLKIT_CAP,
-      adminCap: QSE_TOOLKIT_CAP,
+      absorptionBasis,
     });
     const base = q.learning + q.female + q.disabled;
     const lines: SkillsSubLine[] = [
@@ -998,7 +1025,11 @@ export function calculateSkillsScore(
       ...(learnershipMaxPts > 0
         ? [{ name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: 0 }]
         : []),
-      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(0)}% absorption`, weighting: absorptionMaxPts, score: q.absorption, isBonus: true, note: q.notes[3] },
+      {
+        name: "Absorption of black people after learnerships, apprenticeships or internships",
+        target: `${absorptionTargetPct.toFixed(0)}% ${absorptionBasis === 'absorbedLearners' ? 'of absorbed learners' : 'of unemployed completers'}`,
+        weighting: absorptionMaxPts, score: q.absorption, isBonus: true, note: q.notes[3],
+      },
     ];
     return {
       learningProgrammes: round2(q.learning),
@@ -1017,10 +1048,10 @@ export function calculateSkillsScore(
         blackSpend: round2(q.recognised[0]),
         bursarySpend: round2(q.recognised[1]),
         disabledSpend: round2(q.recognised[2]),
-        learnershipCount: trainingPrograms.filter((t) => isBlackLearner(t) && isLAIProgram(t)).length,
+        learnershipCount: q.learnershipCount,
         absorbedCount: q.absorbed,
-        totalBlackLearners: trainingPrograms.filter(isBlackLearner).length,
-        absorptionRate: q.completedUnemployed > 0 ? q.absorbed / q.completedUnemployed : 0,
+        totalBlackLearners: q.totalBlackLearners,
+        absorptionRate: q.absorptionDenominator > 0 ? q.absorbed / q.absorptionDenominator : 0,
         totalRecognisedSpend: round2(q.recognised[0]),
         targetOverall: round2(TARGET_OVERALL),
         targetBursaries: round2(TARGET_BURSARIES),

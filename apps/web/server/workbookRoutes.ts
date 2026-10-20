@@ -30,7 +30,7 @@ import {
   type SectionDef,
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
-import { coerceYesNo } from "../src/lib/yesNoValue";
+import { coerceYesNo, coerceYesNoOrUnset } from "../src/lib/yesNoValue";
 import { tmpsHold } from "../src/lib/extractionMetaKeys";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import { createChatCompletion } from "./openaiCompat";
@@ -1404,7 +1404,10 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       contributionType: rawType,
       category: "socio_economic" as const,
       descriptionOfSpend: s((r as any).descriptionOfSpend),
-      ictSpecificInitiative: coerceYesNo((r as any).ictSpecificInitiative),
+      // Yes, No, or unset when the cell is blank: an unanswered row is not
+      // recorded as "No" (ICT scores only a Yes either way; the SED line
+      // reports both as not marked ICT-specific).
+      ictSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),
       amount: num((r as any).amount),
