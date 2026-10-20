@@ -8,9 +8,9 @@ line of its Summary Scorecard was compared with what our system scores for the s
 
 ## Result
 
-**704 of 704 comparisons match** across 22 invented companies. For each company we compare 32 figures: the 22 scored lines, the 7 element totals and the grand total, the achieved level and the discounted level, each to within half a cent of a point (levels exactly).
+**736 of 736 comparisons match** across 23 invented companies. For each company we compare 32 figures: the 22 scored lines, the 7 element totals and the grand total, the achieved level and the discounted level, each to within half a cent of a point (levels exactly).
 
-61 of the scored lines match only once a faulty toolkit formula is read as it is evidently meant (the corrected lines then also move their element total and the grand total). Because of those corrections, the achieved level differs from the one the workbook prints in 13 companies and the discounted level in 14. Every company, with the workbook's printed figures beside ours:
+64 of the scored lines match only once a faulty toolkit formula is read as it is evidently meant (the corrected lines then also move their element total and the grand total). Because of those corrections, the achieved level differs from the one the workbook prints in 14 companies and the discounted level in 15. Every company, with the workbook's printed figures beside ours:
 
 | Company | Workbook total | Our total | Workbook level (discounted) | Our level (discounted) | Why the level differs |
 |---|---|---|---|---|---|
@@ -36,6 +36,7 @@ line of its Summary Scorecard was compared with what our system scores for the s
 | 108 | 67.49 | 99.67 | L7 (L8) | L2 (L3) | the corrected lines move the total from 67.49 to 99.67 |
 | 109 | 41.14 | 47.26 | L8 (NC) | L8 (NC) | — |
 | 112 | 29.16 | 34.13 | NC (NC) | NC (NC) | — |
+| 113 | 71.56 | 69.34 | L6 (L7) | L7 (L8) | the corrected lines move the total from 71.56 to 69.34 |
 
 Where a line matched only because the toolkit's own formula is faulty and we score what that formula clearly
 means, the fault is listed under "Toolkit formula faults" below, with the cases it changed.
@@ -84,10 +85,18 @@ is a choice the Codes could be read differently on, it is marked **(please confi
    benefit factor), so the answer never changes a score. A contribution to a white-owned, non-ICT beneficiary counts
    in full. We do the same. The sister RCOGP Generic toolkit does recognise 0 for a beneficiary that does not
    qualify, so the ICT toolkit may mean the same; we did not assume it, because a formula that gives the same answer
-   either way does not say which answer was meant. This changes many scores: in 18 of our 22 test companies at least
+   either way does not say which answer was meant. This changes many scores: in 18 of our 23 test companies at least
    one ESD contribution goes to a beneficiary that is not an ICT company.
-8. **SED.** Only contributions marked as ICT-specific initiatives count. The percentage benefiting black people is not
-   used. Target: 1% of NPAT for 12 points.
+8. **SED.** Only contributions marked as ICT-specific initiatives count. The toolkit counts a contribution only when
+   "ICT Specific Initiative?" says Yes: one answered No, **and one left blank**, counts nothing. We do the same, so a
+   client who has not answered the question for a contribution gets no SED points for it. So that an answer is never
+   lost on the way in, every place our system takes a contribution now asks for it or keeps it: the workbook's
+   "ICT-Specific?" column, the Excel import (which used to drop the column and record every contribution as "No"),
+   and our SED screen with its bulk upload. A contribution with no answer is kept as unanswered, not turned into a
+   "No". Whatever does not count is shown on the SED line and on the SED screen ("not marked as an ICT-specific
+   initiative"), with its rand value, so the client can see why and answer the question. Test company 113 leaves
+   some answers blank to check this against the workbook. The percentage benefiting black people is not used.
+   Target: 1% of NPAT for 12 points.
 9. **Deemed NPAT.** NPAT is the larger of the current year and the average of the current and up to four prior years.
    If that is below a quarter of the industry norm times revenue, the toolkit uses the larger of (smallest qualifying
    margin × revenue) and (quarter-norm × revenue). A manual deemed NPAT always wins.
@@ -101,8 +110,8 @@ is a choice the Codes could be read differently on, it is marked **(please confi
 Where a toolkit formula is evidently broken, we score what the formula evidently means, using the toolkit's own
 figures. Each fault is shown with the cell, what it does, what we do instead, and which test companies it changed.
 
-- **The new-entrants-or-designated-groups target is cut to nothing** ('Ownership Scorecard'!H9). The points formula divides the measure by the first three characters of the target. The 2% target (0.02) becomes the text "0.0", the division fails, and the line always scores 0 unless points are typed in by hand. **What we do:** the toolkit's own measure (designated groups plus new entrants, I9) against 2% for 3 points. *Changed:* case 1, case 2, case 3, case 4, case 5, case 7, case 8, case 9, case 10, case 11, case 12, case 101, case 102, case 103, case 104, case 105, case 106, case 107, case 108, case 109, case 112.
-- **Acquisition debt is netted three different ways** ('Oustanding Debts Calcs' column H, feeding 'Ownership Scorecard'!I7 and I10). Only the first indebted shareholder (row 3) gets the rule that the stake counts in full once its net value reaches 40% of it; every later row subtracts the debt straight off, so the result depends on the order the shareholders are typed in. It credits an indebted holder's whole stake as black, not the black share of it. And its debt column ignores the "Debt?" flag (which is Yes only for a black holder with debt), so a non-black shareholder's acquisition debt is subtracted from the black economic interest. **What we do:** for each black shareholder with acquisition debt, the black share of the stake, credited in full once its net value reaches 40% of the stake and pro rata below (the first-row rule, as for RCOGP Generic); a non-black shareholder's debt is left out. A black shareholder whose debt is larger than its stake takes the shortfall off the total, as the first-row rule does (please confirm). This sets the black economic interest line and the net value line. *Changed:* case 5, case 8, case 11, case 102, case 103, case 106, case 107, case 108.
+- **The new-entrants-or-designated-groups target is cut to nothing** ('Ownership Scorecard'!H9). The points formula divides the measure by the first three characters of the target. The 2% target (0.02) becomes the text "0.0", the division fails, and the line always scores 0 unless points are typed in by hand. **What we do:** the toolkit's own measure (designated groups plus new entrants, I9) against 2% for 3 points. *Changed:* case 1, case 2, case 3, case 4, case 5, case 7, case 8, case 9, case 10, case 11, case 12, case 101, case 102, case 103, case 104, case 105, case 106, case 107, case 108, case 109, case 112, case 113.
+- **Acquisition debt is netted three different ways** ('Oustanding Debts Calcs' column H, feeding 'Ownership Scorecard'!I7 and I10). Only the first indebted shareholder (row 3) gets the rule that the stake counts in full once its net value reaches 40% of it; every later row subtracts the debt straight off, so the result depends on the order the shareholders are typed in. It credits an indebted holder's whole stake as black, not the black share of it. And its debt column ignores the "Debt?" flag (which is Yes only for a black holder with debt), so a non-black shareholder's acquisition debt is subtracted from the black economic interest. **What we do:** for each black shareholder with acquisition debt, the black share of the stake, credited in full once its net value reaches 40% of the stake and pro rata below (the first-row rule, as for RCOGP Generic); a non-black shareholder's debt is left out. A black shareholder whose debt is larger than its stake takes the shortfall off the total, as the first-row rule does (please confirm). This sets the black economic interest line and the net value line. *Changed:* case 5, case 8, case 11, case 102, case 103, case 106, case 107, case 108, case 113.
 - **Ownership points can go below zero** ('Ownership Scorecard'!H5:H10). The points formula caps at the maximum but has no floor. Debt larger than the stake drives black women's economic interest below zero, and the line shows negative points. **What we do:** a line scores at least 0. *Changed:* case 103, case 108.
 - **Middle and junior management line has no formula in the combined layout** ('MC Scorecard (Exco + Senior)'!K28). When the client combines executive and senior management, the cell that scores black middle and junior managers is empty, so the line always scores 0 (the black-women cell beside it, K29, has its formula). **What we do:** the sheet's own measure (J28) against 60% for 6 points. *Changed:* case 1, case 4, case 6, case 7, case 10, case 12, case 101, case 102, case 104, case 105, case 106, case 108, case 109, case 112.
 - **"First-time supplier?" reads the 3-year-contract answer** ('Procurement Data', column "First-time supplier? (Yes/No) [Scenario].Calcs"). With no scenario typed, the column falls back to the "3 year contract in place?" answer instead of the "First-time supplier?" answer, so a first-time supplier never earns the 1.2 recognition factor unless it also holds a 3-year contract. **What we do:** the first-time answer, so a QSE or EME first-time supplier at least 51% black owned earns the 1.2 factor. *Changed:* case 6, case 102, case 103, case 109, case 112.
@@ -127,7 +136,7 @@ figures. Each fault is shown with the cell, what it does, what we do instead, an
 
 ## Still different, and why
 
-No compared figure differs: all 704 comparisons match.
+No compared figure differs: all 736 comparisons match.
 
 Not compared, on purpose:
 
@@ -137,40 +146,40 @@ Not compared, on purpose:
 
 ## Inputs the cases exercise
 
-22 invented companies (cases 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 101, 102, 103, 104, 105, 106, 107, 108, 109, 112): twelve random ones of two sizes, and one or two for each edge the random ones may miss (every line at its maximum, empty data, heavy acquisition debt, every ESD contribution type, first-time suppliers, deemed NPAT, a Level 8 that discounting makes Non-compliant, and a company under 40 points). How many companies exercise each input:
+23 invented companies (cases 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 101, 102, 103, 104, 105, 106, 107, 108, 109, 112, 113): twelve random ones of two sizes, and one or two for each edge the random ones may miss (every line at its maximum, empty data, heavy acquisition debt, every ESD contribution type, first-time suppliers, deemed NPAT, a Level 8 that discounting makes Non-compliant, a company under 40 points, and SED contributions left unanswered on "ICT Specific Initiative?"). How many companies exercise each input:
 
-- SD beneficiaries as suppliers: 22
-- suppliers answered "not empowering": 22
-- several shareholders: 19
+- SD beneficiaries as suppliers: 23
+- suppliers answered "not empowering": 23
+- several shareholders: 20
+- category F and G courses: 20
+- 3-year contracts: 20
 - black new entrants: 19
-- category F and G courses: 19
-- 3-year contracts: 19
-- stipends (categories B to D): 18
+- stipends (categories B to D): 19
 - large other costs (the 15% cap): 18
 - non-compliant suppliers: 18
 - ESD beneficiaries that are not ICT companies: 18
-- disabled learners: 17
-- designated groups in ownership: 16
+- disabled learners: 18
+- designated groups in ownership: 17
+- absorbed learners: 17
+- disabled employees: 17
 - foreign employees: 16
-- absorbed learners: 16
-- disabled employees: 16
+- an ED beneficiary graduating: 15
 - executive and senior management combined: 14
-- an ED beneficiary graduating: 14
+- SED that is not ICT-specific: 14
 - a first-time supplier with no SD link or 3-year contract: 13
-- SED that is not ICT-specific: 13
-- TMPS exclusions: 11
-- acquisition debt: 11
+- TMPS exclusions: 12
+- acquisition debt: 12
 - jobs created up to 10%: 11
+- foreign learners: 11
 - a procurement buffer: 10
-- foreign learners: 10
 - a payroll figure (leviable amount may exceed SDL × 100): 10
+- jobs created 11% or more: 10
 - a missing prior year: 9
-- jobs created 11% or more: 9
 - investments at a lower dividend: 9
+- executive and senior management kept apart: 9
 - a training manager's salary and training overheads: 8
-- executive and senior management kept apart: 8
 - below-prime loans: 7
-- guarantees: 6
+- guarantees: 7
 - minority investments: 5
 - shorter payment periods: 4
 - a non-black shareholder with debt: 4
@@ -180,3 +189,4 @@ Not compared, on purpose:
 - no training at all: 1
 - no ESD contributions: 1
 - a manual deemed NPAT: 1
+- SED left unanswered on "ICT Specific Initiative?": 1

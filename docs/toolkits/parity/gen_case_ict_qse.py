@@ -2,7 +2,7 @@
 written in the toolkit's own vocabulary (sheet cells + table rows). Synthetic
 only: invented names, no ID numbers, nothing from any client file.
 
-  py -3 gen_case_ict_qse.py <seed> <out.case.json> [--profile small|full|max|empty|debt|esd|firsttime|deemed|weak|poor]
+  py -3 gen_case_ict_qse.py <seed> <out.case.json> [--profile small|full|max|empty|debt|esd|firsttime|deemed|weak|poor|sedblank]
 
   py -3 gen_case_ict_qse.py --all    writes the standard set into cases/ict_qse/
 
@@ -377,13 +377,22 @@ def sed(rng, profile, small, npat):
     if profile in ('empty', 'max'):
         return []
     n = rng.randint(1, 3) if small else rng.randint(2, 7)
-    scale = max(abs(npat), 400_000) * (0.004 if profile not in LOW else 0.0015)
+    if profile == 'sedblank':
+        n = max(n, 4)
+    # 'sedblank' spends less, so the ICT-specific rows alone stay under the
+    # target and an unanswered row would move the line if it were counted.
+    scale = max(abs(npat), 400_000) * (0.0015 if profile in LOW else 0.002 if profile == 'sedblank' else 0.004)
     rows = []
     for i in range(n):
+        ict = yn(rng, 0.75)
+        if profile == 'sedblank':
+            # Every answer the column can hold: Yes, No, and no answer at all
+            # (None leaves the cell empty).
+            ict = ('Yes', None, 'Yes', 'No')[i % 4]
         rows.append({
             "Data Date": DATA_DATE, "Beneficiary Name *": f"Beneficiary SED {i + 1}",
             "Description of Spend *": f"SED spend {i + 1}",
-            "ICT Specific Initiative?": yn(rng, 0.75),
+            "ICT Specific Initiative?": ict,
             "Date of Transaction * (format: dd/mm/yyyy)": rdate(rng),
             "Contribution Type *": rng.choice(SED_TYPES),
             "% of Spend Benefiting Black Individuals *": rng.choice([0.5, 0.75, 0.9, 1.0]),
@@ -439,10 +448,12 @@ def make(seed, profile="full"):
 # the ED graduation and jobs bonuses, and the designated-group supplier bonus),
 # so the level lookup is tested right on a threshold. 'weak' (109) lands on
 # Level 8 and fails the procurement and skills sub-minimums, so its discounted
-# level is Non-compliant; 'poor' (112) stays under 40 points.
+# level is Non-compliant; 'poor' (112) stays under 40 points. 'sedblank' (113)
+# leaves some "ICT Specific Initiative?" answers empty, which the toolkit scores 0.
 STANDARD = [(s, 'full' if s % 3 else 'small') for s in range(1, 13)] + [
     (101, 'max'), (102, 'empty'), (103, 'debt'), (104, 'esd'), (105, 'firsttime'),
     (106, 'deemed'), (107, 'deemed'), (108, 'debt'), (109, 'weak'), (112, 'poor'),
+    (113, 'sedblank'),
 ]
 
 
