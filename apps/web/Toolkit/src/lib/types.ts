@@ -130,7 +130,7 @@ export interface Shareholder {
   outstandingDebt?: number;
   /**
    * FSC toolkit: when the acquisition debt was taken on (ISO). Its term to the
-   * data date sets the graduation factor the net value is scored with.
+   * measurement date sets the graduation factor the net value is scored with.
    */
   loanDate?: string;
 }
