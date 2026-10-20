@@ -127,6 +127,13 @@ describe('ICT SED: "ICT-Specific?" reaches the calculator as an answer, never as
     expect(p.sedContributions.map((c) => c.isSectorSpecificInitiative)).toEqual([true, false, undefined, undefined]);
   });
 
+  it('answers nothing for a client outside ICT: the ICT column is not AgriBEE\'s own question', () => {
+    // The information-request template carries "ICT Specific Initiative?" for
+    // every sector; an AgriBEE client's "No" there is not "not agri-specific".
+    const p = projectWorkbookToClient(workbook({ sector: 'AGRI', sedAnswers: [false, false, true] }));
+    expect(p.sedContributions.map((c) => c.isSectorSpecificInitiative)).toEqual([undefined, undefined, undefined]);
+  });
+
   it('an explicit No removes the row from the score; blank and missing answers still count', async () => {
     const withNo = await load(workbook({ sedAnswers: [true, false, '', 'absent'] }));
     expect(withNo.sed.contributions.map((c) => c.isSectorSpecificInitiative)).toEqual([true, false, undefined, undefined]);

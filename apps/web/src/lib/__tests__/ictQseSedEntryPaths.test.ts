@@ -111,6 +111,8 @@ describe("ICT QSE SED: the ICT-specific answer survives every entry path to the 
 
   it("a workbook grid row: Yes counts; a blank cell is projected as unanswered, not No", () => {
     const sections = {
+      // The projection reads "ICT-Specific?" for an ICT client only.
+      "company-information": { meta: { industrySector: "ICT", scorecardType: "QSE" } },
       sed: {
         rows: [
           { _id: "a", beneficiaryName: "Township Coding Club", descriptionOfSpend: "Coding classes",

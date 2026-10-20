@@ -1350,8 +1350,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         isSupplierDevRecipient: coerceYesNo((r as any).sdRecipient),
         threeYearContract: coerceYesNo((r as any).threeYearContract),
         hasThreeYearContract: coerceYesNo((r as any).threeYearContract),
-        // ICT Generic: "First-time Supplier?" (the 1.2 factor for a first-time
-        // ≥51% black-owned QSE/EME). Only ever adds points, so unanswered = No.
+        // "First-time Supplier?" (the 1.2 factor for a first-time ≥51%
+        // black-owned QSE/EME, where the sector's rule reads it: RCOGP QSE,
+        // ICT, AgriBEE Generic, FSC). Only ever adds points, so unanswered = No.
         isFirstTimeSupplier: coerceYesNo((r as any).firstTimeSupplier),
         designated: coerceYesNo((r as any).designated),
         isDesignatedGroup: coerceYesNo((r as any).designated),
@@ -1414,7 +1415,12 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // when the cell is blank. ICT Generic still counts an unanswered row and
       // ICT QSE does not; coercing a blank to false would drop every row
       // nobody was asked about, the way the importer's stamped "No" used to.
-      isSectorSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
+      // An ICT question only: another sector's own initiative question
+      // (AgriBEE's "Agri Specific Initiative?") is not this one, so a "No"
+      // in the ICT column of a non-ICT client's sheet answers nothing.
+      ...(sectorCode === "ICT"
+        ? { isSectorSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative) }
+        : {}),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),
       amount: num((r as any).amount),
