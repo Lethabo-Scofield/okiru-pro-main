@@ -200,6 +200,65 @@ describe("BulkImportDialog", () => {
 });
 
 /**
+ * The client's sector reaches every row the dialog reads. The SED register's
+ * "ICT-Specific?" column is in the information-request workbook for every
+ * sector, but it is an answer only for an ICT client: AgriBEE Generic drops a
+ * contribution answered No to its own initiative question, so an AgriBEE
+ * client's ICT "No" stored as that answer scored its SED 0.
+ */
+describe("BulkImportDialog — a column one sector asks", () => {
+  const sedSheet = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ["Socioeconomic Development"],
+        ["Beneficiary Name *", "Description of Spend *", "ICT Specific Initiative?", "Contribution Type *", "Amount *"],
+        ["Farm School Trust", "School feeding", "No", "Grant Contribution", 50000],
+      ]),
+      "Socioeconomic Development",
+    );
+    return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as unknown as Uint8Array;
+  };
+
+  async function importSed(sectorCode: string) {
+    const onImport = vi.fn();
+    render(
+      <BulkImportDialog
+        open
+        onOpenChange={() => {}}
+        spec={BULK_IMPORT_SPECS.sed}
+        existing={[]}
+        onImport={onImport}
+        sectorCode={sectorCode}
+      />,
+    );
+    const input = document.querySelector('[data-testid="input-bulk-sed"]') as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [fileFrom(sedSheet(), "sed.xlsx")], writable: false });
+    fireEvent.change(input);
+    await waitFor(() =>
+      expect((screen.getByTestId("button-confirm-sed") as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(screen.getByTestId("button-confirm-sed"));
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+    const [entities] = onImport.mock.calls[0];
+    expect(entities).toHaveLength(1);
+    return entities[0] as Record<string, unknown>;
+  }
+
+  it("leaves an AgriBEE client's contribution unanswered", async () => {
+    const c = await importSed("AGRI");
+    expect(c.amount).toBe(50000);
+    expect("isSectorSpecificInitiative" in c).toBe(false);
+  });
+
+  it("keeps an ICT client's No", async () => {
+    const c = await importSed("ICT");
+    expect(c.isSectorSpecificInitiative).toBe(false);
+  });
+});
+
+/**
  * The certificate registry, on a procurement upload.
  *
  * Two things have to be true at once. A client's own supplier spreadsheet is

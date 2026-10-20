@@ -35,6 +35,23 @@ import type {
 /** A row as the shared parser hands it over: workbook column keys to values. */
 export type ParsedRow = Record<string, unknown>;
 
+/** What the upload knows about the client the rows are being imported for. */
+export interface BulkImportContext {
+  /**
+   * The client's sector code, the one its calculator is chosen by ("ICT",
+   * "AGRI", "RCOGP", …). Unknown is treated as no sector-only question asked.
+   */
+  sectorCode?: string;
+}
+
+/**
+ * Whether the client is an ICT client, read the way the workbook projection
+ * reads it (toCalculatorSectorCode: trimmed, case-insensitive).
+ */
+function isIctClient(context: BulkImportContext | undefined): boolean {
+  return String(context?.sectorCode ?? "").trim().toUpperCase() === "ICT";
+}
+
 export interface BulkImportSpec<T> {
   /** Workbook section key — picks the sheet and the column definitions. */
   sectionKey: string;
@@ -61,8 +78,11 @@ export interface BulkImportSpec<T> {
    * counted and reported, never quietly dropped and never half-imported.
    */
   requiredKeys: string[];
-  /** Turn one parsed row into a stored record. */
-  toEntity: (row: ParsedRow) => T;
+  /**
+   * Turn one parsed row into a stored record. `context` is the client the rows
+   * are for; a spec reads it where a column means something in one sector only.
+   */
+  toEntity: (row: ParsedRow, context?: BulkImportContext) => T;
   /** What makes two records the same record, for the second upload. */
   identity: (entity: T) => string;
   /**
@@ -481,7 +501,7 @@ function contributionSpec(
     // ESD names its subject "supplierName" (the beneficiary IS a supplier);
     // SED names it "beneficiaryName". Same record, different register.
     requiredKeys: [which === "esd" ? "supplierName" : "beneficiaryName"],
-    toEntity: (row) => {
+    toEntity: (row, context) => {
       const declared = str(row.esdCategory).toLowerCase();
       const category: Contribution["category"] =
         which === "sed"
@@ -507,10 +527,18 @@ function contributionSpec(
         blackBenefitPercent:
           which === "sed" ? pctOf100(row.percentBenefitingBlack) || undefined : undefined,
         // ICT scores a SED contribution by whether it is an ICT-specific
-        // initiative (sed.sectorSpecificInitiatives), so the sheet's
-        // "ICT-Specific?" answer is kept — and left unset where the sheet does
-        // not give one.
-        ...(which === "sed" && statedBool(row.ictSpecificInitiative) !== undefined
+        // initiative (sed.sectorSpecificInitiatives), so for an ICT client the
+        // sheet's "ICT-Specific?" answer is kept — and left unset where the
+        // sheet does not give one. For any other client the column answers
+        // nothing: the information-request workbook carries it for every
+        // sector, and AgriBEE Generic drops a contribution answered No to ITS
+        // question ("Agri Specific Initiative?", not captured yet), so taking
+        // an AgriBEE client's ICT "No" as that answer took its rows out of the
+        // SED score. The workbook projection applies the same rule
+        // (projectWorkbookToClient).
+        ...(which === "sed" &&
+        isIctClient(context) &&
+        statedBool(row.ictSpecificInitiative) !== undefined
           ? { isSectorSpecificInitiative: statedBool(row.ictSpecificInitiative) }
           : {}),
       } as Contribution;

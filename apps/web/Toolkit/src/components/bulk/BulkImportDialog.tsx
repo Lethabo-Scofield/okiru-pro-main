@@ -23,7 +23,7 @@ import {
 import { downloadSectionTemplate } from "@/lib/informationRequestTemplate";
 import { CertificatePreview } from "@/components/certificates/CertificatePreview";
 import { describeDuplicates, findDuplicates, mergeByAmount } from "@/lib/duplicateRows";
-import type { BulkImportSpec, ParsedRow } from "./bulkImportSpecs";
+import type { BulkImportContext, BulkImportSpec, ParsedRow } from "./bulkImportSpecs";
 
 /**
  * One pillar's bulk upload, for every pillar.
@@ -48,7 +48,11 @@ export interface BulkImportDialogProps<T> {
   existing: T[];
   /** Add these records. Called once, with everything, on confirm. */
   onImport: (entities: T[], mode: "append" | "replace") => void;
-  /** Sector the template button should generate for. */
+  /**
+   * The client's sector. The template button generates for it, and every row
+   * is read for it: a column one sector asks (the SED "ICT-Specific?") is an
+   * answer only for that sector's clients.
+   */
   sectorCode?: string;
   fscSubSector?: string;
 }
@@ -144,6 +148,9 @@ export function BulkImportDialog<T>({
     [existing, spec],
   );
 
+  /** The client every row is read for (see `sectorCode`). */
+  const context = useMemo<BulkImportContext>(() => ({ sectorCode }), [sectorCode]);
+
   /**
    * What this file would do, recomputed whenever the chosen sheet changes.
    *
@@ -210,7 +217,7 @@ export function BulkImportDialog<T>({
     if (!read) return null;
     const entities = (enriched.rows as ParsedRow[])
       .filter((row) => !spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === ""))
-      .map((row) => spec.toEntity(row));
+      .map((row) => spec.toEntity(row, context));
     return findDuplicates(entities, {
       identityOf: spec.identity,
       labelOf: spec.duplicateLabel,
@@ -218,7 +225,7 @@ export function BulkImportDialog<T>({
         ? mergeByAmount<T>(spec.duplicateAmountField)
         : undefined,
     });
-  }, [read, enriched, spec]);
+  }, [read, enriched, spec, context]);
 
   const outcome = useMemo<Outcome<T> | null>(() => {
     if (!read || !duplicates) return null;
@@ -232,7 +239,7 @@ export function BulkImportDialog<T>({
       ? duplicates.deduped
       : rows
           .filter((row) => !spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === ""))
-          .map((row) => spec.toEntity(row));
+          .map((row) => spec.toEntity(row, context));
 
     const added: T[] = [];
     const updated: T[] = [];
@@ -242,7 +249,7 @@ export function BulkImportDialog<T>({
     }
 
     return { added, updated, skipped, read };
-  }, [read, enriched, spec, existingIds, duplicates, collapseDuplicates]);
+  }, [read, enriched, spec, context, existingIds, duplicates, collapseDuplicates]);
 
   const handleFile = useCallback(
     async (file: File | undefined) => {
