@@ -117,11 +117,21 @@ Across sectors (the same question in several templates):
    today. Which rule should each follow?
 3. **The QSE absorption bonus.** Both QSE templates have the same cell. For
    RCOGP QSE we divide the black learners absorbed by the learners who
-   completed a learnership, apprenticeship or internship while unemployed (the
-   line's own headcount, the formula read as meant); for ICT QSE we follow the
-   formula as written, the black share of the learners absorbed, so one black
-   learner absorbed out of fifty earns all 5 points. Which reading is right for
-   each? And should the RCOGP QSE headcount count black learners only?
+   completed a learnership, apprenticeship or internship while not employed,
+   that is unemployed or on a fixed-term contract (the line's own headcount,
+   the formula read as meant); for ICT QSE we follow the formula as written, the
+   black share of the learners absorbed, so one black learner absorbed out of
+   fifty earns all 5 points. Which reading is right for each? And should the
+   RCOGP QSE headcount count black learners only?
+   Both QSE templates ask "Employed?" as Yes or No, and count the learners
+   answered No. Our register asks Permanent, Fixed-Term or Unemployed, so we
+   read a learner on a fixed-term contract as No, in both QSE sectors: that
+   is how the QSE templates' own "Absorption potential" column and the
+   Generic templates read it. Before the two QSE methods were combined, RCOGP
+   QSE read only "Unemployed" as No, so a fixed-term learner who completed and
+   was absorbed now counts in both the absorbed learners and the headcount.
+   **Please confirm the fixed-term reading for RCOGP QSE** (the owner's
+   sign-off is outstanding).
 4. **Enterprise and supplier development beneficiaries.** The RCOGP QSE, ICT
    Generic, ICT QSE and AgriBEE templates work out whether a beneficiary
    qualifies (51% black-owned EME or QSE; for Enterprise Development an ICT or
@@ -230,7 +240,9 @@ records will move. The changes most likely to surprise:
 - **RCOGP QSE Skills, absorption:** a learner on a fixed-term contract now
   counts as not employed, as in every other toolkit sector (before, only
   "Unemployed" did). This came from combining the two QSE methods; ICT QSE
-  already did this.
+  already did this. A record that states a status is read by its status (a
+  permanent learner is not an absorption candidate even if the older
+  "employed" flag says No). Awaiting the owner's sign-off (ruling 3).
 - **FSC:** Others, Banks, Long-term and Short-term insurers are scored by a new
   calculator that follows the FSC toolkit. Records without the answers listed
   above fall back as described there (Skills on the leviable amount, the two

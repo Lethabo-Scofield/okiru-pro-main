@@ -9,7 +9,8 @@
  *     empowering flag;
  *   - Skills ('toolkit_qse'): F & G and other costs capped at 15% of all
  *     training spend, 15% of training-admin costs by workforce share, absorption
- *     over the learners who completed a learnership while unemployed;
+ *     over the learners who completed a learnership while not employed
+ *     (unemployed or on a fixed-term contract);
  *   - none of it reaches RCOGP Generic or the default rules.
  */
 import { describe, it, expect } from 'vitest';
@@ -105,6 +106,58 @@ describe("RCOGP QSE Skills ('toolkit_qse')", () => {
     const r = calculateSkillsScore(skills(programs), QSE);
     // 1 absorbed of 3 completed while unemployed → 33% of the 100% target × 5.
     expect(r.absorption).toBeCloseTo(5 / 3, 2);
+  });
+
+  /**
+   * The template's "Employed?" is Yes/No, and the absorption cells count
+   * "Employed?" = No ('Skills Calcs' D28 and F28, the same cells as ICT QSE's).
+   * Our register asks Permanent, Fixed-Term or Unemployed. A fixed-term learner
+   * is read as "Employed?" = No, as the template's own leftover "Absorption
+   * potential" column (Fixed-Term or Unemployed) and the Generic templates'
+   * three-way column read it, and as ICT QSE scores it. The reviewed RCOGP QSE
+   * branch read only "Unemployed" (or the legacy isEmployed flag) before the
+   * two QSE methods were combined; this pins the combined reading, which the
+   * owner is asked to confirm (findings README, ruling 3).
+   */
+  it('reads a fixed-term learner as not employed: an absorbed completer counts above and below the line', () => {
+    const programs = [
+      learner({ categoryCode: 'B', employmentStatus: 'Fixed-Term', isAbsorbed: true }),
+      learner({ categoryCode: 'C', employmentStatus: 'Unemployed', isAbsorbed: false }),
+      learner({ categoryCode: 'D', employmentStatus: 'Unemployed', isAbsorbed: false }),
+      learner({ categoryCode: 'D', employmentStatus: 'Unemployed', isAbsorbed: false }),
+    ];
+    const r = calculateSkillsScore(skills(programs), QSE);
+    // The fixed-term learner is absorbed and one of the 4 completers: 25% × 5.
+    // Read as employed it would count in neither, and absorption would be 0.
+    expect(r.absorption).toBeCloseTo(5 / 4, 6);
+    const note = r.subLines.find((l) => l.name.startsWith('Absorption of black people'))?.note ?? '';
+    expect(note).toContain('1 black learner(s) absorbed of 4');
+  });
+
+  it('a fixed-term completer who was not absorbed still counts below the line', () => {
+    const programs = [
+      learner({ categoryCode: 'B', employmentStatus: 'Unemployed', isAbsorbed: true }),
+      learner({ categoryCode: 'C', employmentStatus: 'Fixed-Term', isAbsorbed: false }),
+    ];
+    // 1 absorbed of 2 completers → 50% × 5.
+    expect(calculateSkillsScore(skills(programs), QSE).absorption).toBeCloseTo(2.5, 6);
+  });
+
+  it('the stated status wins over the legacy isEmployed flag; the flag is read only when no status is', () => {
+    const absorbed = (o: Partial<TrainingProgram>) => learner({ categoryCode: 'B', isAbsorbed: true, ...o });
+    // A permanent employee is not an absorption candidate, whatever the old flag
+    // says: 1 absorbed of 1 candidate. Read by the flag, 1 of 2 (2.5).
+    const permanent = calculateSkillsScore(skills([
+      learner({ categoryCode: 'C', employmentStatus: 'Permanent', isEmployed: false, isAbsorbed: false }),
+      absorbed({ employmentStatus: 'Unemployed' }),
+    ]), QSE);
+    expect(permanent.absorption).toBeCloseTo(5, 6);
+    // An older record with no status: isEmployed false makes it a candidate.
+    const legacy = calculateSkillsScore(skills([
+      absorbed({ employmentStatus: undefined as unknown as TrainingProgram['employmentStatus'], isEmployed: false }),
+      learner({ categoryCode: 'C', employmentStatus: 'Unemployed', isAbsorbed: false }),
+    ]), QSE);
+    expect(legacy.absorption).toBeCloseTo(2.5, 6); // 1 of 2 candidates
   });
 
   it('leaves RCOGP Generic on its own methods', () => {
