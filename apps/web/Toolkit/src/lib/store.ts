@@ -725,7 +725,14 @@ export function calculateScorecard(
   // costs by (every employee except non-executive directors).
   const skillScore = transportLarge
     ? calculateTransportLargeSkills(state.skills, cfg)
-    : calculateSkillsScore(withSkillsWorkforce(state.skills, state.management), cfg, state.client.eapProvince, state.client.eapYear);
+    : calculateSkillsScore(
+      {
+        ...withSkillsWorkforce(state.skills, state.management),
+        // Read only by a sector that counts training within the period (AgriBEE).
+        measurementPeriodStart: state.skills.measurementPeriodStart ?? (state.client.measurementPeriodStart || undefined),
+      },
+      cfg, state.client.eapProvince, state.client.eapYear,
+    );
 
   // The measurement period's end dates the time-bound rules (a graduated
   // supplier's five years; the ESD "years since first assistance").

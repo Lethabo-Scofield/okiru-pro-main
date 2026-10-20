@@ -503,16 +503,22 @@ describe('AGRI Generic — sub-minimum thresholds', () => {
 
 describe('AGRI Generic — unemployed-training headcount indicator (2.1.2.2)', () => {
   it('scores the bursary slot on a HEADCOUNT basis, not spend (4 pts at target)', () => {
-    // One unemployed Black learner → meets the 2.5%-of-headcount target (floored)
-    // → full 4 pts on the bursary slot, independent of spend amount.
+    // The Empower AgriBEE toolkit scores this line per black group against its
+    // EAP share of 2.5% × headcount ('Skills Calcs' rows 40-45). With a
+    // headcount of 40 each group's target is at most one learner, so one
+    // unemployed learner in each group meets every target → full 4 pts on the
+    // bursary slot, independent of spend amount (R1 each).
+    const groups: Array<[string, string]> = [
+      ['African', 'Male'], ['Coloured', 'Male'], ['Indian', 'Male'],
+      ['African', 'Female'], ['Coloured', 'Female'], ['Indian', 'Female'],
+    ];
     const r = calculateSkillsScore(
       {
-        id: '1', clientId: 'agri', leviableAmount: LEVIABLE,
-        trainingPrograms: [
-          { id: 'u1', name: 'Unemployed learnership', category: 'learnership', categoryCode: 'D' as const,
-            cost: 1, isBlack: true, isDisabled: false, gender: 'Male' as const, race: 'African' as const,
-            employmentStatus: 'Unemployed' } as any,
-        ],
+        id: '1', clientId: 'agri', leviableAmount: LEVIABLE, headcount: 40,
+        trainingPrograms: groups.map(([race, gender], i) => (
+          { id: `u${i}`, name: 'Unemployed learnership', category: 'learnership', categoryCode: 'D' as const,
+            cost: 1, isBlack: true, isDisabled: false, gender, race,
+            employmentStatus: 'Unemployed' } as any)),
         yesCandidatesCount: 0, yesAbsorbedCount: 0,
       },
       CONFIG,
@@ -544,9 +550,11 @@ describe('AGRI Generic — absorption target is 100% (not 2.5%)', () => {
       {
         id: '1', clientId: 'agri', leviableAmount: LEVIABLE,
         trainingPrograms: [
+          // The toolkit counts an absorption only for a learner who completed
+          // the learnership ('Skills Data'[Absorbed LAI [Unemployed Only]]).
           { id: 'a1', name: 'LAI', category: 'learnership', categoryCode: 'D' as const, cost: 10_000,
             isBlack: true, isDisabled: false, gender: 'Female' as const, race: 'African' as const,
-            employmentStatus: 'Unemployed', isAbsorbed: true } as any,
+            employmentStatus: 'Unemployed', isCompleted: true, isAbsorbed: true } as any,
         ],
         yesCandidatesCount: 0, yesAbsorbedCount: 0,
       },
@@ -556,17 +564,17 @@ describe('AGRI Generic — absorption target is 100% (not 2.5%)', () => {
   });
 
   it('50% absorption rate scores ~2.5/5 (100% target, not the lenient 2.5%)', () => {
-    // 1 absorbed of 2 Black learners = 50% rate; against a 100% target → 2.5 pts.
+    // 1 absorbed of 2 Black learners who completed = 50% rate; against a 100% target → 2.5 pts.
     const r = calculateSkillsScore(
       {
         id: '1', clientId: 'agri', leviableAmount: LEVIABLE,
         trainingPrograms: [
           { id: 'a1', name: 'LAI1', category: 'learnership', categoryCode: 'D' as const, cost: 10_000,
             isBlack: true, isDisabled: false, gender: 'Female' as const, race: 'African' as const,
-            employmentStatus: 'Unemployed', isAbsorbed: true } as any,
+            employmentStatus: 'Unemployed', isCompleted: true, isAbsorbed: true } as any,
           { id: 'a2', name: 'LAI2', category: 'learnership', categoryCode: 'D' as const, cost: 10_000,
             isBlack: true, isDisabled: false, gender: 'Male' as const, race: 'African' as const,
-            employmentStatus: 'Unemployed', isAbsorbed: false } as any,
+            employmentStatus: 'Unemployed', isCompleted: true, isAbsorbed: false } as any,
         ],
         yesCandidatesCount: 0, yesAbsorbedCount: 0,
       },

@@ -1,0 +1,4377 @@
+{
+ "template": "agri_generic",
+ "lines": {
+  "19": {
+   "label": "Ownership",
+   "weighting": 25.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F19",
+     "formula": "=IFERROR(SUM(F20:F26),0)",
+     "value": 8.715838
+    },
+    {
+     "cell": "Summary Scorecard!F20",
+     "formula": "=IF('Ownership Scorecard'!J5=\"\",'Ownership Scorecard'!H5,'Ownership Scorecard'!J5)",
+     "value": 1.72
+    },
+    {
+     "cell": "Summary Scorecard!F26",
+     "formula": "=IF('Ownership Scorecard'!J16=\"\",'Ownership Scorecard'!H16,'Ownership Scorecard'!J16)",
+     "value": 2.18366
+    },
+    {
+     "cell": "Ownership Scorecard!H5",
+     "formula": "=IFERROR(MIN(I5/LEFT(E5,3)*D5,D5),0)",
+     "value": 1.72
+    },
+    {
+     "cell": "Ownership Scorecard!H16",
+     "formula": "=IFERROR(MIN(MIN(('Ownership Data'!$W$3/LEFT($E$5,3))*D16,D16)+MIN('Oustanding Debts Calcs'!M1,'Oustanding Debts Calcs'!$N$1),8),0)",
+     "value": 2.18366
+    },
+    {
+     "cell": "Ownership Scorecard!I5",
+     "formula": "='Ownership Data'!$W$4",
+     "value": 0.1075
+    },
+    {
+     "cell": "Ownership Scorecard!E5",
+     "formula": null,
+     "value": "25% + 1 vote"
+    },
+    {
+     "cell": "Ownership Scorecard!D5",
+     "formula": null,
+     "value": 4.0
+    },
+    {
+     "cell": "Ownership Data!W3",
+     "formula": "=W4-W2",
+     "value": 0.0
+    },
+    {
+     "cell": "Ownership Scorecard!D16",
+     "formula": null,
+     "value": 8.0
+    }
+   ]
+  },
+  "20": {
+   "label": "Exercisable voting rights of black individuals",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F20",
+     "formula": "=IF('Ownership Scorecard'!J5=\"\",'Ownership Scorecard'!H5,'Ownership Scorecard'!J5)",
+     "value": 1.72
+    },
+    {
+     "cell": "Ownership Scorecard!H5",
+     "formula": "=IFERROR(MIN(I5/LEFT(E5,3)*D5,D5),0)",
+     "value": 1.72
+    },
+    {
+     "cell": "Ownership Scorecard!I5",
+     "formula": "='Ownership Data'!$W$4",
+     "value": 0.1075
+    },
+    {
+     "cell": "Ownership Scorecard!E5",
+     "formula": null,
+     "value": "25% + 1 vote"
+    },
+    {
+     "cell": "Ownership Scorecard!D5",
+     "formula": null,
+     "value": 4.0
+    },
+    {
+     "cell": "Ownership Data!W4",
+     "formula": "=SUMIFS(tblOwnershipData[ME BO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20)",
+     "value": 0.1075
+    }
+   ]
+  },
+  "21": {
+   "label": "Exercisable voting rights of black females",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F21",
+     "formula": "=IF('Ownership Scorecard'!J6=\"\",'Ownership Scorecard'!H6,'Ownership Scorecard'!J6)",
+     "value": 0.75
+    },
+    {
+     "cell": "Ownership Scorecard!H6",
+     "formula": "=MIN(I6/E6*D6,D6)",
+     "value": 0.75
+    },
+    {
+     "cell": "Ownership Scorecard!I6",
+     "formula": "='Ownership Data'!$X$4",
+     "value": 0.0375
+    },
+    {
+     "cell": "Ownership Scorecard!E6",
+     "formula": null,
+     "value": 0.1
+    },
+    {
+     "cell": "Ownership Scorecard!D6",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "Ownership Data!X4",
+     "formula": "=SUMIFS(tblOwnershipData[ME BWO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20)",
+     "value": 0.0375
+    }
+   ]
+  },
+  "22": {
+   "label": "Economic interest of black individuals",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F22",
+     "formula": "=IF('Ownership Scorecard'!J7=\"\",'Ownership Scorecard'!H7,'Ownership Scorecard'!J7)",
+     "value": 1.99904
+    },
+    {
+     "cell": "Ownership Scorecard!H7",
+     "formula": "=IFERROR(MIN(I7/E7*D7,D7),0)",
+     "value": 1.99904
+    },
+    {
+     "cell": "Ownership Scorecard!I7",
+     "formula": "='Ownership Data'!$W$3+'Oustanding Debts Calcs'!$H$1",
+     "value": 0.12494
+    },
+    {
+     "cell": "Ownership Scorecard!E7",
+     "formula": null,
+     "value": 0.25
+    },
+    {
+     "cell": "Ownership Scorecard!D7",
+     "formula": null,
+     "value": 4.0
+    },
+    {
+     "cell": "Ownership Data!W3",
+     "formula": "=W4-W2",
+     "value": 0.0
+    },
+    {
+     "cell": "Oustanding Debts Calcs!H1",
+     "formula": "=SUM(H3:H1000)",
+     "value": 0.12494
+    }
+   ]
+  },
+  "23": {
+   "label": "Economic interest of black females",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F23",
+     "formula": "=IF('Ownership Scorecard'!J8=\"\",'Ownership Scorecard'!H8,'Ownership Scorecard'!J8)",
+     "value": 0.444387
+    },
+    {
+     "cell": "Ownership Scorecard!H8",
+     "formula": "=IFERROR(MIN(I8/E8*D8,D8),0)",
+     "value": 0.444387
+    },
+    {
+     "cell": "Ownership Scorecard!I8",
+     "formula": "='Ownership Data'!$X$3+'Oustanding Debts Calcs'!$V$1",
+     "value": 0.022219
+    },
+    {
+     "cell": "Ownership Scorecard!E8",
+     "formula": null,
+     "value": 0.1
+    },
+    {
+     "cell": "Ownership Scorecard!D8",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "Ownership Data!X3",
+     "formula": "=X4-X2",
+     "value": 0.0
+    },
+    {
+     "cell": "Oustanding Debts Calcs!V1",
+     "formula": "=SUM(V3:V1000)",
+     "value": 0.022219
+    }
+   ]
+  },
+  "24": {
+   "label": "Economic interest of black designated groups or participants in ownership schemes",
+   "weighting": 3.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F24",
+     "formula": "=IF('Ownership Scorecard'!J10=\"\",'Ownership Scorecard'!H10,'Ownership Scorecard'!J10)",
+     "value": 0.31875
+    },
+    {
+     "cell": "Ownership Scorecard!H10",
+     "formula": "=MIN(I10/E10*D10,D10)",
+     "value": 0.31875
+    },
+    {
+     "cell": "Ownership Scorecard!I10",
+     "formula": "='Ownership Data'!$Y$4",
+     "value": 0.00425
+    },
+    {
+     "cell": "Ownership Scorecard!E10",
+     "formula": null,
+     "value": 0.04
+    },
+    {
+     "cell": "Ownership Scorecard!D10",
+     "formula": null,
+     "value": 3.0
+    },
+    {
+     "cell": "Ownership Data!Y4",
+     "formula": "=SUMIFS(tblOwnershipData[ME BDG%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20)",
+     "value": 0.00425
+    }
+   ]
+  },
+  "25": {
+   "label": "Economic interest of black new entrants",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F25",
+     "formula": "=IF('Ownership Scorecard'!J15=\"\",'Ownership Scorecard'!H15,'Ownership Scorecard'!J15)",
+     "value": 1.3
+    },
+    {
+     "cell": "Ownership Scorecard!H15",
+     "formula": "=MIN(I15/E15*D15,D15)",
+     "value": 1.3
+    },
+    {
+     "cell": "Ownership Scorecard!I15",
+     "formula": "='Ownership Data'!$Z$4",
+     "value": 0.013
+    },
+    {
+     "cell": "Ownership Scorecard!E15",
+     "formula": null,
+     "value": 0.02
+    },
+    {
+     "cell": "Ownership Scorecard!D15",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "Ownership Data!Z4",
+     "formula": "=SUMIFS(tblOwnershipData[ME BNE%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20)",
+     "value": 0.013
+    }
+   ]
+  },
+  "26": {
+   "label": "Net value",
+   "weighting": 8.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F26",
+     "formula": "=IF('Ownership Scorecard'!J16=\"\",'Ownership Scorecard'!H16,'Ownership Scorecard'!J16)",
+     "value": 2.18366
+    },
+    {
+     "cell": "Ownership Scorecard!H16",
+     "formula": "=IFERROR(MIN(MIN(('Ownership Data'!$W$3/LEFT($E$5,3))*D16,D16)+MIN('Oustanding Debts Calcs'!M1,'Oustanding Debts Calcs'!$N$1),8),0)",
+     "value": 2.18366
+    },
+    {
+     "cell": "Ownership Data!W3",
+     "formula": "=W4-W2",
+     "value": 0.0
+    },
+    {
+     "cell": "Ownership Scorecard!E5",
+     "formula": null,
+     "value": "25% + 1 vote"
+    },
+    {
+     "cell": "Ownership Scorecard!D16",
+     "formula": null,
+     "value": 8.0
+    },
+    {
+     "cell": "Oustanding Debts Calcs!M1",
+     "formula": "=SUM(M3:M1000)",
+     "value": 2.18366
+    },
+    {
+     "cell": "Oustanding Debts Calcs!N1",
+     "formula": "=MIN(SUM(N3:N1000),8)",
+     "value": 3.998081
+    },
+    {
+     "cell": "Ownership Data!W4",
+     "formula": "=SUMIFS(tblOwnershipData[ME BO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20)",
+     "value": 0.1075
+    },
+    {
+     "cell": "Ownership Data!W2",
+     "formula": "=SUMIFS(tblOwnershipData[ME BO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$20,tblOwnershipData[Debt?],\"Yes\")",
+     "value": 0.1075
+    },
+    {
+     "cell": "Oustanding Debts Calcs!M3",
+     "formula": "=MAX(L3,0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "28": {
+   "label": "Management Control",
+   "weighting": 23.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F28",
+     "formula": "=IFERROR(SUM(F29:F41),0)",
+     "value": 13.734436
+    },
+    {
+     "cell": "Summary Scorecard!F29",
+     "formula": "='MC Toolkit'!J16",
+     "value": 3.0
+    },
+    {
+     "cell": "Summary Scorecard!F41",
+     "formula": "='MC Toolkit'!O112",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!J16",
+     "formula": "=IFERROR(MIN(I16/G16*H16,H16),0)",
+     "value": 3.0
+    },
+    {
+     "cell": "MC Toolkit!O112",
+     "formula": "=IFERROR('MC Calcs'!$J$48,0)",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!I16",
+     "formula": "=F16",
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!G16",
+     "formula": null,
+     "value": 0.5
+    },
+    {
+     "cell": "MC Toolkit!H16",
+     "formula": null,
+     "value": 3.0
+    },
+    {
+     "cell": "MC Calcs!J48",
+     "formula": "=IFERROR(MIN(K48/E48*D48,D48),0)",
+     "value": 2.0
+    }
+   ]
+  },
+  "29": {
+   "label": "Exercisable voting rights of black board members",
+   "weighting": 3.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F29",
+     "formula": "='MC Toolkit'!J16",
+     "value": 3.0
+    },
+    {
+     "cell": "MC Toolkit!J16",
+     "formula": "=IFERROR(MIN(I16/G16*H16,H16),0)",
+     "value": 3.0
+    },
+    {
+     "cell": "MC Toolkit!I16",
+     "formula": "=F16",
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!G16",
+     "formula": null,
+     "value": 0.5
+    },
+    {
+     "cell": "MC Toolkit!H16",
+     "formula": null,
+     "value": 3.0
+    },
+    {
+     "cell": "MC Toolkit!F16",
+     "formula": "=C16",
+     "value": 1.0
+    }
+   ]
+  },
+  "30": {
+   "label": "Exercisable voting rights of black female board members",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F30",
+     "formula": "='MC Toolkit'!N16",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!N16",
+     "formula": "=IFERROR(MIN(M16/K16*L16,L16),0)",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!M16",
+     "formula": "=D16",
+     "value": 0.571429
+    },
+    {
+     "cell": "MC Toolkit!K16",
+     "formula": null,
+     "value": 0.25
+    },
+    {
+     "cell": "MC Toolkit!L16",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!D16",
+     "formula": "=IFERROR((D15/$F$15),0)",
+     "value": 0.571429
+    }
+   ]
+  },
+  "31": {
+   "label": "Black executive directors",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F31",
+     "formula": "='MC Toolkit'!J32",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!J32",
+     "formula": "=MIN(I32/G32*H32,H32)",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!I32",
+     "formula": "=C32",
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!G32",
+     "formula": null,
+     "value": 0.5
+    },
+    {
+     "cell": "MC Toolkit!H32",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!C32",
+     "formula": "=IFERROR((C31/F31),0)",
+     "value": 1.0
+    }
+   ]
+  },
+  "32": {
+   "label": "Black female executive directors",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F32",
+     "formula": "='MC Toolkit'!N32",
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!N32",
+     "formula": "=MIN(M32/K32*L32,L32)",
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!M32",
+     "formula": "=D32",
+     "value": 0.75
+    },
+    {
+     "cell": "MC Toolkit!K32",
+     "formula": null,
+     "value": 0.25
+    },
+    {
+     "cell": "MC Toolkit!L32",
+     "formula": null,
+     "value": 1.0
+    },
+    {
+     "cell": "MC Toolkit!D32",
+     "formula": "=IFERROR((D31/F31),0)",
+     "value": 0.75
+    }
+   ]
+  },
+  "33": {
+   "label": "Black other executive management",
+   "weighting": 3.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F33",
+     "formula": "='MC Toolkit'!J48",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!J48",
+     "formula": "=IFERROR(MIN(I48/G48*H48,H48),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!I48",
+     "formula": "=F48",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!G48",
+     "formula": null,
+     "value": 0.6
+    },
+    {
+     "cell": "MC Toolkit!H48",
+     "formula": null,
+     "value": 3.0
+    },
+    {
+     "cell": "MC Toolkit!F48",
+     "formula": "=C48",
+     "value": 0.0
+    }
+   ]
+  },
+  "34": {
+   "label": "Black female other executive management",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F34",
+     "formula": "='MC Toolkit'!N48",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!N48",
+     "formula": "=IFERROR(MIN(M48/K48*L48,L48),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!M48",
+     "formula": "=D48",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!K48",
+     "formula": null,
+     "value": 0.3
+    },
+    {
+     "cell": "MC Toolkit!L48",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!D48",
+     "formula": "=IFERROR((D47/$F$47),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "35": {
+   "label": "Black employees in senior management",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F35",
+     "formula": "='MC Toolkit'!O64",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!O64",
+     "formula": "=IFERROR('MC Calcs'!$J$13,0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J13",
+     "formula": "=SUM(J14:J19)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J14",
+     "formula": "=IFERROR(MIN(K14/E14*D14,D14),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J19",
+     "formula": "=IFERROR(MIN(K19/E19*D19,D19),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "36": {
+   "label": "Black female employees in senior management",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F36",
+     "formula": "='MC Toolkit'!S64",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Toolkit!S64",
+     "formula": "=IFERROR('MC Calcs'!$J$20,0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J20",
+     "formula": "=SUM(J21:J23)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J21",
+     "formula": "=IFERROR(MIN(K21/E21*D21,D21),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "MC Calcs!J23",
+     "formula": "=IFERROR(MIN(K23/E23*D23,D23),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "37": {
+   "label": "Black employees in middle management",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F37",
+     "formula": "='MC Toolkit'!O80",
+     "value": 1.573626
+    },
+    {
+     "cell": "MC Toolkit!O80",
+     "formula": "=IFERROR('MC Calcs'!$J$25,0)",
+     "value": 1.573626
+    },
+    {
+     "cell": "MC Calcs!J25",
+     "formula": "=SUM(J26:J31)",
+     "value": 1.573626
+    },
+    {
+     "cell": "MC Calcs!J26",
+     "formula": "=IFERROR(MIN(K26/E26*D26,D26),0)",
+     "value": 0.657143
+    },
+    {
+     "cell": "MC Calcs!J31",
+     "formula": "=IFERROR(MIN(K31/E31*D31,D31),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "38": {
+   "label": "Black female employees in middle management",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F38",
+     "formula": "='MC Toolkit'!S80",
+     "value": 0.967825
+    },
+    {
+     "cell": "MC Toolkit!S80",
+     "formula": "=IFERROR('MC Calcs'!$J$32,0)",
+     "value": 0.967825
+    },
+    {
+     "cell": "MC Calcs!J32",
+     "formula": "=SUM(J33:J35)",
+     "value": 0.967825
+    },
+    {
+     "cell": "MC Calcs!J33",
+     "formula": "=IFERROR(MIN(K33/E33*D33,D33),0)",
+     "value": 0.591885
+    },
+    {
+     "cell": "MC Calcs!J35",
+     "formula": "=IFERROR(MIN(K35/E35*D35,D35),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "39": {
+   "label": "Black employees in junior management",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F39",
+     "formula": "='MC Toolkit'!O96",
+     "value": 0.601099
+    },
+    {
+     "cell": "MC Toolkit!O96",
+     "formula": "=IFERROR('MC Calcs'!$J$37,0)",
+     "value": 0.601099
+    },
+    {
+     "cell": "MC Calcs!J37",
+     "formula": "=SUM(J38:J43)",
+     "value": 0.601099
+    },
+    {
+     "cell": "MC Calcs!J38",
+     "formula": "=IFERROR(MIN(K38/E38*D38,D38),0)",
+     "value": 0.328571
+    },
+    {
+     "cell": "MC Calcs!J43",
+     "formula": "=IFERROR(MIN(K43/E43*D43,D43),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "40": {
+   "label": "Black female employees in junior management",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F40",
+     "formula": "='MC Toolkit'!S96",
+     "value": 0.591885
+    },
+    {
+     "cell": "MC Toolkit!S96",
+     "formula": "=IFERROR('MC Calcs'!$J$44,0)",
+     "value": 0.591885
+    },
+    {
+     "cell": "MC Calcs!J44",
+     "formula": "=SUM(J45:J47)",
+     "value": 0.591885
+    },
+    {
+     "cell": "MC Calcs!J45",
+     "formula": "=IFERROR(MIN(K45/E45*D45,D45),0)",
+     "value": 0.591885
+    },
+    {
+     "cell": "MC Calcs!J47",
+     "formula": "=IFERROR(MIN(K47/E47*D47,D47),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "41": {
+   "label": "Black employees with disabilities",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F41",
+     "formula": "='MC Toolkit'!O112",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Toolkit!O112",
+     "formula": "=IFERROR('MC Calcs'!$J$48,0)",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Calcs!J48",
+     "formula": "=IFERROR(MIN(K48/E48*D48,D48),0)",
+     "value": 2.0
+    },
+    {
+     "cell": "MC Calcs!K48",
+     "formula": "='MC Toolkit'!$K$112",
+     "value": 0.028571
+    },
+    {
+     "cell": "MC Calcs!E48",
+     "formula": null,
+     "value": 0.02
+    },
+    {
+     "cell": "MC Calcs!D48",
+     "formula": null,
+     "value": 2.0
+    }
+   ]
+  },
+  "43": {
+   "label": "Skills Development",
+   "weighting": 25.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F43",
+     "formula": "=IFERROR(SUM(F44:F48),0)",
+     "value": 7.326917
+    },
+    {
+     "cell": "Summary Scorecard!F44",
+     "formula": "='Skills Toolkit'!P23",
+     "value": 0.680604
+    },
+    {
+     "cell": "Summary Scorecard!F48",
+     "formula": "='Skills Toolkit'!J147",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Toolkit!P23",
+     "formula": "=IF($D$10<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!$R$13,'Skills Calcs'!$R$68))",
+     "value": 0.680604
+    },
+    {
+     "cell": "Skills Toolkit!J147",
+     "formula": "=IF($D$11<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!J53,'Skills Calcs'!J108))",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Toolkit!D10",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!R13",
+     "formula": "=SUM(R7:R12)",
+     "value": 0.680604
+    },
+    {
+     "cell": "Skills Calcs!R68",
+     "formula": "=SUM(R62:R67)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Toolkit!D11",
+     "formula": null,
+     "value": "Yes"
+    }
+   ]
+  },
+  "44": {
+   "label": "Expenditure on learning programmes for Black people",
+   "weighting": 8.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F44",
+     "formula": "='Skills Toolkit'!P23",
+     "value": 0.680604
+    },
+    {
+     "cell": "Skills Toolkit!P23",
+     "formula": "=IF($D$10<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!$R$13,'Skills Calcs'!$R$68))",
+     "value": 0.680604
+    },
+    {
+     "cell": "Skills Toolkit!D10",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!R13",
+     "formula": "=SUM(R7:R12)",
+     "value": 0.680604
+    },
+    {
+     "cell": "Skills Calcs!R68",
+     "formula": "=SUM(R62:R67)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!R7",
+     "formula": "=IFERROR(MIN(SUM(P7:Q7)/D7*E7,E7),0)",
+     "value": 0.35452
+    },
+    {
+     "cell": "Skills Calcs!R12",
+     "formula": "=IFERROR(MIN(SUM(P12:Q12)/D12*E12,E12),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!R62",
+     "formula": "=IFERROR(MIN(SUM(P62:Q62)/D62*E62,E62),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!R67",
+     "formula": "=IFERROR(MIN(SUM(P67:Q67)/D67*E67,E67),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "45": {
+   "label": "Expenditure on learning programmes for disabled Black people",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F45",
+     "formula": "='Skills Toolkit'!J56",
+     "value": 1.837522
+    },
+    {
+     "cell": "Skills Toolkit!J56",
+     "formula": "=IF($D$10<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!R20,'Skills Calcs'!R75))",
+     "value": 1.837522
+    },
+    {
+     "cell": "Skills Toolkit!D10",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!R20",
+     "formula": "=IFERROR(MIN(SUM(P20:Q20)/D20*E20,E20),0)",
+     "value": 1.837522
+    },
+    {
+     "cell": "Skills Calcs!R75",
+     "formula": "=IFERROR(MIN(SUM(P75:Q75)/D75*E75,E75),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!P20",
+     "formula": "=SUM(G20,H20,J20)",
+     "value": 61554.63
+    },
+    {
+     "cell": "Skills Calcs!Q20",
+     "formula": "=K20+MIN(SUM(I20,L20),O20)",
+     "value": 16255.02
+    },
+    {
+     "cell": "Skills Calcs!D20",
+     "formula": "=C20*LeviableAmount",
+     "value": 169379.568
+    },
+    {
+     "cell": "Skills Calcs!E20",
+     "formula": null,
+     "value": 4.0
+    }
+   ]
+  },
+  "46": {
+   "label": "Number of Black people participating in learnerships, apprenticeships or internships",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F46",
+     "formula": "='Skills Toolkit'!P87",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Toolkit!P87",
+     "formula": "=IF($D$11<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!$N$33,'Skills Calcs'!$N$88))",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Toolkit!D11",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!N33",
+     "formula": "=SUM(N27:N32)",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Calcs!N88",
+     "formula": "=SUM(N82:N87)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!N27",
+     "formula": "=IFERROR(MIN(K27/D27*E27,E27),0)",
+     "value": 1.314286
+    },
+    {
+     "cell": "Skills Calcs!N32",
+     "formula": "=IFERROR(MIN(K32/D32*E32,E32),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!N82",
+     "formula": "=IFERROR(MIN(K82/D82*E82,E82),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!N87",
+     "formula": "=IFERROR(MIN(K87/D87*E87,E87),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "47": {
+   "label": "Number of unemployed Black people participating in training as per learning programme matrix",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F47",
+     "formula": "='Skills Toolkit'!P119",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Toolkit!P119",
+     "formula": "=IF($D$11<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!$J$46,'Skills Calcs'!$J$101))",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Toolkit!D11",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!J46",
+     "formula": "=SUM(J40:J45)",
+     "value": 2.404396
+    },
+    {
+     "cell": "Skills Calcs!J101",
+     "formula": "=SUM(J95:J100)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!J40",
+     "formula": "=IFERROR(MIN(I40/D40*E40,E40),0)",
+     "value": 1.314286
+    },
+    {
+     "cell": "Skills Calcs!J45",
+     "formula": "=IFERROR(MIN(I45/D45*E45,E45),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!J95",
+     "formula": "=IFERROR(MIN(I95/D95*E95,E95),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!J100",
+     "formula": "=IFERROR(MIN(I100/D100*E100,E100),0)",
+     "value": 0.0
+    }
+   ]
+  },
+  "48": {
+   "label": "Absorption of unemployed Black people after completing learnerships, apprenticeships or internships",
+   "weighting": 5.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F48",
+     "formula": "='Skills Toolkit'!J147",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Toolkit!J147",
+     "formula": "=IF($D$11<>\"Yes\",0,IF($D$8=\"Current YTD\",'Skills Calcs'!J53,'Skills Calcs'!J108))",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Toolkit!D11",
+     "formula": null,
+     "value": "Yes"
+    },
+    {
+     "cell": "Skills Toolkit!D8",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Skills Calcs!J53",
+     "formula": "=IFERROR(MIN(SUM(I53)/D53*E53,E53),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!J108",
+     "formula": "=IFERROR(MIN(SUM(I108)/D108*E108,E108),0)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!I53",
+     "formula": "=SUM(F53,G53)",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!D53",
+     "formula": "=COUNTIFS(\ntblSkillsData[Within FY?],\"Yes\",\ntblSkillsData[Black],\"Yes\",\ntblSkillsData[LAI],\"Yes\",\ntblSkillsData[Completed.calcs],\"Yes\")",
+     "value": 0.0
+    },
+    {
+     "cell": "Skills Calcs!E53",
+     "formula": null,
+     "value": 5.0
+    },
+    {
+     "cell": "Skills Calcs!I108",
+     "formula": "=SUM(F108,G108)",
+     "value": 0.0
+    }
+   ]
+  },
+  "50": {
+   "label": "Preferential procurement",
+   "weighting": 27.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F50",
+     "formula": "=SUM(F51:F56)",
+     "value": 22.220668
+    },
+    {
+     "cell": "Summary Scorecard!F51",
+     "formula": "=IF('Procurement Scorecard'!I9=\"\",'Procurement Scorecard'!F9,'Procurement Scorecard'!I9)",
+     "value": 3.489985
+    },
+    {
+     "cell": "Summary Scorecard!F56",
+     "formula": "=IF('Procurement Scorecard'!I15=\"\",'Procurement Scorecard'!F15,'Procurement Scorecard'!I15)",
+     "value": 2.0
+    },
+    {
+     "cell": "Procurement Scorecard!F9",
+     "formula": "=MIN(G9/D9*C9,C9)",
+     "value": 3.489985
+    },
+    {
+     "cell": "Procurement Scorecard!F15",
+     "formula": "=MIN(G15/D15*C15,C15)",
+     "value": 2.0
+    },
+    {
+     "cell": "Procurement Scorecard!G9",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H9/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H9/$C$5,IF($C$19=\"Prior Year\",H9/MAX($C$3:$C$4),0))),0)",
+     "value": 0.558398
+    },
+    {
+     "cell": "Procurement Scorecard!D9",
+     "formula": null,
+     "value": 0.8
+    },
+    {
+     "cell": "Procurement Scorecard!C9",
+     "formula": null,
+     "value": 5.0
+    },
+    {
+     "cell": "Procurement Scorecard!G15",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H15/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H15/$C$5,IF($C$19=\"Prior Year\",H15/MAX($C$3:$C$4),0))),0)",
+     "value": 0.102399
+    },
+    {
+     "cell": "Procurement Scorecard!D15",
+     "formula": null,
+     "value": 0.02
+    }
+   ]
+  },
+  "51": {
+   "label": "Spend on empowering suppliers",
+   "weighting": 5.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F51",
+     "formula": "=IF('Procurement Scorecard'!I9=\"\",'Procurement Scorecard'!F9,'Procurement Scorecard'!I9)",
+     "value": 3.489985
+    },
+    {
+     "cell": "Procurement Scorecard!F9",
+     "formula": "=MIN(G9/D9*C9,C9)",
+     "value": 3.489985
+    },
+    {
+     "cell": "Procurement Scorecard!G9",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H9/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H9/$C$5,IF($C$19=\"Prior Year\",H9/MAX($C$3:$C$4),0))),0)",
+     "value": 0.558398
+    },
+    {
+     "cell": "Procurement Scorecard!D9",
+     "formula": null,
+     "value": 0.8
+    },
+    {
+     "cell": "Procurement Scorecard!C9",
+     "formula": null,
+     "value": 5.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H9",
+     "formula": "=PPAllSpend",
+     "value": 53355292.191
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "52": {
+   "label": "Spend on QSE empowering suppliers",
+   "weighting": 3.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F52",
+     "formula": "=IF('Procurement Scorecard'!I10=\"\",'Procurement Scorecard'!F10,'Procurement Scorecard'!I10)",
+     "value": 1.148303
+    },
+    {
+     "cell": "Procurement Scorecard!F10",
+     "formula": "=MIN(G10/D10*C10,C10)",
+     "value": 1.148303
+    },
+    {
+     "cell": "Procurement Scorecard!G10",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H10/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H10/$C$5,IF($C$19=\"Prior Year\",H10/MAX($C$3:$C$4),0))),0)",
+     "value": 0.057415
+    },
+    {
+     "cell": "Procurement Scorecard!D10",
+     "formula": null,
+     "value": 0.15
+    },
+    {
+     "cell": "Procurement Scorecard!C10",
+     "formula": null,
+     "value": 3.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H10",
+     "formula": "=PPQSESpend",
+     "value": 5486060.628
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "53": {
+   "label": "Spend on EME suppliers",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F53",
+     "formula": "=IF('Procurement Scorecard'!I11=\"\",'Procurement Scorecard'!F11,'Procurement Scorecard'!I11)",
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!F11",
+     "formula": "=MIN(G11/D11*C11,C11)",
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!G11",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H11/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H11/$C$5,IF($C$19=\"Prior Year\",H11/MAX($C$3:$C$4),0))),0)",
+     "value": 0.215938
+    },
+    {
+     "cell": "Procurement Scorecard!D11",
+     "formula": null,
+     "value": 0.15
+    },
+    {
+     "cell": "Procurement Scorecard!C11",
+     "formula": null,
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H11",
+     "formula": "=PPEMESpend",
+     "value": 20633068.2595
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "54": {
+   "label": "Spend on empowering suppliers with at least 51% black ownership",
+   "weighting": 9.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F54",
+     "formula": "=IF('Procurement Scorecard'!I12=\"\",'Procurement Scorecard'!F12,'Procurement Scorecard'!I12)",
+     "value": 7.58238
+    },
+    {
+     "cell": "Procurement Scorecard!F12",
+     "formula": "=MIN(G12/D12*C12,C12)",
+     "value": 7.58238
+    },
+    {
+     "cell": "Procurement Scorecard!G12",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H12/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H12/$C$5,IF($C$19=\"Prior Year\",H12/MAX($C$3:$C$4),0))),0)",
+     "value": 0.336995
+    },
+    {
+     "cell": "Procurement Scorecard!D12",
+     "formula": null,
+     "value": 0.4
+    },
+    {
+     "cell": "Procurement Scorecard!C12",
+     "formula": null,
+     "value": 9.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H12",
+     "formula": "=PPBOSpend",
+     "value": 32200084.621
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "55": {
+   "label": "Spend on empowering suppliers with greater than 30% black female ownership",
+   "weighting": 4.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F55",
+     "formula": "=IF('Procurement Scorecard'!I13=\"\",'Procurement Scorecard'!F13,'Procurement Scorecard'!I13)",
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!F13",
+     "formula": "=MIN(G13/D13*C13,C13)",
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!G13",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H13/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H13/$C$5,IF($C$19=\"Prior Year\",H13/MAX($C$3:$C$4),0))),0)",
+     "value": 0.237743
+    },
+    {
+     "cell": "Procurement Scorecard!D13",
+     "formula": null,
+     "value": 0.12
+    },
+    {
+     "cell": "Procurement Scorecard!C13",
+     "formula": null,
+     "value": 4.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H13",
+     "formula": "=PPBWOSpend",
+     "value": 22716533.6725
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "56": {
+   "label": "Spend on designated group suppliers with at least 51% black ownership",
+   "weighting": 2.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F56",
+     "formula": "=IF('Procurement Scorecard'!I15=\"\",'Procurement Scorecard'!F15,'Procurement Scorecard'!I15)",
+     "value": 2.0
+    },
+    {
+     "cell": "Procurement Scorecard!F15",
+     "formula": "=MIN(G15/D15*C15,C15)",
+     "value": 2.0
+    },
+    {
+     "cell": "Procurement Scorecard!G15",
+     "formula": "=IFERROR(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H15/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H15/$C$5,IF($C$19=\"Prior Year\",H15/MAX($C$3:$C$4),0))),0)",
+     "value": 0.102399
+    },
+    {
+     "cell": "Procurement Scorecard!D15",
+     "formula": null,
+     "value": 0.02
+    },
+    {
+     "cell": "Procurement Scorecard!C15",
+     "formula": null,
+     "value": 2.0
+    },
+    {
+     "cell": "Procurement Scorecard!E6",
+     "formula": null,
+     "value": "Actual"
+    },
+    {
+     "cell": "Procurement Scorecard!C19",
+     "formula": null,
+     "value": "Current YTD"
+    },
+    {
+     "cell": "Procurement Scorecard!H15",
+     "formula": "=PPBDGSpend",
+     "value": 9784259.1505
+    },
+    {
+     "cell": "Procurement Scorecard!C3",
+     "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+     "value": 95550727.57
+    },
+    {
+     "cell": "Procurement Scorecard!C4",
+     "formula": "=TotalPPSpend*(100%+D4)",
+     "value": 74669915.63
+    }
+   ]
+  },
+  "58": {
+   "label": "Supplier development",
+   "weighting": 10.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F58",
+     "formula": "=IFERROR(SUM(F59),0)",
+     "value": 10.0
+    },
+    {
+     "cell": "Summary Scorecard!F59",
+     "formula": "='ESD Scorecard'!H6",
+     "value": 10.0
+    },
+    {
+     "cell": "ESD Scorecard!H6",
+     "formula": "=MIN(I6/F6*E6,E6)",
+     "value": 10.0
+    },
+    {
+     "cell": "ESD Scorecard!I6",
+     "formula": "=IFERROR(J6/$D$2,0)",
+     "value": 0.028208
+    },
+    {
+     "cell": "ESD Scorecard!F6",
+     "formula": null,
+     "value": 0.02
+    },
+    {
+     "cell": "ESD Scorecard!E6",
+     "formula": null,
+     "value": 10.0
+    }
+   ]
+  },
+  "59": {
+   "label": "Annual value of all Supplier Development contributions",
+   "weighting": 10.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F59",
+     "formula": "='ESD Scorecard'!H6",
+     "value": 10.0
+    },
+    {
+     "cell": "ESD Scorecard!H6",
+     "formula": "=MIN(I6/F6*E6,E6)",
+     "value": 10.0
+    },
+    {
+     "cell": "ESD Scorecard!I6",
+     "formula": "=IFERROR(J6/$D$2,0)",
+     "value": 0.028208
+    },
+    {
+     "cell": "ESD Scorecard!F6",
+     "formula": null,
+     "value": 0.02
+    },
+    {
+     "cell": "ESD Scorecard!E6",
+     "formula": null,
+     "value": 10.0
+    },
+    {
+     "cell": "ESD Scorecard!J6",
+     "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I14,tblESDData[Pillar],\"Supplier Development\")",
+     "value": 1186216.605
+    },
+    {
+     "cell": "ESD Scorecard!D2",
+     "formula": "=IF($F$14=\"Prior Year\",Financials!$C$4,DeemedNPAT)",
+     "value": 42052478.0
+    }
+   ]
+  },
+  "61": {
+   "label": "Enterprise development",
+   "weighting": 7.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F61",
+     "formula": "=IFERROR(SUM(F62:F64),0)",
+     "value": 5.0
+    },
+    {
+     "cell": "Summary Scorecard!F62",
+     "formula": "='ESD Scorecard'!H7",
+     "value": 5.0
+    },
+    {
+     "cell": "Summary Scorecard!F64",
+     "formula": "='ESD Scorecard'!H10",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!H7",
+     "formula": "=MIN(I7/F7*E7,E7)",
+     "value": 5.0
+    },
+    {
+     "cell": "ESD Scorecard!H10",
+     "formula": "=IFERROR(IF(AND(I10>0%,I10<11%),1,0),\"\")",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!I7",
+     "formula": "=IFERROR(J7/$D$2,0)",
+     "value": 0.059939
+    },
+    {
+     "cell": "ESD Scorecard!F7",
+     "formula": null,
+     "value": 0.015
+    },
+    {
+     "cell": "ESD Scorecard!E7",
+     "formula": null,
+     "value": 5.0
+    },
+    {
+     "cell": "ESD Scorecard!I10",
+     "formula": "=IF(J10=\"Yes\",10%,0%)",
+     "value": 0.0
+    }
+   ]
+  },
+  "62": {
+   "label": "Annual value of Enterprise Development contributions and Sector Specific Programms",
+   "weighting": 5.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F62",
+     "formula": "='ESD Scorecard'!H7",
+     "value": 5.0
+    },
+    {
+     "cell": "ESD Scorecard!H7",
+     "formula": "=MIN(I7/F7*E7,E7)",
+     "value": 5.0
+    },
+    {
+     "cell": "ESD Scorecard!I7",
+     "formula": "=IFERROR(J7/$D$2,0)",
+     "value": 0.059939
+    },
+    {
+     "cell": "ESD Scorecard!F7",
+     "formula": null,
+     "value": 0.015
+    },
+    {
+     "cell": "ESD Scorecard!E7",
+     "formula": null,
+     "value": 5.0
+    },
+    {
+     "cell": "ESD Scorecard!J7",
+     "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I14,tblESDData[Pillar],\"Enterprise Development\")",
+     "value": 2520595.92
+    },
+    {
+     "cell": "ESD Scorecard!D2",
+     "formula": "=IF($F$14=\"Prior Year\",Financials!$C$4,DeemedNPAT)",
+     "value": 42052478.0
+    }
+   ]
+  },
+  "63": {
+   "label": "Graduation of one or more Enterprise Development beneficiaries to the Supplier Development level",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F63",
+     "formula": "='ESD Scorecard'!H9",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!H9",
+     "formula": "=MIN(I9/F9*E9,E9)",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!I9",
+     "formula": "=IF(J9=\"Yes\",100%,0%)",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!F9",
+     "formula": null,
+     "value": 1.0
+    },
+    {
+     "cell": "ESD Scorecard!E9",
+     "formula": null,
+     "value": 1.0
+    },
+    {
+     "cell": "ESD Scorecard!J9",
+     "formula": "=IF(COUNTIFS(tblESDData[Graduated to Supplier Development?],\"Yes\",tblESDData[End of Month],$I$14)>=1,\"Yes\",\"No\")",
+     "value": "No"
+    }
+   ]
+  },
+  "64": {
+   "label": "Creation of one or more jobs directly as a result of Supplier Development and Enterprise Development initiatives",
+   "weighting": 1.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F64",
+     "formula": "='ESD Scorecard'!H10",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!H10",
+     "formula": "=IFERROR(IF(AND(I10>0%,I10<11%),1,0),\"\")",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!I10",
+     "formula": "=IF(J10=\"Yes\",10%,0%)",
+     "value": 0.0
+    },
+    {
+     "cell": "ESD Scorecard!J10",
+     "formula": "=IF(COUNTIFS(tblESDData[At least 1 job created?],\"Yes\",tblESDData[End of Month],$I$14)>=1,\"Yes\",\"No\")",
+     "value": "No"
+    }
+   ]
+  },
+  "66": {
+   "label": "Socioeconomic Development development",
+   "weighting": 15.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F66",
+     "formula": "=IFERROR(F67,0)",
+     "value": 15.0
+    },
+    {
+     "cell": "Summary Scorecard!F67",
+     "formula": "='SED Scorecard'!G6",
+     "value": 15.0
+    },
+    {
+     "cell": "SED Scorecard!G6",
+     "formula": "=MIN(H6/E6*D6,D6)",
+     "value": 15.0
+    },
+    {
+     "cell": "SED Scorecard!H6",
+     "formula": "=IFERROR(I6/$C$2,0)",
+     "value": 0.017906
+    },
+    {
+     "cell": "SED Scorecard!E6",
+     "formula": null,
+     "value": 0.015
+    },
+    {
+     "cell": "SED Scorecard!D6",
+     "formula": null,
+     "value": 15.0
+    }
+   ]
+  },
+  "67": {
+   "label": "Socioeconomic Development Contributions (Agricultural Industry)",
+   "weighting": 15.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F67",
+     "formula": "='SED Scorecard'!G6",
+     "value": 15.0
+    },
+    {
+     "cell": "SED Scorecard!G6",
+     "formula": "=MIN(H6/E6*D6,D6)",
+     "value": 15.0
+    },
+    {
+     "cell": "SED Scorecard!H6",
+     "formula": "=IFERROR(I6/$C$2,0)",
+     "value": 0.017906
+    },
+    {
+     "cell": "SED Scorecard!E6",
+     "formula": null,
+     "value": 0.015
+    },
+    {
+     "cell": "SED Scorecard!D6",
+     "formula": null,
+     "value": 15.0
+    },
+    {
+     "cell": "SED Scorecard!I6",
+     "formula": "=SUMIFS(tblSED[Recognised Amount],tblSED[End of month],K10)",
+     "value": 752982.968
+    },
+    {
+     "cell": "SED Scorecard!C2",
+     "formula": "=IF(YEAR(K10)=Validation!I127,DeemedNPAT,Financials!C4)",
+     "value": 42052478.0
+    }
+   ]
+  },
+  "69": {
+   "label": "Grand total",
+   "weighting": 132.0,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F69",
+     "formula": "=SUM(F66,F61,F58,F50,F43,F28,F19)",
+     "value": 81.997858
+    },
+    {
+     "cell": "Summary Scorecard!F66",
+     "formula": "=IFERROR(F67,0)",
+     "value": 15.0
+    },
+    {
+     "cell": "Summary Scorecard!F61",
+     "formula": "=IFERROR(SUM(F62:F64),0)",
+     "value": 5.0
+    },
+    {
+     "cell": "Summary Scorecard!F58",
+     "formula": "=IFERROR(SUM(F59),0)",
+     "value": 10.0
+    },
+    {
+     "cell": "Summary Scorecard!F50",
+     "formula": "=SUM(F51:F56)",
+     "value": 22.220668
+    },
+    {
+     "cell": "Summary Scorecard!F43",
+     "formula": "=IFERROR(SUM(F44:F48),0)",
+     "value": 7.326917
+    },
+    {
+     "cell": "Summary Scorecard!F28",
+     "formula": "=IFERROR(SUM(F29:F41),0)",
+     "value": 13.734436
+    },
+    {
+     "cell": "Summary Scorecard!F19",
+     "formula": "=IFERROR(SUM(F20:F26),0)",
+     "value": 8.715838
+    },
+    {
+     "cell": "Summary Scorecard!F67",
+     "formula": "='SED Scorecard'!G6",
+     "value": 15.0
+    },
+    {
+     "cell": "Summary Scorecard!F62",
+     "formula": "='ESD Scorecard'!H7",
+     "value": 5.0
+    }
+   ]
+  },
+  "73": {
+   "label": "Achived Level",
+   "weighting": null,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F73",
+     "formula": "='Scorecard Calculations'!C15",
+     "value": "Level 4"
+    },
+    {
+     "cell": "Scorecard Calculations!C15",
+     "formula": "=VLOOKUP(C12,'Summary Scorecard'!F5:G13,2,FALSE)",
+     "value": "Level 4"
+    },
+    {
+     "cell": "Scorecard Calculations!C12",
+     "formula": "=MAX(IF('Summary Scorecard'!F5:F13<C10,'Summary Scorecard'!F5:F13))",
+     "value": 80.0
+    },
+    {
+     "cell": "Summary Scorecard!F5",
+     "formula": null,
+     "value": 100.0
+    },
+    {
+     "cell": "Scorecard Calculations!C10",
+     "formula": "=SUM(C3:C9)",
+     "value": 81.997858
+    }
+   ]
+  },
+  "75": {
+   "label": "Discounted Level",
+   "weighting": null,
+   "chain": [
+    {
+     "cell": "Summary Scorecard!F75",
+     "formula": "=IFERROR('Scorecard Calculations'!C16,F73)",
+     "value": "Level 5"
+    },
+    {
+     "cell": "Scorecard Calculations!C16",
+     "formula": "=VLOOKUP(C14,'Summary Scorecard'!F5:G13,2,FALSE)",
+     "value": "Level 5"
+    },
+    {
+     "cell": "Summary Scorecard!F73",
+     "formula": "='Scorecard Calculations'!C15",
+     "value": "Level 4"
+    },
+    {
+     "cell": "Scorecard Calculations!C14",
+     "formula": "=IF(C12=C13,C12,MAX(IF('Summary Scorecard'!F5:F13<C13,'Summary Scorecard'!F5:F13)))",
+     "value": 75.0
+    },
+    {
+     "cell": "Summary Scorecard!F5",
+     "formula": null,
+     "value": 100.0
+    },
+    {
+     "cell": "Scorecard Calculations!C15",
+     "formula": "=VLOOKUP(C12,'Summary Scorecard'!F5:G13,2,FALSE)",
+     "value": "Level 4"
+    },
+    {
+     "cell": "Scorecard Calculations!C12",
+     "formula": "=MAX(IF('Summary Scorecard'!F5:F13<C10,'Summary Scorecard'!F5:F13))",
+     "value": 80.0
+    },
+    {
+     "cell": "Scorecard Calculations!C13",
+     "formula": "=MAX(IF(OR(G3<F3,G5<F5,G6<F6,G7<F7,G8<F8),C12-1,C12),0)",
+     "value": 79.0
+    }
+   ]
+  }
+ },
+ "cells": {
+  "Summary Scorecard": {
+   "B18": {
+    "v": "Grand Total"
+   },
+   "C18": {
+    "v": 132.0
+   },
+   "F18": {
+    "v": 81.99785842254785
+   },
+   "B19": {
+    "v": "Ownership"
+   },
+   "C19": {
+    "v": 25.0
+   },
+   "F19": {
+    "v": 8.715838044927537
+   },
+   "B20": {
+    "v": "Exercisable voting rights of black individuals"
+   },
+   "C20": {
+    "v": 4.0
+   },
+   "F20": {
+    "v": 1.7200000000000002
+   },
+   "B21": {
+    "v": "Exercisable voting rights of black females"
+   },
+   "C21": {
+    "v": 2.0
+   },
+   "F21": {
+    "v": 0.7500000000000001
+   },
+   "B22": {
+    "v": "Economic interest of black individuals"
+   },
+   "C22": {
+    "v": 4.0
+   },
+   "F22": {
+    "v": 1.9990404869565217
+   },
+   "B23": {
+    "v": "Economic interest of black females"
+   },
+   "C23": {
+    "v": 2.0
+   },
+   "F23": {
+    "v": 0.4443875
+   },
+   "B24": {
+    "v": "Economic interest of black designated groups or participants in ownership schemes"
+   },
+   "C24": {
+    "v": 3.0
+   },
+   "F24": {
+    "v": 0.31875000000000003
+   },
+   "B25": {
+    "v": "Economic interest of black new entrants"
+   },
+   "C25": {
+    "v": 2.0
+   },
+   "F25": {
+    "v": 1.3
+   },
+   "B26": {
+    "v": "Net value"
+   },
+   "C26": {
+    "v": 8.0
+   },
+   "F26": {
+    "v": 2.183660057971015
+   },
+   "B28": {
+    "v": "Management Control"
+   },
+   "C28": {
+    "v": 23.0
+   },
+   "F28": {
+    "v": 13.734436007404227
+   },
+   "B29": {
+    "v": "Exercisable voting rights of black board members"
+   },
+   "C29": {
+    "v": 3.0
+   },
+   "F29": {
+    "v": 3.0
+   },
+   "B30": {
+    "v": "Exercisable voting rights of black female board members"
+   },
+   "C30": {
+    "v": 2.0
+   },
+   "F30": {
+    "v": 2.0
+   },
+   "B31": {
+    "v": "Black executive directors"
+   },
+   "C31": {
+    "v": 2.0
+   },
+   "F31": {
+    "v": 2.0
+   },
+   "B32": {
+    "v": "Black female executive directors"
+   },
+   "C32": {
+    "v": 1.0
+   },
+   "F32": {
+    "v": 1.0
+   },
+   "B33": {
+    "v": "Black other executive management"
+   },
+   "C33": {
+    "v": 3.0
+   },
+   "F33": {
+    "v": 0.0
+   },
+   "B34": {
+    "v": "Black female other executive management"
+   },
+   "C34": {
+    "v": 2.0
+   },
+   "F34": {
+    "v": 0.0
+   },
+   "B35": {
+    "v": "Black employees in senior management"
+   },
+   "C35": {
+    "v": 2.0
+   },
+   "F35": {
+    "v": 0.0
+   },
+   "B36": {
+    "v": "Black female employees in senior management"
+   },
+   "C36": {
+    "v": 1.0
+   },
+   "F36": {
+    "v": 0.0
+   },
+   "B37": {
+    "v": "Black employees in middle management"
+   },
+   "C37": {
+    "v": 2.0
+   },
+   "F37": {
+    "v": 1.5736263736263736
+   },
+   "B38": {
+    "v": "Black female employees in middle management"
+   },
+   "C38": {
+    "v": 1.0
+   },
+   "F38": {
+    "v": 0.9678252911515064
+   },
+   "B39": {
+    "v": "Black employees in junior management"
+   },
+   "C39": {
+    "v": 1.0
+   },
+   "F39": {
+    "v": 0.6010989010989011
+   },
+   "B40": {
+    "v": "Black female employees in junior management"
+   },
+   "C40": {
+    "v": 1.0
+   },
+   "F40": {
+    "v": 0.5918854415274463
+   },
+   "B41": {
+    "v": "Black employees with disabilities"
+   },
+   "C41": {
+    "v": 2.0
+   },
+   "F41": {
+    "v": 2.0
+   },
+   "B43": {
+    "v": "Skills Development"
+   },
+   "C43": {
+    "v": 25.0
+   },
+   "F43": {
+    "v": 7.326916643004875
+   },
+   "B44": {
+    "v": "Expenditure on learning programmes for Black people"
+   },
+   "C44": {
+    "v": 8.0
+   },
+   "F44": {
+    "v": 0.6806039215835235
+   },
+   "B45": {
+    "v": "Expenditure on learning programmes for disabled Black people"
+   },
+   "C45": {
+    "v": 4.0
+   },
+   "F45": {
+    "v": 1.8375215126301423
+   },
+   "B46": {
+    "v": "Number of Black people participating in learnerships, apprenticeships or internships"
+   },
+   "C46": {
+    "v": 4.0
+   },
+   "F46": {
+    "v": 2.4043956043956043
+   },
+   "B47": {
+    "v": "Number of unemployed Black people participating in training as per learning programme matrix"
+   },
+   "C47": {
+    "v": 4.0
+   },
+   "F47": {
+    "v": 2.4043956043956043
+   },
+   "B48": {
+    "v": "Absorption of unemployed Black people after completing learnerships, apprenticeships or internships"
+   },
+   "C48": {
+    "v": 5.0
+   },
+   "F48": {
+    "v": 0.0
+   },
+   "B50": {
+    "v": "Preferential procurement"
+   },
+   "C50": {
+    "v": 27.0
+   },
+   "F50": {
+    "v": 22.220667727211215
+   },
+   "B51": {
+    "v": "Spend on empowering suppliers"
+   },
+   "C51": {
+    "v": 5.0
+   },
+   "F51": {
+    "v": 3.489984688493879
+   },
+   "B52": {
+    "v": "Spend on QSE empowering suppliers"
+   },
+   "C52": {
+    "v": 3.0
+   },
+   "F52": {
+    "v": 1.1483032662374946
+   },
+   "B53": {
+    "v": "Spend on EME suppliers"
+   },
+   "C53": {
+    "v": 4.0
+   },
+   "F53": {
+    "v": 4.0
+   },
+   "B54": {
+    "v": "Spend on empowering suppliers with at least 51% black ownership"
+   },
+   "C54": {
+    "v": 9.0
+   },
+   "F54": {
+    "v": 7.582379772479843
+   },
+   "B55": {
+    "v": "Spend on empowering suppliers with greater than 30% black female ownership"
+   },
+   "C55": {
+    "v": 4.0
+   },
+   "F55": {
+    "v": 4.0
+   },
+   "B56": {
+    "v": "Spend on designated group suppliers with at least 51% black ownership"
+   },
+   "C56": {
+    "v": 2.0
+   },
+   "F56": {
+    "v": 2.0
+   },
+   "B58": {
+    "v": "Supplier development"
+   },
+   "C58": {
+    "v": 10.0
+   },
+   "F58": {
+    "v": 10.0
+   },
+   "B59": {
+    "v": "Annual value of all Supplier Development contributions"
+   },
+   "C59": {
+    "v": 10.0
+   },
+   "F59": {
+    "v": 10.0
+   },
+   "B61": {
+    "v": "Enterprise development"
+   },
+   "C61": {
+    "v": 7.0
+   },
+   "F61": {
+    "v": 5.0
+   },
+   "B62": {
+    "v": "Annual value of Enterprise Development contributions and Sector Specific Programms"
+   },
+   "C62": {
+    "v": 5.0
+   },
+   "F62": {
+    "v": 5.0
+   },
+   "B63": {
+    "v": "Graduation of one or more Enterprise Development beneficiaries to the Supplier Development level"
+   },
+   "C63": {
+    "v": 1.0
+   },
+   "F63": {
+    "v": 0.0
+   },
+   "B64": {
+    "v": "Creation of one or more jobs directly as a result of Supplier Development and Enterprise Development initiatives"
+   },
+   "C64": {
+    "v": 1.0
+   },
+   "F64": {
+    "v": 0.0
+   },
+   "B66": {
+    "v": "Socioeconomic Development development"
+   },
+   "C66": {
+    "v": 15.0
+   },
+   "F66": {
+    "v": 15.0
+   },
+   "B67": {
+    "v": "Socioeconomic Development Contributions (Agricultural Industry)"
+   },
+   "C67": {
+    "v": 15.0
+   },
+   "F67": {
+    "v": 15.0
+   },
+   "B69": {
+    "v": "Grand total"
+   },
+   "C69": {
+    "v": 132.0
+   },
+   "F69": {
+    "v": 81.99785842254785
+   },
+   "B71": {
+    "v": "YES points"
+   },
+   "C71": {
+    "v": 132.0
+   },
+   "F71": {
+    "v": 81.99785842254785
+   },
+   "B73": {
+    "v": "Achived Level"
+   },
+   "F73": {
+    "v": "Level 4"
+   },
+   "B75": {
+    "v": "Discounted Level"
+   },
+   "F75": {
+    "v": "Level 5"
+   },
+   "B77": {
+    "v": "YES Level"
+   },
+   "F77": {
+    "v": "Level 5"
+   }
+  },
+  "Ownership Scorecard": {
+   "D1": {
+    "v": 230000000.0
+   },
+   "J7": {
+    "v": null
+   },
+   "J16": {
+    "v": null
+   }
+  },
+  "Ownership Data": {
+   "W3": {
+    "v": 0.0
+   }
+  },
+  "MC Toolkit": {
+   "C7": {
+    "v": 35.0
+   }
+  },
+  "Skills Toolkit": {
+   "D11": {
+    "v": "Yes"
+   }
+  },
+  "Skills Calcs": {
+   "D40": {
+    "v": 0.2875
+   },
+   "E40": {
+    "v": 1.3142857142857143
+   },
+   "D41": {
+    "v": 0.17884615384615385
+   },
+   "E41": {
+    "v": 0.8175824175824176
+   },
+   "D42": {
+    "v": 0.0057692307692307696
+   },
+   "E42": {
+    "v": 0.026373626373626374
+   },
+   "D43": {
+    "v": 0.23846153846153845
+   },
+   "E43": {
+    "v": 1.09010989010989
+   },
+   "D44": {
+    "v": 0.1625
+   },
+   "E44": {
+    "v": 0.7428571428571429
+   },
+   "D45": {
+    "v": 0.0019230769230769232
+   },
+   "E45": {
+    "v": 0.008791208791208791
+   }
+  },
+  "Procurement Scorecard": {
+   "C3": {
+    "v": 95550727.57
+   },
+   "C4": {
+    "v": 74669915.63
+   }
+  },
+  "ESD Scorecard": {
+   "D2": {
+    "v": 42052478.0
+   }
+  }
+ },
+ "tables": {
+  "tblOwnershipData": {
+   "headers": [
+    "Shareholder",
+    "Share %",
+    "BO%",
+    "Outstaning Debt",
+    "Loan Term"
+   ],
+   "rows": [
+    [
+     "Holder 1",
+     0.485,
+     0.0,
+     22583368.0,
+     7.991666666666666
+    ],
+    [
+     "Holder 2",
+     0.13,
+     0.5,
+     20482966.0,
+     3.658333333333333
+    ],
+    [
+     "Holder 3",
+     0.17,
+     0.25,
+     7633384.0,
+     10.491666666666667
+    ],
+    [
+     "Holder 4",
+     0.215,
+     0.0,
+     12147443.0,
+     8.491666666666667
+    ]
+   ]
+  },
+  "tblMCData": {
+   "headers": [
+    "Employee?",
+    "Black?",
+    "Disabled *",
+    "Gender.calcs"
+   ],
+   "rows": [
+    [
+     "No",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "No",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Female"
+    ],
+    [
+     "No",
+     "Yes",
+     "Yes",
+     "Female"
+    ]
+   ]
+  },
+  "tblSkillsData": {
+   "headers": [
+    "Within FY?",
+    "Black",
+    "LAI",
+    "Employment?.calcs",
+    "Race.calcs",
+    "Gender.calcs"
+   ],
+   "rows": [
+    [
+     "No",
+     "No",
+     "No",
+     "Yes",
+     "African",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "No",
+     "African",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "Yes",
+     "Yes",
+     "African",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "Yes",
+     "Yes",
+     "White",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Yes",
+     "African",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "Yes",
+     "No",
+     "African",
+     "Male"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "No",
+     "African",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "Yes",
+     "No",
+     "African",
+     "Female"
+    ],
+    [
+     "Yes",
+     "No",
+     "No",
+     "Yes",
+     "White",
+     "Female"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Yes",
+     "Coloured",
+     "Male"
+    ],
+    [
+     "Yes",
+     "Yes",
+     "No",
+     "Yes",
+     "African",
+     "Male"
+    ]
+   ]
+  },
+  "tblPPData": {
+   "headers": [
+    "All Spend\nadjusted",
+    "Current Company Size *",
+    "Current Black ownership",
+    "Current Black Female ownership",
+    "Black Designated Group  ownership",
+    "Supplier development recipient? (Yes/No)",
+    "3 year contract in place? (Yes/No)3",
+    "First-time supplier? (Yes/No)"
+   ],
+   "rows": [
+    [
+     8706062.0375,
+     "EME",
+     0.51,
+     0.3,
+     0.51,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     4434127.825,
+     "Generic",
+     0.51,
+     0.3,
+     0.459,
+     "Yes",
+     "No",
+     "No"
+    ],
+    [
+     2685602.628,
+     "Generic",
+     0.51,
+     0.3,
+     0.459,
+     "No",
+     "No",
+     "Yes"
+    ],
+    [
+     903593.3805000001,
+     "QSE",
+     0.6,
+     0.18,
+     0.0,
+     "No",
+     "No",
+     "Yes"
+    ],
+    [
+     814384.7030000001,
+     "EME",
+     0.6,
+     0.51,
+     0.6,
+     "No",
+     "No",
+     "Yes"
+    ],
+    [
+     0.0,
+     "Generic",
+     0.3,
+     0.09,
+     0.27,
+     "Yes",
+     "No",
+     "No"
+    ],
+    [
+     444141.309,
+     "Generic",
+     0.0,
+     0.0,
+     0.0,
+     "Yes",
+     "No",
+     "No"
+    ],
+    [
+     9012609.485,
+     "Generic",
+     0.6,
+     0.0,
+     0.0,
+     "Yes",
+     "No",
+     "No"
+    ],
+    [
+     5379892.152000001,
+     "EME",
+     0.6,
+     0.6,
+     0.0,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     409745.382,
+     "EME",
+     0.3,
+     0.3,
+     0.15,
+     "Yes",
+     "No",
+     "No"
+    ],
+    [
+     4860948.294000001,
+     "EME",
+     0.1,
+     0.05,
+     0.0,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     263812.41,
+     "QSE",
+     0.6,
+     0.18,
+     0.54,
+     "No",
+     "No",
+     "Yes"
+    ],
+    [
+     5217987.5865,
+     "Generic",
+     0.3,
+     0.15,
+     0.0,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     2220247.5875,
+     "QSE",
+     0.26,
+     0.078,
+     0.0,
+     "No",
+     "No",
+     "Yes"
+    ],
+    [
+     462035.691,
+     "EME",
+     0.26,
+     0.26,
+     0.234,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     2098407.25,
+     "QSE",
+     0.0,
+     0.0,
+     0.0,
+     "No",
+     "No",
+     "No"
+    ],
+    [
+     286718.945,
+     "Generic",
+     0.3,
+     0.3,
+     0.27,
+     "No",
+     "Yes",
+     "No"
+    ],
+    [
+     5154975.525,
+     "Generic",
+     0.0,
+     0.0,
+     0.0,
+     "No",
+     "No",
+     "Yes"
+    ]
+   ]
+  },
+  "tblESDData": {
+   "headers": [
+    "Pillar",
+    "Contribution Type",
+    "Amount",
+    "Recognised Amount"
+   ],
+   "rows": [
+    [
+     "Supplier Development",
+     "Guarantees provided on behalf of Enterprise and Supplier Development beneficiaries",
+     1257717.95,
+     628858.975
+    ],
+    [
+     "Enterprise Development",
+     "Guarantees provided on behalf of an Enterprise and Supplier Development beneficiaries",
+     579002.32,
+     289501.16
+    ],
+    [
+     "Enterprise Development",
+     "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
+     1176810.41,
+     1176810.41
+    ],
+    [
+     "Supplier Development",
+     "Standard Loan to Enterprise and Supplier Development beneficiaries",
+     570215.26,
+     285107.63
+    ],
+    [
+     "Enterprise Development",
+     "Discounts in addition to normal business practice supporting Enterprise and Supplier Development beneficiaries",
+     1016034.35,
+     1016034.35
+    ],
+    [
+     "Enterprise Development",
+     "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     900000.0,
+     38250.0
+    ],
+    [
+     "Supplier Development",
+     "Enterprise and Supplier Development Investment with lower dividend to fanacier",
+     700000.0,
+     47250.0
+    ],
+    [
+     "Supplier Development",
+     "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     2500000.0,
+     225000.0
+    ],
+    [
+     "Supplier Development",
+     "Minority Investment in Enterprise and Supplier Development beneficiaries",
+     1200000.0,
+     0.0
+    ]
+   ]
+  }
+ },
+ "sampleCase": {
+  "template": "agri_generic",
+  "seed": 110,
+  "profile": "edge",
+  "cells": {
+   "Ownership Scorecard!D19": "Year",
+   "Ownership Scorecard!D20": "Current YTD",
+   "MC Toolkit!C4": "Year",
+   "MC Toolkit!C5": "Current YTD",
+   "MC Scorecard!K14": "Year",
+   "MC Scorecard!K15": "Current YTD",
+   "MC Scorecard (Exco + Senior)!K14": "Year",
+   "MC Scorecard (Exco + Senior)!K15": "Current YTD",
+   "Skills Toolkit!D8": "Current YTD",
+   "Skills Scorecard!Q11": "Current YTD",
+   "Procurement Scorecard!C18": "Year",
+   "Procurement Scorecard!C19": "Current YTD",
+   "ESD Scorecard!F13": "Year",
+   "ESD Scorecard!F14": "Current YTD",
+   "SED Scorecard!H9": "Year",
+   "SED Scorecard!H10": "Current YTD",
+   "Procurement Scorecard!E6": "Actual",
+   "Client Information!C3": "Agri parity case 110",
+   "Client Information!C4": "2025-03-01",
+   "Client Information!D4": "2026-02-28",
+   "Client Information!C7": 2025,
+   "Client Information!C8": "Northern Cape",
+   "Client Information!C10": 0.0734,
+   "Client Information!C14": "2026-02-28",
+   "Client Information!C18": 457000000,
+   "Client Information!C19": 42052478,
+   "Skills Toolkit!D10": "Yes",
+   "Skills Toolkit!D11": "Yes",
+   "Client Information!G4": 35521.81,
+   "Client Information!G5": 55651.54,
+   "Client Information!G6": 20624.37,
+   "Client Information!G7": 46255.98,
+   "Client Information!G8": 38703.82,
+   "Client Information!G9": 18005.4,
+   "Client Information!G10": 76170.99,
+   "Client Information!G11": 83430.21,
+   "Client Information!G12": 26283.11,
+   "Client Information!G13": 62421.6,
+   "Client Information!G14": 54649.12,
+   "Client Information!G15": 46880.61,
+   "Skills Toolkit!D6": 662799.89,
+   "Skills Toolkit!D7": 69974.49,
+   "Financials!C4": 22707453,
+   "Financials!E4": 402780774,
+   "Financials!C5": 74847563,
+   "Financials!E5": 546926772,
+   "Financials!C6": 23381230,
+   "Financials!E6": 497479937
+  },
+  "tables": {
+   "tblOwnershipData": [
+    {
+     "Data Date": "2026-02-28",
+     "Shareholder": "Holder 1",
+     "Ownership Type": "Broad Based Ownership Scheme (BBOS)",
+     "Outstaning Debt": 22583368,
+     "BO%": 0.0,
+     "BWO%": 0.0,
+     "BDG%": 0.0,
+     "BNE%": 0.0,
+     "Number of Share": 9700,
+     "Share Value": 111550000.0,
+     "Original Date": "2019-06-01",
+     "Loan Date": "2018-03-01"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Shareholder": "Holder 2",
+     "Ownership Type": "Employee Share Ownership Plan (ESOP)",
+     "Outstaning Debt": 20482966,
+     "BO%": 0.5,
+     "BWO%": 0.125,
+     "BDG%": 0.0,
+     "BNE%": 0.1,
+     "Number of Share": 2600,
+     "Share Value": 29900000.0,
+     "Original Date": "2016-01-01",
+     "Loan Date": "2022-07-01"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Shareholder": "Holder 3",
+     "Ownership Type": "Broad Based Ownership Scheme (BBOS)",
+     "Outstaning Debt": 7633384,
+     "BO%": 0.25,
+     "BWO%": 0.125,
+     "BDG%": 0.025,
+     "BNE%": 0.0,
+     "Number of Share": 3400,
+     "Share Value": 39100000.0,
+     "Original Date": "2018-07-01",
+     "Loan Date": "2015-09-01"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Shareholder": "Holder 4",
+     "Ownership Type": "Strategic Partner",
+     "Outstaning Debt": 12147443,
+     "BO%": 0.0,
+     "BWO%": 0.0,
+     "BDG%": 0.0,
+     "BNE%": 0.0,
+     "Number of Share": 4300,
+     "Share Value": 49450000.0,
+     "Original Date": "2022-03-01",
+     "Loan Date": "2017-09-01"
+    }
+   ],
+   "tblCompanyValuation": [
+    {
+     "Date": "2026-02-28",
+     "Company Asset Value": 230000000,
+     "Total Shares": 20000,
+     "Share Value": 11500.0
+    }
+   ],
+   "tblMCData": [
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 1",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Non-executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.1176
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 2",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Designation *": "Unskilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 3",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 4",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 5",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Unskilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 6",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 7",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 8",
+     "Gender *": "Female",
+     "Race *": "Coloured",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 9",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 10",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Non-executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.1176
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 11",
+     "Gender *": "Female",
+     "Race *": "Coloured",
+     "Designation *": "Executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.1176
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 12",
+     "Gender *": "Male",
+     "Race *": "Coloured",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 13",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 14",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 15",
+     "Gender *": "Female",
+     "Race *": "Coloured",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 16",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 17",
+     "Gender *": "Male",
+     "Race *": "Coloured",
+     "Designation *": "Unskilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 18",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 19",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 20",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Designation *": "Unskilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 21",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 22",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Unskilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 23",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 24",
+     "Gender *": "Male",
+     "Race *": "White",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 25",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 26",
+     "Gender *": "Male",
+     "Race *": "White",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 27",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 28",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.2941
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 29",
+     "Gender *": "Male",
+     "Race *": "Coloured",
+     "Designation *": "Executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.1176
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 30",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 31",
+     "Gender *": "Male",
+     "Race *": "Indian",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 32",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 33",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Semi-skilled",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 34",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 35",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Designation *": "Middle Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 36",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Executive Director",
+     "Disabled *": "No",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.1765
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Employee 37",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Junior Manager",
+     "Disabled *": "No",
+     "Foreign *": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Full Name *": "Director Disabled",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Designation *": "Non-executive Director",
+     "Disabled *": "Yes",
+     "Foreign *": "No",
+     "Voting Rights (Directors only) *": 0.0588
+    }
+   ],
+   "tblSkillsData": [
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 1",
+     "Category *": "F",
+     "ABET": "No",
+     "Mandatory Training?": "Yes",
+     "Training Provider": "Provider 3",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 1",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "Yes",
+     "Age": 30,
+     "Employed?": "Yes",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 2214.05,
+     "Travel Cost": 0,
+     "Accommodation Cost": 5407.43,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 35202.94,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2024-06-01",
+     "End Date (format: dd/mm/yyyy)": "2025-02-15"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 2",
+     "Category *": "G",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 5",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 2",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 30,
+     "Employed?": "No",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 6852.31,
+     "Travel Cost": 0,
+     "Accommodation Cost": 131.54,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 42615.61,
+     "Other Costs": 2512.83,
+     "Start Date (format: dd/mm/yyyy)": "2025-07-21",
+     "End Date (format: dd/mm/yyyy)": "2026-01-16"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 3",
+     "Category *": "B",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 1",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 3",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 45,
+     "Employed?": "Yes",
+     "Completed?": "No",
+     "Absorbed?": "No",
+     "Course Cost": 23770.0,
+     "Travel Cost": 949.21,
+     "Accommodation Cost": 0,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 10896.65,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-08-20",
+     "End Date (format: dd/mm/yyyy)": "2025-11-07"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 4",
+     "Category *": "D",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 1",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 4",
+     "Gender *": "Male",
+     "Race *": "White",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 32,
+     "Employed?": "Yes",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 46942.7,
+     "Travel Cost": 0,
+     "Accommodation Cost": 0,
+     "Catering Cost": 2344.2,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 0,
+     "Other Costs": 3923.72,
+     "Start Date (format: dd/mm/yyyy)": "2025-05-03",
+     "End Date (format: dd/mm/yyyy)": "2025-12-06"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 5",
+     "Category *": "G",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 6",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 5",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Disabled?*": "Yes",
+     "Foreign?*": "No",
+     "Age": 46,
+     "Employed?": "Yes",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 11284.58,
+     "Travel Cost": 0,
+     "Accommodation Cost": 0,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 0,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-04-04",
+     "End Date (format: dd/mm/yyyy)": "2025-12-17"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 6",
+     "Category *": "B",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 2",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 6",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 36,
+     "Employed?": "No",
+     "Completed?": "No",
+     "Absorbed?": "No",
+     "Course Cost": 57951.14,
+     "Travel Cost": 0,
+     "Accommodation Cost": 0,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 0,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-06-09",
+     "End Date (format: dd/mm/yyyy)": "2025-12-03"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 7",
+     "Category *": "E",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 6",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 7",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "Yes",
+     "Age": 50,
+     "Employed?": "No",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 35165.8,
+     "Travel Cost": 0,
+     "Accommodation Cost": 0,
+     "Catering Cost": 1767.88,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 0,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-03-31",
+     "End Date (format: dd/mm/yyyy)": "2026-02-08"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 8",
+     "Category *": "D",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 3",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 8",
+     "Gender *": "Female",
+     "Race *": "African",
+     "Disabled?*": "Yes",
+     "Foreign?*": "No",
+     "Age": 26,
+     "Employed?": "No",
+     "Completed?": "No",
+     "Absorbed?": "No",
+     "Course Cost": 35475.05,
+     "Travel Cost": 0,
+     "Accommodation Cost": 2031.34,
+     "Catering Cost": 2939.1,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 26079.58,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-08-01",
+     "End Date (format: dd/mm/yyyy)": "2026-01-28"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 9",
+     "Category *": "G",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 2",
+     "Scarce or Critical Skills?": "No",
+     "Learner Name *": "Learner 9",
+     "Gender *": "Female",
+     "Race *": "White",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 47,
+     "Employed?": "Yes",
+     "Completed?": "No",
+     "Absorbed?": "No",
+     "Course Cost": 39872.86,
+     "Travel Cost": 5071.18,
+     "Accommodation Cost": 0,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 38647.45,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-07-19",
+     "End Date (format: dd/mm/yyyy)": "2025-11-25"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 10",
+     "Category *": "G",
+     "ABET": "No",
+     "Mandatory Training?": "Yes",
+     "Training Provider": "Provider 1",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 10",
+     "Gender *": "Male",
+     "Race *": "Coloured",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 37,
+     "Employed?": "Yes",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 57176.7,
+     "Travel Cost": 0,
+     "Accommodation Cost": 4412.64,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 0,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-07-22",
+     "End Date (format: dd/mm/yyyy)": "2025-12-09"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Training Program Name *": "Programme 11",
+     "Category *": "A",
+     "ABET": "No",
+     "Mandatory Training?": "No",
+     "Training Provider": "Provider 1",
+     "Scarce or Critical Skills?": "Yes",
+     "Learner Name *": "Learner 11",
+     "Gender *": "Male",
+     "Race *": "African",
+     "Disabled?*": "No",
+     "Foreign?*": "No",
+     "Age": 43,
+     "Employed?": "Yes",
+     "Completed?": "Yes",
+     "Absorbed?": "No",
+     "Course Cost": 10131.88,
+     "Travel Cost": 0,
+     "Accommodation Cost": 0,
+     "Catering Cost": 0,
+     "Stationery Cost": 0,
+     "Training Facility Cost": 0,
+     "Salary Cost (stipend and category B,C,D only)": 70956.3,
+     "Other Costs": 0,
+     "Start Date (format: dd/mm/yyyy)": "2025-03-27",
+     "End Date (format: dd/mm/yyyy)": "2025-11-15"
+    }
+   ],
+   "tblPPData": [
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 1",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 2,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.51,
+     "Current Black Female ownership": 0.3,
+     "Black Designated Group  ownership": 0.51,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 6964849.63
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 2",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 7,
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.51,
+     "Current Black Female ownership": 0.3,
+     "Black Designated Group  ownership": 0.459,
+     "Supplier development recipient? (Yes/No)": "Yes",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 8868255.65
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 3",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 1,
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.51,
+     "Current Black Female ownership": 0.3,
+     "Black Designated Group  ownership": 0.459,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 1989335.28
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 4",
+     "Current Company Size *": "QSE",
+     "B-BBEE Level": 1,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.6,
+     "Current Black Female ownership": 0.18,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 669328.43
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 5",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 8,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.6,
+     "Current Black Female ownership": 0.51,
+     "Black Designated Group  ownership": 0.6,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 8143847.03
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 6",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": "Non-compliant",
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.3,
+     "Current Black Female ownership": 0.09,
+     "Black Designated Group  ownership": 0.27,
+     "Supplier development recipient? (Yes/No)": "Yes",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 5639571.47
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 7",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 8,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0,
+     "Current Black Female ownership": 0.0,
+     "Black Designated Group  ownership": 0,
+     "Supplier development recipient? (Yes/No)": "Yes",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 4441413.09
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 8",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 3,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.6,
+     "Current Black Female ownership": 0.0,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "Yes",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 8193281.35
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 9",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 5,
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.6,
+     "Current Black Female ownership": 0.6,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 6724865.19
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 10",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 8,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.3,
+     "Current Black Female ownership": 0.3,
+     "Black Designated Group  ownership": 0.15,
+     "Supplier development recipient? (Yes/No)": "Yes",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 4097453.82
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 11",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 1,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.1,
+     "Current Black Female ownership": 0.05,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 3600702.44
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 12",
+     "Current Company Size *": "QSE",
+     "B-BBEE Level": 4,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.6,
+     "Current Black Female ownership": 0.18,
+     "Black Designated Group  ownership": 0.54,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 263812.41
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 13",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 1,
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.3,
+     "Current Black Female ownership": 0.15,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 3865175.99
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 14",
+     "Current Company Size *": "QSE",
+     "B-BBEE Level": 2,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.26,
+     "Current Black Female ownership": 0.078,
+     "Black Designated Group  ownership": 0.0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 1776198.07
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 15",
+     "Current Company Size *": "EME",
+     "B-BBEE Level": 1,
+     "Empowering Supplier? (Yes/No)": "No",
+     "Current Black ownership": 0.26,
+     "Current Black Female ownership": 0.26,
+     "Black Designated Group  ownership": 0.234,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 342248.66
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 16",
+     "Current Company Size *": "QSE",
+     "B-BBEE Level": 4,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0,
+     "Current Black Female ownership": 0.0,
+     "Black Designated Group  ownership": 0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 2098407.25
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 17",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 8,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0.3,
+     "Current Black Female ownership": 0.3,
+     "Black Designated Group  ownership": 0.27,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "Yes",
+     "First-time supplier? (Yes/No)": "No",
+     "Spend *": 2867189.45
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Supplier Name *": "Supplier 18",
+     "Current Company Size *": "Generic",
+     "B-BBEE Level": 2,
+     "Empowering Supplier? (Yes/No)": "Yes",
+     "Current Black ownership": 0,
+     "Current Black Female ownership": 0.0,
+     "Black Designated Group  ownership": 0,
+     "Supplier development recipient? (Yes/No)": "No",
+     "3 year contract in place? (Yes/No)3": "No",
+     "First-time supplier? (Yes/No)": "Yes",
+     "Spend *": 4123980.42
+    }
+   ],
+   "tblInclusions": [
+    {
+     "Inclusions": "Cost of Sales",
+     "Amount": 95550727.57
+    },
+    {
+     "Inclusions": "Operating Expenses",
+     "Amount": 0
+    },
+    {
+     "Inclusions": "Cash used in Operations",
+     "Amount": null
+    },
+    {
+     "Inclusions": "Capital Expenses",
+     "Amount": null
+    },
+    {
+     "Inclusions": "Finance Costs",
+     "Amount": null
+    }
+   ],
+   "tblESDData": [
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 1",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 1",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-06",
+     "Contribution Type": "Guarantees provided on behalf of Enterprise and Supplier Development beneficiaries",
+     "Amount": 1257717.95,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 2",
+     "Current Black ownership %": 1.0,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 2",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-28",
+     "Contribution Type": "Guarantees provided on behalf of an Enterprise and Supplier Development beneficiaries",
+     "Amount": 579002.32,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 3",
+     "Current Black ownership %": 0.51,
+     "Current Size": "EME",
+     "Agri Company?": "No",
+     "Contribution Description*": "Contribution 3",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-02-12",
+     "Contribution Type": "Direct Cost incurred in support of Enterprise and Supplier Development beneficiaries",
+     "Amount": 1176810.41,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary 4",
+     "Current Black ownership %": 0.3,
+     "Current Size": "Generic",
+     "Agri Company?": "No",
+     "Contribution Description*": "Contribution 4",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-11-13",
+     "Contribution Type": "Standard Loan to Enterprise and Supplier Development beneficiaries",
+     "Amount": 570215.26,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary 5",
+     "Current Black ownership %": 0.3,
+     "Current Size": "Generic",
+     "Agri Company?": "No",
+     "Contribution Description*": "Contribution 5",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-01-08",
+     "Contribution Type": "Discounts in addition to normal business practice supporting Enterprise and Supplier Development beneficiaries",
+     "Amount": 1016034.35,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Enterprise Development",
+     "Beneficiary Name": "Beneficiary LI",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 1",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-06",
+     "Contribution Type": "Lower insterest Rate than prime on Standard Loan to Enterprise and Supplier Development beneficiaries",
+     "Amount": 900000.0,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No",
+     "Prime Rate": 0.1075,
+     "Actual Interest Rate": 0.065
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary LD",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 1",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-06",
+     "Contribution Type": "Enterprise and Supplier Development Investment with lower dividend to fanacier",
+     "Amount": 700000.0,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No",
+     "Prime Rate": 0.1075,
+     "Actual Interest Rate": 0.04
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary SP",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 1",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-06",
+     "Contribution Type": "Shorter payment periods for Enterprise and Supplier Development beneficiaries",
+     "Amount": 2500000.0,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No",
+     "Invoice date (format: dd/mm/yyyy)": "2025-10-06",
+     "Payment date (format: dd/mm/yyyy)": "2025-10-12"
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Pillar": "Supplier Development",
+     "Beneficiary Name": "Beneficiary MI",
+     "Current Black ownership %": 0.3,
+     "Current Size": "QSE",
+     "Agri Company?": "Yes",
+     "Contribution Description*": "Contribution 1",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-07-06",
+     "Contribution Type": "Minority Investment in Enterprise and Supplier Development beneficiaries",
+     "Amount": 1200000.0,
+     "At least 1 job created?": "No",
+     "Graduated to Supplier Development?": "No"
+    }
+   ],
+   "tblSED": [
+    {
+     "Data Date": "2026-02-28",
+     "Beneficiary Name *": "Beneficiary SED 1",
+     "Description of Spend *": "SED spend 1",
+     "Agri Specific Initiative?": "Yes",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-02-05",
+     "Contribution Type *": "Professional services rendered at discount and supporting Socioeconomic Development beneficiaries",
+     "% of Spend Benefiting Black Individuals *": 1.0,
+     "Amount": 245603.56
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Beneficiary Name *": "Beneficiary SED 2",
+     "Description of Spend *": "SED spend 2",
+     "Agri Specific Initiative?": "Yes",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2026-02-25",
+     "Contribution Type *": "Time of employees productively deployed in assisting Socioeconomic Development beneficiaries",
+     "% of Spend Benefiting Black Individuals *": 0.5,
+     "Amount": 695625.15
+    },
+    {
+     "Data Date": "2026-02-28",
+     "Beneficiary Name *": "Beneficiary SED 3",
+     "Description of Spend *": "SED spend 3",
+     "Agri Specific Initiative?": "No",
+     "Date of Transaction * (format: dd/mm/yyyy)": "2025-04-23",
+     "Contribution Type *": "Time of employees productively deployed in assisting Socioeconomic Development beneficiaries",
+     "% of Spend Benefiting Black Individuals *": 0.5,
+     "Amount": 713124.75
+    }
+   ]
+  }
+ }
+}

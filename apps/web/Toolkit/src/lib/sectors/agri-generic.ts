@@ -21,6 +21,7 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
+import { EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES } from '../../../../../api/pipeline/rules/benefitFactors';
 
 export const AGRI_GENERIC_SECTOR_CODE = 'AGRI' as const;
 export const AGRI_GENERIC_SCORECARD_TYPE = 'Generic' as const;
@@ -279,9 +280,76 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
   };
 }
 
+/**
+ * Where AgriBEE Generic follows its Empower toolkit (BBBEE Toolkit (Agri
+ * Generic) Master v1.0.1, checked line by line against Excel — see
+ * docs/toolkits/parity/findings/agri_generic.md). Each is the template's own
+ * arithmetic, opted into here so no other sector moves:
+ *   - Ownership by the toolkit method: holders weighed by share value, each
+ *     indebted black holder's stake netted against the company value (the
+ *     40% rule of the template's first debt row, black share only); net value
+ *     against 25% (Ownership Scorecard H16 divides by LEFT(E5,3) = "25%").
+ *   - Skills by the toolkit method, with the Agri template's differences:
+ *     F & G course costs and other costs share one 15% cap; 15% of training
+ *     admin costs is shared by the black workforce mix; the 4-point headcount
+ *     line counts unemployed black learners in learnerships per EAP group;
+ *     absorption is over black learners who completed a learnership (100%);
+ *     only training that ended after the period began counts; a
+ *     scarce-and-critical-skills declaration answered "No" zeroes its lines.
+ *   - Procurement: every supplier's recognised spend counts on the first line
+ *     (the "Empowering Supplier?" answer is never read); a QSE/EME ≥51% black
+ *     owned earns 1.2 as an SD beneficiary, on a 3-year contract, or as a
+ *     first-time supplier.
+ *   - ESD: guarantees at 50%; ED sub-minimum 40% of the 5-point base line
+ *     (the template's own test reads 40% of 15 — unreachable; see findings).
+ *     No beneficiary gate: the template computes "Qualify?" but recognises
+ *     every row at its benefit factor.
+ *   - SED: a row answered as not an agri-specific initiative counts nothing.
+ */
+function withEmpowerAgriToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+  const pc = cfg.pillarConfigs ?? {};
+  return {
+    ...cfg,
+    ownership: { ...cfg.ownership, ownershipMethod: 'toolkit', netValueTarget: 0.25 },
+    pillarConfigs: {
+      ...pc,
+      enterpriseDevelopment: {
+        ...(pc.enterpriseDevelopment ?? { maxPoints: 7 }),
+        subMinimumPercent: 40,
+      },
+    },
+    skills: {
+      ...cfg.skills,
+      method: 'toolkit',
+      combinedOtherCostCap: 0.15,
+      adminCostShare: 0.15,
+      unemployedLearnersLine: true,
+      absorptionBasis: 'laiCompleters',
+      absorptionTargetPercent: 100,
+      onlyTrainingWithinPeriod: true,
+      scarceCriticalDeclarationsGate: true,
+    },
+    procurement: {
+      ...cfg.procurement,
+      allSuppliersIgnoreEmpoweringFlag: true,
+      enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
+    },
+    sed: { ...cfg.sed, sectorSpecificInitiativesOnly: true },
+    benefitFactors: cfg.benefitFactors.map((bf) =>
+      Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
+        ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
+        : bf,
+    ),
+  };
+}
+
+/** AGRI Generic on the earlier reading, without the toolkit's method choices above. */
+export const AGRI_GENERIC_CODES_CALCULATOR_CONFIG: CalculatorConfig =
+  sectorConfigToAgriGenericCalculatorConfig(AGRI_GENERIC);
+
 /** Complete AGRI Generic config — use for scorecard, tests, and explicit sector wiring. */
 export const AGRI_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToAgriGenericCalculatorConfig(AGRI_GENERIC);
+  withEmpowerAgriToolkitMethod(AGRI_GENERIC_CODES_CALCULATOR_CONFIG);
 
 export function isAgriGenericSector(
   sectorCode: string,

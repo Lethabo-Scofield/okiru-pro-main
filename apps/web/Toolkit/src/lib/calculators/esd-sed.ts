@@ -542,8 +542,16 @@ export function calculateSedScore(
   const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
+  // AgriBEE Generic ('SED Data'[Recognised Amount]): a row answered as not an
+  // agri-specific initiative counts nothing; an unanswered one still counts.
+  const initiativesOnly = sc.sectorSpecificInitiativesOnly === true;
+  let notInitiativeSpend = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
+    if (initiativesOnly && c.isSectorSpecificInitiative === false) {
+      notInitiativeSpend += amount;
+      return acc;
+    }
     const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
     if (!recognised) {
       unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
@@ -591,9 +599,11 @@ export function calculateSedScore(
 
   const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
   const total = round2(clampScore(score, maxPoints));
-  const excludedClause = excludedSpend > 0
+  const excludedClause = (excludedSpend > 0
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
-    : '';
+    : '') + (notInitiativeSpend > 0
+    ? `; ${formatRand(notInitiativeSpend)} not counted: not a sector-specific initiative`
+    : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),

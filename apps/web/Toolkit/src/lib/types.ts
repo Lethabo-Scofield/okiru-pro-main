@@ -283,6 +283,15 @@ export interface SkillsData {
    * share of that level's payroll.
    */
   payrollByLevel?: { execSenior: number; middle: number; junior: number; nonManagement: number };
+  /**
+   * AgriBEE scarce-and-critical-skills declarations ('Skills Toolkit'!D10 for
+   * spend, D11 for headcount). Read only where the sector's config gates on
+   * them; false scores the gated lines 0, undefined does not gate.
+   */
+  scarceCriticalSpendDeclared?: boolean;
+  scarceCriticalHeadcountDeclared?: boolean;
+  /** Start of the measurement period (ISO date), for sectors that count only training within it. */
+  measurementPeriodStart?: string;
 }
 
 // YES 4 Youth Initiative
@@ -551,6 +560,8 @@ export interface Contribution {
    * Absent = SED.
    */
   sedPillar?: 'sed' | 'consumer_education' | 'fundisa';
+  /** SED: a sector-specific initiative (AgriBEE: 'SED Data'[Agri Specific Initiative?]). */
+  isSectorSpecificInitiative?: boolean;
 }
 
 export interface ESDData {
@@ -715,6 +726,12 @@ export interface BreakdownLine {
   target: string;
   weighting: number;
   score: number;
+  /**
+   * The line's score before it was rounded to the cent for display, where the
+   * calculator gives it (the Skills toolkit method). Lets a parity check
+   * compare the arithmetic itself rather than the displayed cent.
+   */
+  exactScore?: number;
   isBonus?: boolean;
   /** Methodology note attached to this line (e.g. why a bonus scored 0). */
   note?: string;
