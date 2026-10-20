@@ -215,7 +215,7 @@ describe('ICT skills: the EAP-split sign-off reaches the Skills data', () => {
   });
 });
 
-describe('the new capture fields are shown only where ICT Generic scores them', () => {
+describe('the new capture fields are shown only where the score reads them', () => {
   const procurementKeys = (sector: string, card: string) => getSection('procurement', sector, card)!.columns!.map((c) => c.key);
   const skillsMetaKeys = (sector: string, card: string) => getSection('skills-development', sector, card)!.meta!.map((f) => f.key);
 
@@ -224,9 +224,18 @@ describe('the new capture fields are shown only where ICT Generic scores them', 
     expect(skillsMetaKeys('ICT', 'Generic')).toContain('disabledSpendUsesEap');
   });
 
-  it.each([['RCOGP', 'Generic'], ['RCOGP', 'QSE'], ['ICT', 'QSE'], ['TRANSPORT', 'Generic'], ['AGRI', 'Generic']])(
+  it.each([['RCOGP', 'Generic'], ['TRANSPORT', 'Generic']])(
     '%s %s shows neither (nothing there reads them)', (sector, card) => {
       expect(procurementKeys(sector, card)).not.toContain('firstTimeSupplier');
+      expect(skillsMetaKeys(sector, card)).not.toContain('disabledSpendUsesEap');
+    },
+  );
+
+  // Since the sector branches were merged, the first-time route to the 1.2
+  // factor is one rule several scorecards read (firstTimeSupplierColumn.test.ts).
+  it.each([['RCOGP', 'QSE'], ['ICT', 'QSE'], ['AGRI', 'Generic']])(
+    '%s %s shows the first-time answer its score reads, not the ICT Generic sign-off', (sector, card) => {
+      expect(procurementKeys(sector, card)).toContain('firstTimeSupplier');
       expect(skillsMetaKeys(sector, card)).not.toContain('disabledSpendUsesEap');
     },
   );

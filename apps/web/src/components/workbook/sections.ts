@@ -1092,10 +1092,30 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
   }),
 ];
 
-/** ICT Generic-only inputs (the procurement "First-time Supplier?" column and the
- *  Skills EAP-split sign-off), kept for the importer and hidden from other
- *  sectors' forms via getSection: only ICT Generic's toolkit method reads them. */
-export const ICT_GENERIC_ONLY_KEYS = new Set<string>(["firstTimeSupplier", "disabledSpendUsesEap"]);
+/** ICT Generic-only input (the Skills EAP-split sign-off), kept for the importer
+ *  and hidden from other sectors' forms via getSection: only ICT Generic's
+ *  toolkit method reads it. */
+export const ICT_GENERIC_ONLY_KEYS = new Set<string>(["disabledSpendUsesEap"]);
+
+/** The procurement "First-time Supplier?" column, kept for the importer and
+ *  shown only on the forms of scorecards whose score reads it. */
+export const FIRST_TIME_SUPPLIER_KEY = "firstTimeSupplier";
+
+/**
+ * Scorecards whose 1.2 recognition factor also goes to a first-time supplier
+ * (the rule 'black_owned_small_supplier_or_first_time'): RCOGP QSE, ICT
+ * Generic and QSE, AgriBEE Generic, and FSC on its toolkit method (every
+ * sub-sector but QSE). Kept in step with the sector configs by
+ * firstTimeSupplierColumn.test.ts.
+ */
+export function scorecardReadsFirstTimeSupplier(sectorCode?: string, scorecardType?: string): boolean {
+  const sector = String(sectorCode ?? "").trim().toUpperCase();
+  const qse = String(scorecardType ?? "").trim().toUpperCase() === "QSE";
+  if (sector === "ICT") return true;
+  if (sector === "RCOGP") return qse;
+  if (sector === "AGRI" || sector === "FSC") return !qse;
+  return false;
+}
 
 /** Construction-only column keys, appended to the base arrays for the importer but
  *  hidden from non-construction forms via getSection. (Phase 1 template columns) */
@@ -1337,12 +1357,13 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "unmodifiedBlackOwnership", label: "Unmodified Black Ownership (%)", type: "number", width: 200, validate: percentValidator },
   yesNoColumn("sdRecipient", "SD Recipient?", { width: 130, aliases: ["Supplier development recipient? (Yes/No)"] }),
   yesNoColumn("threeYearContract", "3yr Contract?", { width: 130, aliases: ["3 year contract in place? (Yes/No)"] }),
-  // ICT Generic only (hidden elsewhere by getSection): a first-time supplier
-  // that is a ≥51% black-owned QSE/EME earns the 1.2 recognition factor.
+  // Shown only where the score reads it (scorecardReadsFirstTimeSupplier): a
+  // first-time supplier that is a ≥51% black-owned QSE/EME earns the 1.2
+  // recognition factor.
   yesNoColumn("firstTimeSupplier", "First-time Supplier?", {
     width: 160,
     aliases: ["First-time supplier? (Yes/No)", "First-time supplier?", "First time supplier", "First-time supplier"],
-    guidance: "ICT Generic only: was this supplier first procured from in this measurement period? A first-time supplier that is a QSE or EME at least 51% black owned earns the 1.2 recognition factor.",
+    guidance: "Was this supplier first procured from in this measurement period? A first-time supplier that is a QSE or EME at least 51% black owned earns the 1.2 recognition factor.",
   }),
   yesNoColumn("designated", "Designated?", { width: 120, aliases: ["Black Designated Group  ownership"] }),
   { key: "spend", label: "Spend (R)", type: "number", required: true, width: 140, validate: numericValidator, aliases: ["Rand Value", "Amount", "Spend", "Spend *", "Procurement Spend", "Supplier Spend", "Value (R)", "R Spend", "Total Spend", "Annual Spend", "Spend Amount", "Spend (Excl VAT)"], validationMessage: "Enter amount in Rands (e.g. 1500000 or R1,500,000)" },
@@ -1646,9 +1667,10 @@ export const SECTIONS: SectionDef[] = [
  * Looks up a section by key, optionally filtering its columns and meta to match
  * the caller's sector and scorecard type. Sector-aware transformations applied:
  *  - SED "ICT-Specific?" column: only shown for ICT sector.
- *  - Procurement "First-time Supplier?" column and the Skills "Disabled
- *    learners measured against EAP targets?" field: only shown for ICT
- *    Generic, the only scorecard whose method reads them.
+ *  - Procurement "First-time Supplier?" column: only shown where the score
+ *    reads it (scorecardReadsFirstTimeSupplier).
+ *  - Skills "Disabled learners measured against EAP targets?" field: only
+ *    shown for ICT Generic, the only scorecard whose method reads it.
  *  - SED section gets CE/Fundisa meta for FSC sector (hybrid: meta + columns).
  *  - Ownership section gets "Farm Worker?" column for AGRI sector.
  *  - Skills Development: eapProvince and eapYear excluded for QSE (fixed % targets, no EAP lookup).
@@ -1670,6 +1692,11 @@ export function getSection(
   if (out.columns && sector !== "" && sector !== "CONSTRUCTION") {
     const cols = out.columns.filter((c) => !CONSTRUCTION_ONLY_COLUMN_KEYS.has(c.key));
     if (cols.length !== out.columns.length) out = { ...out, columns: cols };
+  }
+  // The first-time supplier answer, the same way: kept for the importer,
+  // hidden from the forms of scorecards whose score never reads it.
+  if (!scorecardReadsFirstTimeSupplier(sector, scorecardType) && out.columns?.some((c) => c.key === FIRST_TIME_SUPPLIER_KEY)) {
+    out = { ...out, columns: out.columns.filter((c) => c.key !== FIRST_TIME_SUPPLIER_KEY) };
   }
   // ICT Generic-only inputs, the same way: kept for the importer, hidden from
   // every other explicit sector form (nothing else scores them).
