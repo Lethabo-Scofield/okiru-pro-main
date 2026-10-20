@@ -380,7 +380,9 @@ const DATA_SHEETS: DataSheetSpec[] = [
     rowToCells: (r) => [
       s((r as any).beneficiaryName ?? (r as any).name),
       s((r as any).descriptionOfSpend ?? (r as any).description),
-      yesNo((r as any).ictSpecificInitiative),
+      // An explicit No is kept (yesNo writes false as blank): on re-import a
+      // blank is "not answered" and the row counts, a No does not (ICT SED).
+      (r as any).ictSpecificInitiative === false ? "No" : yesNo((r as any).ictSpecificInitiative),
       s((r as any).dateOfTransaction ?? (r as any).date),
       s((r as any).contributionType),
       s((r as any).percentBenefitingBlack),
@@ -1348,6 +1350,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         isSupplierDevRecipient: coerceYesNo((r as any).sdRecipient),
         threeYearContract: coerceYesNo((r as any).threeYearContract),
         hasThreeYearContract: coerceYesNo((r as any).threeYearContract),
+        // ICT Generic: "First-time Supplier?" (the 1.2 factor for a first-time
+        // ≥51% black-owned QSE/EME). Only ever adds points, so unanswered = No.
+        isFirstTimeSupplier: coerceYesNo((r as any).firstTimeSupplier),
         designated: coerceYesNo((r as any).designated),
         isDesignatedGroup: coerceYesNo((r as any).designated),
         spend: num((r as any).spend),
@@ -1408,6 +1413,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // recorded as "No" (ICT scores only a Yes either way; the SED line
       // reports both as not marked ICT-specific).
       ictSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
+      // What the ICT SED calculator reads (sed.sectorSpecificInitiativesOnly):
+      // only an ANSWER counts. A blank cell stays unset and the row still
+      // scores; coercing it to false would drop every row nobody was asked
+      // about, the way the importer's stamped "No" used to.
+      isSectorSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),
       amount: num((r as any).amount),
@@ -1862,6 +1872,7 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.eapYear != null) skillsExtra.eapYear = f.eapYear;
           if (f.trainingManagerSalary != null) skillsExtra.trainingManagerSalary = f.trainingManagerSalary;
           if (f.trainingOverheadCost != null) skillsExtra.trainingOverheadCost = f.trainingOverheadCost;
+          if (f.disabledSpendUsesEap !== undefined) skillsExtra.disabledSpendUsesEap = f.disabledSpendUsesEap;
           if (f.selectPeriod) skillsExtra.selectPeriod = f.selectPeriod;
           if (f.dataDate) skillsExtra.dataDate = f.dataDate;
           // AGRI-specific

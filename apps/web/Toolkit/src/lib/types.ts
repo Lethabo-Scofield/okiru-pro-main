@@ -292,6 +292,12 @@ export interface SkillsData {
   scarceCriticalHeadcountDeclared?: boolean;
   /** Start of the measurement period (ISO date), for sectors that count only training within it. */
   measurementPeriodStart?: string;
+  /**
+   * ICT toolkit ('Skills Toolkit'!D9): disabled-learner spend measured per
+   * black group against its effective-EAP share — only with the verification
+   * agent's sign-off. Unset: one pool against the whole target.
+   */
+  disabledSpendUsesEap?: boolean;
 }
 
 // YES 4 Youth Initiative
@@ -566,7 +572,7 @@ export interface Contribution {
    * Absent = SED.
    */
   sedPillar?: 'sed' | 'consumer_education' | 'fundisa';
-  /** SED: a sector-specific initiative (AgriBEE: 'SED Data'[Agri Specific Initiative?]). */
+  /** SED: a sector-specific initiative (AgriBEE 'Agri Specific Initiative?', ICT "ICT Specific Initiative?"). */
   isSectorSpecificInitiative?: boolean;
 }
 

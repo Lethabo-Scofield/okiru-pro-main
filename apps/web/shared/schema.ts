@@ -205,8 +205,13 @@ export interface CalculatorConfig {
      * against its share of the leviable amount. The absorption bonus counts
      * black learners absorbed after a learnership, apprenticeship or internship
      * completed while not employed, over the denominator absorptionBasis names.
+     *
+     * 'ict_toolkit' is the ICT Generic toolkit's own method: learning spend,
+     * disabled spend, learners in learnerships etc., the unemployed ones among
+     * them and absorption of unemployed completers, each split by EAP group,
+     * with F & G and other costs sharing one 15% cap (no bursary line).
      */
-    method?: 'toolkit' | 'toolkit_qse';
+    method?: 'toolkit' | 'toolkit_qse' | 'ict_toolkit';
     /**
      * 'headcount': the absorption bonus measures absorbed learners against the
      * entity headcount (absorbed ÷ headcount vs absorptionTargetPercent), as the
@@ -296,8 +301,9 @@ export interface CalculatorConfig {
      *  - 'flow_through' (RCOGP Generic v1.4): ≥51% black AND ≥51% flow-through
      *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
      *    contract;
-     *  - 'black_owned_small_supplier_or_first_time' (RCOGP QSE v1.1, ICT QSE
-     *    v1.1, FSC v1.0 and AgriBEE Generic v1.0.1, as the templates mean it): a QSE/EME ≥51% black owned that is a Supplier
+     *  - 'black_owned_small_supplier_or_first_time' (RCOGP QSE v1.1, ICT
+     *    Generic v1.4, ICT QSE v1.1, FSC v1.0 and AgriBEE Generic v1.0.1, as
+     *    the templates mean it): a QSE/EME ≥51% black owned that is a Supplier
      *    Development beneficiary, holds a 3-year contract, or is a first-time
      *    supplier (Supplier.isFirstTimeSupplier).
      */
@@ -348,6 +354,15 @@ export interface CalculatorConfig {
      * unlisted type stays unrecognised (0).
      */
     additionalContributionFactors?: Record<string, number>;
+    /**
+     * ICT Generic: the shorter-payment and lower-interest / lower-dividend
+     * factors are computed for every row of those types, as the ICT
+     * template's Benefit Factor column does ('ESD Data'!V reads AE / AF for
+     * every row, qualified or not). A shorter-payment row without both an
+     * invoice and a payment date is therefore recognised at 0, not at the
+     * table's 15%. Unset keeps the 15% for undated rows.
+     */
+    computedFactorsForEveryRow?: boolean;
   };
   sed: {
     maxPoints: number;

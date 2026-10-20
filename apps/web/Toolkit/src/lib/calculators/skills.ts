@@ -383,6 +383,9 @@ export function skillsWorkforceFromManagement(
     const d = blackDemographic(e.race, e.gender);
     if (d) counts[d]++;
     if (e.isDisabled) counts.PWD++;
+    // Per group as well (PWD_AM …): the ICT toolkit shares training-admin
+    // costs on the disabled line by each group's disabled black staff.
+    if (e.isDisabled && d) counts[`PWD_${d}`] = (counts[`PWD_${d}`] ?? 0) + 1;
   }
   const n = staff.length;
   const shares: Record<string, number> = {};
@@ -947,6 +950,190 @@ function scoreToolkitQseMethod(
   };
 }
 
+// ---------------------------------------------------------------------------
+// ICT toolkit method (skills.method = 'ict_toolkit') — the Empower ICT Generic
+// template's arithmetic (tblSkillsData computed columns → 'Skills Calcs' →
+// 'Skills Toolkit'), checked line by line against the toolkit recalculated in
+// Excel. Five lines, each split by effective-EAP group except where noted:
+//   learning programmes (6% of leviable), disabled learners (0.3%; EAP split
+//   only when the verifier signs it off), black learners in learnerships,
+//   apprenticeships and internships (2.5% of headcount), the unemployed ones
+//   among them (2.5%), and absorption of unemployed learners who completed.
+// ---------------------------------------------------------------------------
+
+/** 'Skills Calcs'!O7 = all training spend × 15% × EAP: F & G course cost and other costs share one cap. */
+const ICT_TOOLKIT_COST_CAP = 0.15;
+/** 'Employee Demographics' rows 8–9: 15% of training-manager salary and overhead. */
+const ICT_TOOLKIT_ADMIN_SHARE = 0.15;
+
+interface IctRow {
+  black: boolean;
+  demo: BlackDemo | null;
+  disabled: boolean;
+  lai: boolean;
+  notEmployed: boolean;
+  completed: boolean;
+  absorbed: boolean;
+  /** Course cost, categories A–E. */
+  ae: number;
+  /** Stipend / salary, categories B, C, D. */
+  bcd: number;
+  /** Course cost of categories F & G plus every other cost (travel, accommodation …). */
+  fgOther: number;
+}
+
+function ictRow(prog: TrainingProgram): IctRow {
+  const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
+  const cat = (ALL_CATEGORIES as string[]).includes(raw) ? raw : '';
+  const other =
+    (prog.travelCost || 0) + (prog.accommodationCost || 0) + (prog.cateringCost || 0) +
+    (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
+  let course = prog.courseCost || 0;
+  const salary = prog.salaryCost || 0;
+  if (course === 0 && salary === 0 && other === 0) {
+    const lump = prog.totalCost ?? prog.cost ?? 0;
+    if (lump > 0) course = lump;
+  }
+  const black = isBlackLearner(prog);
+  const isBCD = cat === 'B' || cat === 'C' || cat === 'D';
+  return {
+    black,
+    demo: black ? blackDemographic(prog.race, prog.gender) : null,
+    disabled: Boolean(prog.isDisabled),
+    lai: isBCD,
+    notEmployed: isNotEmployed(prog),
+    completed: Boolean(prog.isCompleted),
+    absorbed: Boolean(prog.isAbsorbed),
+    ae: cat !== '' && cat !== 'F' && cat !== 'G' ? course : 0,
+    bcd: isBCD ? salary : 0,
+    fgOther: (cat === 'F' || cat === 'G' ? course : 0) + other,
+  };
+}
+
+interface IctToolkitParams {
+  leviable: number;
+  headcount: number;
+  province: Province;
+  eapYear?: number;
+  overallTargetPct: number;
+  disabledTargetPct: number;
+  /** Unemployed learners in learnerships etc., as a fraction of headcount. */
+  unemployedLaiTargetPct: number;
+  /** All black learners in learnerships etc., in percent of headcount. */
+  laiTargetPercent: number;
+  absorptionTargetPercent: number;
+  learningMaxPts: number;
+  disabledMaxPts: number;
+  laiMaxPts: number;
+  unemployedLaiMaxPts: number;
+  absorptionMaxPts: number;
+  disabledUsesEap: boolean;
+}
+
+function scoreIctToolkitMethod(data: SkillsData, p: IctToolkitParams) {
+  const rows = (data.trainingPrograms || []).map(ictRow);
+  const eap = getEffectiveEap(p.province, p.eapYear);
+  const shares = data.workforceShares ?? {};
+  const adminCosts = (data.trainingManagerSalary ?? 0) + (data.trainingOverheadCost ?? 0);
+  const sum = (rs: IctRow[], f: (r: IctRow) => number) => rs.reduce((a, r) => a + f(r), 0);
+  // 'Skills Calcs'!N5: every learner's spend, any race.
+  const allSpend = sum(rows, r => r.ae + r.bcd + r.fgOther);
+  const black = rows.filter(r => r.demo !== null);
+
+  // Spend recognised for one group: course and stipends, its share of the
+  // admin costs, and F & G plus other costs up to the cap.
+  const recognisedFor = (g: IctRow[], adminShare: number, cap: number) =>
+    sum(g, r => r.ae + r.bcd) + ICT_TOOLKIT_ADMIN_SHARE * adminCosts * adminShare + Math.min(sum(g, r => r.fgOther), cap);
+
+  let learning = 0;
+  let learningRecognised = 0;
+  const learningParts: string[] = [];
+  for (const d of BLACK_DEMOS) {
+    const e = eap[d] ?? 0;
+    const recognised = recognisedFor(black.filter(r => r.demo === d), shares[d] ?? 0, allSpend * ICT_TOOLKIT_COST_CAP * e);
+    const target = p.leviable * p.overallTargetPct * e;
+    const max = p.learningMaxPts * e;
+    const pts = cappedRatio(recognised, target, max);
+    learning += pts;
+    learningRecognised += recognised;
+    if (recognised > 0) learningParts.push(`${DEMO_LABEL[d]} ${fmtRand(recognised)} ÷ ${fmtRand(target)} → ${pts.toFixed(2)} of ${max.toFixed(2)}`);
+  }
+
+  // Disabled black learners. With the EAP split each group has its share of
+  // the target and points; without it every group is measured against the
+  // whole target and the sum is capped — one pool.
+  const dis = black.filter(r => r.disabled);
+  let disabled = 0;
+  let disabledRecognised = 0;
+  for (const d of BLACK_DEMOS) {
+    const e = p.disabledUsesEap ? (eap[d] ?? 0) : 1;
+    const recognised = recognisedFor(dis.filter(r => r.demo === d), shares[`PWD_${d}`] ?? 0, allSpend * ICT_TOOLKIT_COST_CAP * e);
+    disabled += cappedRatio(recognised, p.leviable * p.disabledTargetPct * e, p.disabledMaxPts * e);
+    disabledRecognised += recognised;
+  }
+  disabled = Math.min(disabled, p.disabledMaxPts);
+
+  // Headcount lines, per group against its EAP share of the target.
+  const headcountLine = (count: (d: BlackDemo) => number, targetFraction: number, maxPts: number) => {
+    let pts = 0;
+    let n = 0;
+    for (const d of BLACK_DEMOS) {
+      const e = eap[d] ?? 0;
+      const k = count(d);
+      pts += cappedRatio(k, p.headcount * targetFraction * e, maxPts * e);
+      n += k;
+    }
+    return { pts, n };
+  };
+  const lai = headcountLine(d => black.filter(r => r.demo === d && r.lai).length, p.laiTargetPercent / 100, p.laiMaxPts);
+  const unemployedLai = headcountLine(
+    d => black.filter(r => r.demo === d && r.lai && r.notEmployed).length, p.unemployedLaiTargetPct, p.unemployedLaiMaxPts);
+
+  // Absorption: absorbed unemployed black completers per group, against the
+  // group's EAP share of every unemployed learner who completed (any race).
+  const completers = rows.filter(r => r.lai && r.notEmployed && r.completed).length;
+  let absorption = 0;
+  let absorbedCount = 0;
+  for (const d of BLACK_DEMOS) {
+    const e = eap[d] ?? 0;
+    const k = black.filter(r => r.demo === d && r.lai && r.notEmployed && r.completed && r.absorbed).length;
+    absorption += cappedRatio(k, completers * (p.absorptionTargetPercent / 100) * e, p.absorptionMaxPts * e);
+    absorbedCount += k;
+  }
+
+  const notes = [
+    `Each black group against its effective-EAP share of ${fmtPct(p.overallTargetPct)} × ${fmtRand(p.leviable)} leviable, ` +
+      `up to its share of ${fmtNum(p.learningMaxPts)} points: ` +
+      (learningParts.length ? `${learningParts.join('; ')}. ` : 'no recognised spend on black learners. ') +
+      `Categories F & G and other costs together are capped at ${fmtPct(ICT_TOOLKIT_COST_CAP)} of all training spend (${fmtRand(allSpend)}), per group share` +
+      (adminCosts > 0 ? `; ${fmtPct(ICT_TOOLKIT_ADMIN_SHARE)} of training-admin costs (${fmtRand(adminCosts)}) is shared by the black workforce mix.` : '.'),
+    `Black learners with disabilities: ${fmtRand(disabledRecognised)} recognised against ${fmtPct(p.disabledTargetPct)} × ${fmtRand(p.leviable)}` +
+      (p.disabledUsesEap ? ', split by effective EAP' : ' (no EAP split)') + ` → ${disabled.toFixed(2)} of ${fmtNum(p.disabledMaxPts)}.`,
+    p.headcount > 0
+      ? `${lai.n} black learner(s) in categories B, C and D, each group against its EAP share of ${fmtNum(p.laiTargetPercent)}% × ${fmtNum(p.headcount)} headcount → ${lai.pts.toFixed(2)}.`
+      : 'No headcount, so this line cannot score.',
+    p.headcount > 0
+      ? `${unemployedLai.n} of them were not employed, each group against its EAP share of ${fmtPct(p.unemployedLaiTargetPct)} × ${fmtNum(p.headcount)} headcount → ${unemployedLai.pts.toFixed(2)}.`
+      : 'No headcount, so this line cannot score.',
+    `${absorbedCount} unemployed black learner(s) completed a learnership, apprenticeship or internship and were absorbed, ` +
+      `each group against its EAP share of the ${completers} unemployed learner(s) who completed → ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`,
+  ];
+
+  return {
+    learning, disabled, lai: lai.pts, unemployedLai: unemployedLai.pts, absorption, notes,
+    rawStats: {
+      blackSpend: round2(learningRecognised),
+      bursarySpend: 0,
+      disabledSpend: round2(disabledRecognised),
+      learnershipCount: lai.n,
+      absorbedCount,
+      totalBlackLearners: black.length,
+      absorptionRate: completers > 0 ? absorbedCount / completers : 0,
+      totalRecognisedSpend: round2(learningRecognised),
+    },
+  };
+}
+
 export function calculateSkillsScore(
   data: SkillsData,
   config?: CalculatorConfig,
@@ -1102,6 +1289,54 @@ export function calculateSkillsScore(
       subMinimumMet: subMinimumMetFor(base),
       categoryBreakdown: t.categoryBreakdown,
       subLines: lines.map(l => ({ ...l, score: round2(l.score), exactScore: l.score })),
+      eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
+      eapProvince: province,
+      rawStats: {
+        ...t.rawStats,
+        targetOverall: round2(TARGET_OVERALL),
+        targetBursaries: round2(TARGET_BURSARIES),
+        targetDisabled: round2(TARGET_DISABLED),
+      },
+    };
+  }
+
+  if (sc.method === 'ict_toolkit') {
+    const t = scoreIctToolkitMethod(data, {
+      leviable: leviableAmount > 0 ? leviableAmount : 0,
+      headcount: data.headcount != null && data.headcount > 0 ? data.headcount : 0,
+      province,
+      eapYear,
+      overallTargetPct,
+      disabledTargetPct,
+      unemployedLaiTargetPct: bursaryTargetPct,
+      laiTargetPercent: learnershipTargetPct,
+      absorptionTargetPercent: absorptionTargetPct,
+      learningMaxPts,
+      disabledMaxPts,
+      laiMaxPts: learnershipMaxPts,
+      unemployedLaiMaxPts: bursaryMaxPts,
+      absorptionMaxPts,
+      disabledUsesEap: data.disabledSpendUsesEap === true,
+    });
+    const base = t.learning + t.disabled + t.lai + t.unemployedLai;
+    const lines: SkillsSubLine[] = [
+      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0] },
+      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[1] },
+      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.lai, note: t.notes[2] },
+      { name: "Number of unemployed Black people participating in learnerships, apprenticeships or internships", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: t.unemployedLai, note: t.notes[3] },
+      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(0)}% of unemployed completers`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4] },
+    ];
+    return {
+      learningProgrammes: round2(t.learning),
+      bursaries: round2(t.unemployedLai),
+      disabledLearning: round2(t.disabled),
+      learnerships: round2(t.lai),
+      absorption: round2(t.absorption),
+      total: round2(clampScore(base + t.absorption, maxPoints)),
+      exactTotal: clampScore(base + t.absorption, maxPoints),
+      subMinimumMet: subMinimumMetFor(base),
+      categoryBreakdown: applyCapToSpend(accumulateSpend(trainingPrograms).byCategory, fgCap, adminCap).breakdown,
+      subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
       eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
       eapProvince: province,
       rawStats: {

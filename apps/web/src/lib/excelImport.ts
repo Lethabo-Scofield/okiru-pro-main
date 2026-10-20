@@ -16,7 +16,6 @@ import {
 } from "@/components/workbook/workbookValidation";
 import type { WorkbookSectionsInput, WorkbookRow } from "@/lib/workbookExcelNormalizer";
 import { SECTOR_CODE_OPTIONS } from "@/components/workbook/workbookValidation";
-import { coerceYesNoOrUnset } from "@/lib/yesNoValue";
 
 export type FieldConfidence = "high" | "medium" | "low";
 
@@ -1961,11 +1960,11 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
   const blackPctIdx = colIdx(headers, "benefitingblack", "benefiting black", "percentbenefitingblack");
   const amountIdx = colIdx(headers, "amount");
   const dateIdx = colIdx(headers, "dateoftransaction", "date");
-  // ICT: "ICT Specific Initiative?" decides whether the contribution scores at
-  // all (sed.requireIctSpecificInitiative). Keep the answer the sheet gives,
-  // and leave the field unset where the sheet has no such column or the cell
-  // is blank — never a "No" the client did not give.
-  const ictIdx = colIdx(headers, "ictspecificinitiative", "ictspecific");
+  // "ICT Specific Initiative?" (the ICT toolkit and our own export) decides
+  // whether an ICT contribution scores at all. Exact header match only: colIdx
+  // also matches by containment, and a stray "ICT" or "Initiative" header must
+  // not be read as this answer.
+  const ictIdx = headers.get(norm("ICT Specific Initiative?")) ?? headers.get(norm("ICT-Specific?"));
 
   const out: WorkbookRow[] = [];
   for (let r = headerIdx + 1; r < matrix.length; r++) {
@@ -1975,12 +1974,17 @@ function parseSedGridRows(matrix: SheetMatrix): WorkbookRow[] {
     const amount = amountIdx !== undefined ? parseCurrency(row[amountIdx]) ?? 0 : 0;
     if (!name || amount <= 0) continue;
     const blackPct = blackPctIdx !== undefined ? parsePercent(row[blackPctIdx]) ?? 100 : 100;
-    const ictAnswer = ictIdx !== undefined ? coerceYesNoOrUnset(row[ictIdx]) : undefined;
+    // Only an answer the sheet gives, and only a plain Yes or No. ICT SED
+    // scores sector-specific initiatives only, so a "No" stamped on every
+    // imported row (as this importer used to write) would exclude every
+    // imported ICT SED contribution; blank, "N/A" and the like stay unset.
+    const ictRaw = ictIdx !== undefined ? cellStr(row[ictIdx]).trim().toLowerCase() : "";
+    const ict = ["yes", "y", "true"].includes(ictRaw) ? true : ["no", "n", "false"].includes(ictRaw) ? false : undefined;
     out.push({
       _id: uuidv4(),
       beneficiaryName: name,
       descriptionOfSpend: descIdx !== undefined ? cellStr(row[descIdx]) : "Grant",
-      ...(ictAnswer !== undefined ? { ictSpecificInitiative: ictAnswer } : {}),
+      ...(ict !== undefined ? { ictSpecificInitiative: ict } : {}),
       contributionType: typeIdx !== undefined ? cellStr(row[typeIdx]) || "Grant Contribution" : "Grant Contribution",
       percentBenefitingBlack: pctForWorkbook(blackPct) || 100,
       amount,
