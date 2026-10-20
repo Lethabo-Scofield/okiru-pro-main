@@ -18,6 +18,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     process.env.NODE_ENV !== 'production' &&
     req.headers['x-okiru-demo-user'] === 'demo-offline-user'
   ) {
+    // Populate the request session shape used by downstream routes. The web
+    // dev server owns the demo login session, so the proxy header is the only
+    // identity signal available to this separate API process.
+    (req.session as any).userId = 'demo-offline-user';
+    (req.session as any).organizationId = 'demo-offline-workspace';
     next();
     return;
   }

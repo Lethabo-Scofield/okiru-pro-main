@@ -43,6 +43,7 @@ import adminUsersRouter from './adminUsers.js';
 import adminAnalyticsRouter from './adminAnalytics.js';
 import feedbackRouter from './feedback.js';
 import userActivityRouter from './userActivity.js';
+import supplierDirectoryRouter from './supplierDirectory.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -227,6 +228,7 @@ export async function registerRoutes(
 
   // Admin: user management (super_admin only)
   app.use('/api/admin/users', adminUsersRouter);
+  app.use('/api/admin/supplier-directory', supplierDirectoryRouter);
   app.use('/api/admin', adminUsersRouter);
 
   // User feedback (public POST; admin GET/PATCH/DELETE)

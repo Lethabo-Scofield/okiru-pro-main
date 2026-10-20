@@ -21,6 +21,7 @@ type ChatMessage = {
   warnings?: string[];
   tables?: AdviceTable[];
   actions?: AdviceAction[];
+  suppliers?: SupplierResult[];
 };
 
 type AdviceTable = {
@@ -33,6 +34,23 @@ type AdviceAction = {
   label: string;
   route: string;
   reason?: string;
+};
+
+type SupplierResult = {
+  id: string;
+  name: string;
+  industry?: string;
+  location?: string;
+  beeLevel?: number;
+  blackOwnership?: number;
+  verificationStatus: string;
+  matchScore: number;
+  matchReasons: string[];
+  source?: string;
+  scope?: "my_suppliers" | "discover" | "all";
+  existingSupplier?: boolean;
+  freshnessStatus?: string;
+  lastVerifiedAt?: string;
 };
 
 const STARTERS = [
@@ -107,7 +125,7 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
 
   async function sendMessage(text: string) {
     const message = text.trim();
-    if (!message || !scorecardId || loading) return;
+    if (!message || loading) return;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -120,7 +138,8 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/scorecards/${encodeURIComponent(scorecardId)}/advice/chat`, {
+      const adviceContextId = scorecardId || "current";
+      const res = await fetch(`${API_BASE}/api/scorecards/${encodeURIComponent(adviceContextId)}/advice/chat`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -151,6 +170,7 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
           warnings: Array.isArray(data.warnings) ? data.warnings : [],
           tables: Array.isArray(data.tables) ? data.tables : [],
           actions: Array.isArray(data.actions) ? data.actions : [],
+          suppliers: Array.isArray(data.suppliers) ? data.suppliers : [],
         },
       ]);
     } catch (err) {
@@ -303,6 +323,33 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
                                 </tbody>
                               </table>
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {message.suppliers && message.suppliers.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/45">Supplier records</p>
+                        {message.suppliers.map((supplier) => (
+                          <div key={`${message.id}-${supplier.id}`} className="rounded-[14px] border border-white/10 bg-black/20 px-3 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-medium text-white">{supplier.name}</p>
+                                <p className="mt-0.5 text-[11px] text-white/50">
+                                  {[supplier.industry, supplier.location].filter(Boolean).join(" · ") || "Location or industry not recorded"}
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-white/[0.08] px-2 py-1 text-[10px] text-white/60">{supplier.matchScore}% match</span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-white/60">
+                              {supplier.beeLevel ? <span className="rounded-full bg-white/[0.06] px-2 py-1">Level {supplier.beeLevel}</span> : null}
+                              {supplier.blackOwnership !== undefined ? <span className="rounded-full bg-white/[0.06] px-2 py-1">Black ownership {supplier.blackOwnership}%</span> : null}
+                              <span className="rounded-full bg-white/[0.06] px-2 py-1">{supplier.verificationStatus}</span>
+                              <span className="rounded-full bg-white/[0.06] px-2 py-1">{supplier.existingSupplier ? "Existing supplier" : "Directory record"}</span>
+                            </div>
+                            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{supplier.matchReasons.join("; ")}</p>
+                            <p className="mt-1 text-[10px] text-white/35">Source: {supplier.source || "Okiru supplier records"}</p>
+                            <p className="mt-1 text-[10px] text-white/35">Freshness: {supplier.freshnessStatus || "unknown"}{supplier.lastVerifiedAt ? ` · checked ${new Date(supplier.lastVerifiedAt).toLocaleDateString()}` : ""}</p>
                           </div>
                         ))}
                       </div>

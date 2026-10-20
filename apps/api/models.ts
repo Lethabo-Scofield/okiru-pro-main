@@ -245,6 +245,28 @@ const supplierSchema = new Schema({
   certificateExpiryDate: { type: String, default: '' },
   firstProcurementDate: { type: String, default: '' },
   vatNumber: { type: String, default: '' },
+  tradingName: { type: String, default: '' },
+  province: { type: String, default: '' },
+  city: { type: String, default: '' },
+  serviceLocations: { type: [String], default: [] },
+  industry: { type: String, default: '' },
+  productsServices: { type: [String], default: [] },
+  categories: { type: [String], default: [] },
+  description: { type: String, default: '' },
+  website: { type: String, default: '' },
+  dataSource: { type: String, default: 'Okiru supplier records' },
+  sourceUrl: { type: String, default: '' },
+  sourceRecordId: { type: String, default: '' },
+  evidenceReference: { type: String, default: '' },
+  certificateType: { type: String, default: '' },
+  certificateIssueDate: { type: String, default: '' },
+  beeRecognitionPercentage: { type: Number, default: null },
+  verificationStatus: { type: String, default: 'unverified' },
+  verificationSource: { type: String, default: '' },
+  lastVerifiedAt: { type: Date, default: null },
+  dataConfidence: { type: String, default: 'unverified' },
+  accreditations: { type: [String], default: [] },
+  procurementExperience: { type: [String], default: [] },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({
@@ -522,6 +544,75 @@ export const OwnershipDataModel = mongoose.model("OwnershipData", ownershipDataS
 export const EmployeeModel = mongoose.model("Employee", employeeSchema);
 export const TrainingProgramModel = mongoose.model("TrainingProgram", trainingProgramSchema);
 export const SupplierModel = mongoose.model("Supplier", supplierSchema);
+
+// Shared public-reference directory. This is deliberately separate from
+// `suppliers`, which is tenant-scoped and may contain confidential spend,
+// certificates, and scorecard evidence.
+const supplierDirectorySchema = new Schema({
+  directoryId: { type: String, default: uuid, unique: true, index: true },
+  registeredName: { type: String, required: true },
+  normalizedName: { type: String, required: true, index: true },
+  tradingName: { type: String, default: '' },
+  registrationNumber: { type: String, default: '', index: true, sparse: true },
+  vatNumber: { type: String, default: '' },
+  province: { type: String, default: '', index: true },
+  city: { type: String, default: '' },
+  physicalLocation: { type: String, default: '' },
+  serviceCoverage: { type: [String], default: [] },
+  industry: { type: String, default: '', index: true },
+  categories: { type: [String], default: [] },
+  productsServices: { type: [String], default: [] },
+  description: { type: String, default: '' },
+  website: { type: String, default: '' },
+  publicContact: { type: Schema.Types.Mixed, default: null },
+  beeLevel: { type: Number, default: null },
+  beeRecognitionPercentage: { type: Number, default: null },
+  blackOwnership: { type: Number, default: null },
+  womenOwnership: { type: Number, default: null },
+  certificateIssueDate: { type: String, default: '' },
+  certificateExpiryDate: { type: String, default: '' },
+  verificationStatus: { type: String, enum: ['imported', 'unverified', 'evidence_available', 'independently_verified', 'expired', 'outdated', 'unknown'], default: 'imported', index: true },
+  source: { type: String, required: true, index: true },
+  sourceUrl: { type: String, default: '' },
+  sourceRecordId: { type: String, default: '', index: true },
+  sourceEvidence: { type: [Schema.Types.Mixed], default: [] },
+  lastSourceUpdatedAt: { type: Date, default: null },
+  lastImportedAt: { type: Date, default: Date.now },
+  freshnessStatus: { type: String, enum: ['current', 'outdated', 'unknown'], default: 'unknown', index: true },
+  procurementHistory: { type: [Schema.Types.Mixed], default: [] },
+  possibleDuplicateOf: { type: String, default: null },
+}, { collection: 'supplier_directory', timestamps: true });
+supplierDirectorySchema.index({ source: 1, sourceRecordId: 1 }, { unique: true, sparse: true });
+supplierDirectorySchema.index({ registeredName: 'text', tradingName: 'text', industry: 'text', description: 'text', productsServices: 'text', categories: 'text' });
+
+const supplierDirectorySourceSchema = new Schema({
+  source: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  sourceUrl: { type: String, required: true },
+  licence: { type: String, default: '' },
+  accessMethod: { type: String, enum: ['api', 'download', 'manual', 'not_authorised'], required: true },
+  enabled: { type: Boolean, default: false },
+  lastImportedAt: { type: Date, default: null },
+  lastSuccessfulImportAt: { type: Date, default: null },
+  lastError: { type: String, default: null },
+}, { collection: 'supplier_directory_sources', timestamps: true });
+
+const supplierDirectoryImportJobSchema = new Schema({
+  jobId: { type: String, default: uuid, unique: true, index: true },
+  source: { type: String, required: true, index: true },
+  status: { type: String, enum: ['queued', 'running', 'completed', 'failed', 'partial'], default: 'queued', index: true },
+  processed: { type: Number, default: 0 },
+  imported: { type: Number, default: 0 },
+  updated: { type: Number, default: 0 },
+  skipped: { type: Number, default: 0 },
+  errors: { type: [Schema.Types.Mixed], default: [] },
+  startedAt: { type: Date, default: null },
+  completedAt: { type: Date, default: null },
+}, { collection: 'supplier_directory_import_jobs', timestamps: true });
+
+export const SupplierDirectoryModel = mongoose.models.SupplierDirectory || mongoose.model('SupplierDirectory', supplierDirectorySchema);
+export const SupplierDirectorySourceModel = mongoose.models.SupplierDirectorySource || mongoose.model('SupplierDirectorySource', supplierDirectorySourceSchema);
+export const SupplierDirectoryImportJobModel = mongoose.models.SupplierDirectoryImportJob || mongoose.model('SupplierDirectoryImportJob', supplierDirectoryImportJobSchema);
 export const ProcurementDataModel = mongoose.model("ProcurementData", procurementDataSchema);
 export const EsdContributionModel = mongoose.model("EsdContribution", esdContributionSchema);
 export const SedContributionModel = mongoose.model("SedContribution", sedContributionSchema);
