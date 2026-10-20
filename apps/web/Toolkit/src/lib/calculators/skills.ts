@@ -30,6 +30,12 @@ export interface SkillsSubLine {
   isBonus?: boolean;
   /** The line's arithmetic in plain words, for the reviewer. */
   note?: string;
+  /**
+   * Whether the line measures rand spent or learners counted. Set where a
+   * method's lines are not in the original order (spend lines first), so the
+   * Skills page shows spend detail only under spend lines.
+   */
+  measure?: 'spend' | 'headcount';
 }
 
 export interface CategoryBreakdown {
@@ -272,9 +278,22 @@ function buildSkillsEAPBreakdowns(
   province: Province,
   year?: number,
 ): Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> {
+  return buildLineEAPBreakdowns([0, 1, 2].map(i => filterProgramsForSpendIndicator(programs, i)), province, year);
+}
+
+/**
+ * One EAP breakdown per Skills line, keyed by the line's index in subLines:
+ * `learnersByLine[i]` are the learners line i measures. A method whose lines
+ * are not the original three spend lines in order passes its own lists, so
+ * the per-group detail shown under a line is that line's learners.
+ */
+function buildLineEAPBreakdowns(
+  learnersByLine: TrainingProgram[][],
+  province: Province,
+  year?: number,
+): Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> {
   const result: Record<number, Record<SkillsEAPLevel, DemographicBreakdown[]>> = {};
-  for (const indicatorIdx of [0, 1, 2]) {
-    const filtered = filterProgramsForSpendIndicator(programs, indicatorIdx);
+  for (const [indicatorIdx, filtered] of learnersByLine.entries()) {
     const byLevel = {} as Record<SkillsEAPLevel, DemographicBreakdown[]>;
     for (const level of SKILLS_EAP_LEVELS) {
       // Province + year effective EAP (was national-only — same bug fixed in MC).
@@ -434,7 +453,16 @@ interface ToolkitRow {
 
 const ALL_CATEGORIES: TrainingCategoryCode[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
-function toolkitRow(prog: TrainingProgram): ToolkitRow {
+/**
+ * A training row's costs as every Empower toolkit method reads them (RCOGP and
+ * AgriBEE Generic 'toolkit', the QSE 'toolkit_qse', ICT Generic
+ * 'ict_toolkit'): its category (A–G, '' when unknown), course cost,
+ * stipend / salary, and the other costs (travel, accommodation, catering,
+ * stationery, facility, other). A row that carries only a lump-sum cost (older
+ * records, summary imports) is read as its course cost — the toolkits have no
+ * column for an unsplit total.
+ */
+function readToolkitCosts(prog: TrainingProgram): { catCode: TrainingCategoryCode | ''; course: number; salary: number; other: number } {
   const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
   const catCode: TrainingCategoryCode | '' = (ALL_CATEGORIES as string[]).includes(raw) ? (raw as TrainingCategoryCode) : '';
   const other =
@@ -442,12 +470,15 @@ function toolkitRow(prog: TrainingProgram): ToolkitRow {
     (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
   let course = prog.courseCost || 0;
   const salary = prog.salaryCost || 0;
-  // A row that carries only a lump-sum cost (older records, summary imports) is
-  // read as its course cost — the toolkit has no column for an unsplit total.
   if (course === 0 && salary === 0 && other === 0) {
     const lump = prog.totalCost ?? prog.cost ?? 0;
     if (lump > 0) course = lump;
   }
+  return { catCode, course, salary, other };
+}
+
+function toolkitRow(prog: TrainingProgram): ToolkitRow {
+  const { catCode, course, salary, other } = readToolkitCosts(prog);
   const bursary = isBursaryProgram(prog);
   const notEmployed = isNotEmployed(prog);
   const black = isBlackLearner(prog);
@@ -814,18 +845,7 @@ interface QseRow {
 }
 
 function qseRow(prog: TrainingProgram): QseRow {
-  const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
-  const catCode: TrainingCategoryCode | '' = (ALL_CATEGORIES as string[]).includes(raw) ? (raw as TrainingCategoryCode) : '';
-  const other =
-    (prog.travelCost || 0) + (prog.accommodationCost || 0) + (prog.cateringCost || 0) +
-    (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
-  let course = prog.courseCost || 0;
-  const salary = prog.salaryCost || 0;
-  // A row that carries only a lump-sum cost is read as its course cost.
-  if (course === 0 && salary === 0 && other === 0) {
-    const lump = prog.totalCost ?? prog.cost ?? 0;
-    if (lump > 0) course = lump;
-  }
+  const { catCode, course, salary, other } = readToolkitCosts(prog);
   const isFG = catCode === 'F' || catCode === 'G';
   const isBCD = catCode === 'B' || catCode === 'C' || catCode === 'D';
   return {
@@ -980,20 +1000,11 @@ interface IctRow {
   bcd: number;
   /** Course cost of categories F & G plus every other cost (travel, accommodation …). */
   fgOther: number;
+  catCode: TrainingCategoryCode | '';
 }
 
 function ictRow(prog: TrainingProgram): IctRow {
-  const raw = String(prog.categoryCode || mapLegacyCategory(prog.category)).trim().toUpperCase();
-  const cat = (ALL_CATEGORIES as string[]).includes(raw) ? raw : '';
-  const other =
-    (prog.travelCost || 0) + (prog.accommodationCost || 0) + (prog.cateringCost || 0) +
-    (prog.stationeryCost || 0) + (prog.facilityCost || 0) + (prog.otherCosts || 0);
-  let course = prog.courseCost || 0;
-  const salary = prog.salaryCost || 0;
-  if (course === 0 && salary === 0 && other === 0) {
-    const lump = prog.totalCost ?? prog.cost ?? 0;
-    if (lump > 0) course = lump;
-  }
+  const { catCode: cat, course, salary, other } = readToolkitCosts(prog);
   const black = isBlackLearner(prog);
   const isBCD = cat === 'B' || cat === 'C' || cat === 'D';
   return {
@@ -1007,6 +1018,7 @@ function ictRow(prog: TrainingProgram): IctRow {
     ae: cat !== '' && cat !== 'F' && cat !== 'G' ? course : 0,
     bcd: isBCD ? salary : 0,
     fgOther: (cat === 'F' || cat === 'G' ? course : 0) + other,
+    catCode: cat,
   };
 }
 
@@ -1031,7 +1043,8 @@ interface IctToolkitParams {
 }
 
 function scoreIctToolkitMethod(data: SkillsData, p: IctToolkitParams) {
-  const rows = (data.trainingPrograms || []).map(ictRow);
+  const programs = data.trainingPrograms || [];
+  const rows = programs.map(ictRow);
   const eap = getEffectiveEap(p.province, p.eapYear);
   const shares = data.workforceShares ?? {};
   const adminCosts = (data.trainingManagerSalary ?? 0) + (data.trainingOverheadCost ?? 0);
@@ -1119,8 +1132,39 @@ function scoreIctToolkitMethod(data: SkillsData, p: IctToolkitParams) {
       `each group against its EAP share of the ${completers} unemployed learner(s) who completed → ${absorption.toFixed(2)} (max ${fmtNum(p.absorptionMaxPts)}).`,
   ];
 
+  // The learners each line measures, in subLines order — what the per-group
+  // detail under each line shows.
+  const learnersWhere = (f: (r: IctRow) => boolean) => programs.filter((_, i) => f(rows[i]));
+  const learnersByLine = [
+    learnersWhere(r => r.demo !== null),
+    learnersWhere(r => r.demo !== null && r.disabled),
+    learnersWhere(r => r.demo !== null && r.lai),
+    learnersWhere(r => r.demo !== null && r.lai && r.notEmployed),
+    learnersWhere(r => r.demo !== null && r.lai && r.notEmployed && r.completed && r.absorbed),
+  ];
+
+  // Black learners' spend by category on the learning line's footing: F & G
+  // and other costs scaled by each group's share of the cap, so the
+  // categories add up to the spend the line recognises (before admin costs).
+  const fgFactor: Partial<Record<BlackDemo, number>> = {};
+  for (const d of BLACK_DEMOS) {
+    const fg = sum(black.filter(r => r.demo === d), r => r.fgOther);
+    fgFactor[d] = fg > 0 ? Math.min(fg, allSpend * ICT_TOOLKIT_COST_CAP * (eap[d] ?? 0)) / fg : 1;
+  }
+  const categoryBreakdown: CategoryBreakdown[] = ALL_CATEGORIES.map(code => {
+    const rs = black.filter(r => r.catCode === code);
+    const spend = sum(rs, r => r.ae + r.bcd + r.fgOther);
+    const recognisedSpend = sum(rs, r => r.ae + r.bcd + r.fgOther * (fgFactor[r.demo as BlackDemo] ?? 1));
+    return {
+      code, label: CATEGORY_LABELS[code].label, examples: CATEGORY_LABELS[code].examples,
+      spend, recognisedSpend, cap: code === 'F' || code === 'G' ? ICT_TOOLKIT_COST_CAP : undefined,
+      capApplied: recognisedSpend < spend - 0.005,
+    };
+  });
+
   return {
     learning, disabled, lai: lai.pts, unemployedLai: unemployedLai.pts, absorption, notes,
+    learnersByLine, categoryBreakdown,
     rawStats: {
       blackSpend: round2(learningRecognised),
       bursarySpend: 0,
@@ -1270,13 +1314,13 @@ export function calculateSkillsScore(
     });
     const base = t.learning + t.bursary + t.disabled + t.learnerships;
     const lines: SkillsSubLine[] = [
-      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0] },
+      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0], measure: 'spend' },
       sc.unemployedLearnersLine === true
-        ? { name: "Number of unemployed Black people in training", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: t.bursary, note: t.notes[1] }
-        : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: t.bursary, note: t.notes[1] },
-      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[2] },
-      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.learnerships, note: t.notes[3] },
-      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% ${sc.absorptionBasis === 'laiCompleters' ? 'of black learners who completed one' : 'of headcount'}`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4] },
+        ? { name: "Number of unemployed Black people in training", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: t.bursary, note: t.notes[1], measure: 'headcount' }
+        : { name: "Expenditure on bursaries for Black students", target: `${(bursaryTargetPct * 100).toFixed(1)}% of payroll`, weighting: bursaryMaxPts, score: t.bursary, note: t.notes[1], measure: 'spend' },
+      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[2], measure: 'spend' },
+      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.learnerships, note: t.notes[3], measure: 'headcount' },
+      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(1)}% ${sc.absorptionBasis === 'laiCompleters' ? 'of black learners who completed one' : 'of headcount'}`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4], measure: 'headcount' },
     ];
     return {
       learningProgrammes: round2(t.learning),
@@ -1289,7 +1333,15 @@ export function calculateSkillsScore(
       subMinimumMet: subMinimumMetFor(base),
       categoryBreakdown: t.categoryBreakdown,
       subLines: lines.map(l => ({ ...l, score: round2(l.score), exactScore: l.score })),
-      eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
+      // AgriBEE's second line counts unemployed black learners in
+      // learnerships, so its breakdown is theirs, not the bursary learners'.
+      eapBreakdowns: isQse ? {} : sc.unemployedLearnersLine === true
+        ? buildLineEAPBreakdowns([
+          trainingPrograms.filter(isBlackLearner),
+          trainingPrograms.filter(prog => isBlackLearner(prog) && toolkitRow(prog).lai && isNotEmployed(prog)),
+          trainingPrograms.filter(prog => isBlackLearner(prog) && prog.isDisabled),
+        ], province, eapYear)
+        : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
       eapProvince: province,
       rawStats: {
         ...t.rawStats,
@@ -1320,11 +1372,11 @@ export function calculateSkillsScore(
     });
     const base = t.learning + t.disabled + t.lai + t.unemployedLai;
     const lines: SkillsSubLine[] = [
-      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0] },
-      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[1] },
-      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.lai, note: t.notes[2] },
-      { name: "Number of unemployed Black people participating in learnerships, apprenticeships or internships", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: t.unemployedLai, note: t.notes[3] },
-      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(0)}% of unemployed completers`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4] },
+      { name: "Expenditure on learning programmes for Black people", target: `${(overallTargetPct * 100).toFixed(1)}% of payroll`, weighting: learningMaxPts, score: t.learning, note: t.notes[0], measure: 'spend' },
+      { name: "Expenditure on learning programmes for disabled black employees", target: `${(disabledTargetPct * 100).toFixed(1)}% of payroll`, weighting: disabledMaxPts, score: t.disabled, note: t.notes[1], measure: 'spend' },
+      { name: "Number of ALL Black people participating in learnerships, apprenticeships or internships", target: `${learnershipTargetPct.toFixed(1)}% of headcount`, weighting: learnershipMaxPts, score: t.lai, note: t.notes[2], measure: 'headcount' },
+      { name: "Number of unemployed Black people participating in learnerships, apprenticeships or internships", target: `${(bursaryTargetPct * 100).toFixed(1)}% of headcount`, weighting: bursaryMaxPts, score: t.unemployedLai, note: t.notes[3], measure: 'headcount' },
+      { name: "Absorption of black people after learnerships, apprenticeships or internships", target: `${absorptionTargetPct.toFixed(0)}% of unemployed completers`, weighting: absorptionMaxPts, score: t.absorption, isBonus: true, note: t.notes[4], measure: 'headcount' },
     ];
     return {
       learningProgrammes: round2(t.learning),
@@ -1335,9 +1387,11 @@ export function calculateSkillsScore(
       total: round2(clampScore(base + t.absorption, maxPoints)),
       exactTotal: clampScore(base + t.absorption, maxPoints),
       subMinimumMet: subMinimumMetFor(base),
-      categoryBreakdown: applyCapToSpend(accumulateSpend(trainingPrograms).byCategory, fgCap, adminCap).breakdown,
+      // On the ICT method's own footing, and each line's breakdown keyed to
+      // that line (its lines are not the Codes method's three spend lines).
+      categoryBreakdown: t.categoryBreakdown,
       subLines: lines.map(l => ({ ...l, score: round2(l.score) })),
-      eapBreakdowns: isQse ? {} : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear),
+      eapBreakdowns: isQse ? {} : buildLineEAPBreakdowns(t.learnersByLine, province, eapYear),
       eapProvince: province,
       rawStats: {
         ...t.rawStats,

@@ -1051,7 +1051,9 @@ export default function SkillsDevelopment() {
               <tbody className="divide-y divide-border">
                 {score.subLines.map((sl, idx) => {
                   const isExpanded = expandedSkillRows.has(idx);
-                  const isSpendRow = idx <= 2;
+                  // A method whose lines are not the three spend lines first
+                  // (ICT Generic, AgriBEE) says which lines measure spend.
+                  const isSpendRow = sl.measure ? sl.measure === 'spend' : idx <= 2;
                   const hasEapBreakdown = !isQse && isSpendRow && !!score.eapBreakdowns[idx];
                   const categoryRows = score.categoryBreakdown.filter(cb => cb.spend > 0);
                   const eapByLevel = score.eapBreakdowns[idx];
