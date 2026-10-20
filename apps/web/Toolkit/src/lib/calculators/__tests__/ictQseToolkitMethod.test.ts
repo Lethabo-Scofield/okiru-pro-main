@@ -110,13 +110,15 @@ describe('procurement: the first-time supplier earns the 1.2 factor', () => {
     hasThreeYearContract: false, isFirstTimeSupplier: true, spend: 1_000_000,
   };
   it('where the sector reads the answer (ICT QSE)', () => {
-    expect(qualifiesForEnhancedRecognition(s, 'black_owned_small_supplier', true)).toBe(true);
+    expect(ICT_QSE.procurement.enhancedRecognitionRule).toBe('black_owned_small_supplier_or_first_time');
+    expect(qualifiesForEnhancedRecognition(s, 'black_owned_small_supplier_or_first_time')).toBe(true);
     const r = calculateProcurementScore({ id: 'p', clientId: 'c', tmps: 10_000_000, suppliers: [s] }, ICT_QSE);
     expect(r.recognisedSpend).toBeCloseTo(1_000_000 * 1.35 * 1.2, 2);
   });
   it('and not where it does not', () => {
     expect(qualifiesForEnhancedRecognition(s)).toBe(false);
-    const r = calculateProcurementScore({ id: 'p', clientId: 'c', tmps: 10_000_000, suppliers: [s] }, RCOGP_QSE);
+    const plain = { ...ICT_QSE, procurement: { ...ICT_QSE.procurement, enhancedRecognitionRule: 'black_owned_small_supplier' as const } };
+    const r = calculateProcurementScore({ id: 'p', clientId: 'c', tmps: 10_000_000, suppliers: [s] }, plain);
     expect(r.recognisedSpend).toBeCloseTo(1_000_000 * 1.35, 2);
   });
 });
@@ -164,7 +166,11 @@ describe('the ICT QSE config', () => {
     expect(ICT_QSE.procurement.allSuppliersIgnoreEmpoweringFlag).toBe(true);
   });
   it('leaves RCOGP QSE on its own rules', () => {
-    expect(RCOGP_QSE.skills.method).toBeUndefined();
+    // The two QSE templates share the Skills arithmetic; only the absorption
+    // denominator differs, by each sector's own ruling.
+    expect(RCOGP_QSE.skills.method).toBe('toolkit_qse');
+    expect(RCOGP_QSE.skills.absorptionBasis).toBe('unemployedLaiCompleters');
+    expect(ICT_QSE.skills.absorptionBasis).toBe('absorbedLearners');
     expect(RCOGP_QSE.discounting.qseRequiresAllPriorityElements).toBeUndefined();
     expect(RCOGP_QSE.managementControl?.qseCombineExcoSenior).toBeUndefined();
     expect(RCOGP_QSE.sed.requireIctSpecificInitiative).toBeUndefined();
