@@ -123,7 +123,7 @@ const ENHANCED_RECOGNITION = 1.2;
 /** Procurement Data[QSE Spend] / [EME Spend]: "Years of being a supplier" ≤ 5. */
 const GRADUATION_WINDOW_YEARS = 5;
 
-export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'flow_through';
+export type EnhancedRecognitionRule = 'black_owned_small_supplier' | 'black_owned_small_supplier_or_first_time' | 'flow_through';
 
 /**
  * The 1.2 recognition factor (Procurement Data, the "Qualify for 1.2
@@ -152,6 +152,11 @@ export function qualifiesForEnhancedRecognition(
   if (rule === 'black_owned_small_supplier') {
     return small && bo >= OWNED_51
       && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract));
+  }
+  // FSC toolkit: a first-time supplier earns it too.
+  if (rule === 'black_owned_small_supplier_or_first_time') {
+    return small && bo >= OWNED_51
+      && (Boolean(sup.isSupplierDevRecipient) || Boolean(sup.hasThreeYearContract) || Boolean(sup.isFirstTimeSupplier));
   }
   const ft = Number(sup.flowThroughOwnership) || 0;
   if (bo >= OWNED_51 && ft >= OWNED_51) return true;

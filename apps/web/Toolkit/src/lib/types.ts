@@ -128,6 +128,11 @@ export interface Shareholder {
    * stated nil.
    */
   outstandingDebt?: number;
+  /**
+   * FSC toolkit: when the acquisition debt was taken on (ISO). Its term to the
+   * data date sets the graduation factor the net value is scored with.
+   */
+  loanDate?: string;
 }
 
 export interface OwnershipData {
@@ -238,6 +243,13 @@ export interface TrainingProgram {
   cost?: number;  // Deprecated: use totalCost
   isEmployed?: boolean;  // Deprecated: use employmentStatus
   isBlack?: boolean;  // Deprecated: computed from race
+
+  /**
+   * FSC toolkit: the learner's management position (Skills Data[Management
+   * Position *]): Executive / Senior / Middle / Junior Management,
+   * Non-Management or Unemployed. FSC measures spend per management level.
+   */
+  managementPosition?: string;
 }
 
 export interface SkillsData {
@@ -265,6 +277,12 @@ export interface SkillsData {
    * overhead to each group by these shares. Filled from Management Control.
    */
   workforceShares?: Record<string, number>;
+  /**
+   * FSC toolkit: the measurement year's payroll per management level
+   * ('Client Information'!I20:I23). FSC sets each level's spend target as a
+   * share of that level's payroll.
+   */
+  payrollByLevel?: { execSenior: number; middle: number; junior: number; nonManagement: number };
 }
 
 // YES 4 Youth Initiative
@@ -344,6 +362,15 @@ export interface Supplier {
   isEmpoweringSupplier: boolean;         // Mandatory for Generic/QSE
   isSupplierDevRecipient: boolean;       // Links to ESD
   hasThreeYearContract: boolean;         // For graduation bonus
+  /**
+   * FSC toolkit supplier flags (Procurement Data): a first-time supplier (one
+   * of the 1.2 recognition-factor grounds), and the stock broker / fund
+   * manager / intermediary suppliers its two bonus lines count.
+   */
+  isFirstTimeSupplier?: boolean;
+  isStockBroker?: boolean;
+  isFundManager?: boolean;
+  isIntermediary?: boolean;
   
   // Dates
   firstProcurementDate?: string;
@@ -411,6 +438,12 @@ export interface ProcurementData {
    * graduation clause cannot be judged and does not apply.
    */
   measurementPeriodEnd?: string;
+  /**
+   * FSC toolkit: "Total allocated trade value" ('Procurement Scorecard'!E5) —
+   * what the intermediated-professional and stock-broker bonus lines are
+   * measured against.
+   */
+  allocatedTradeValue?: number;
   suppliers: Supplier[];
   // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }
@@ -440,7 +473,9 @@ export type ESDContributionType =
   | 'professional_services_discounted'
   | 'employee_secondment'
   | 'employee_mentorship'
-  | 'non_core_business_transfer';
+  | 'non_core_business_transfer'
+  /** FSC: bad debts written off on ESD financing (scored only where the sector config recognises it). */
+  | 'bad_debt';
 
 export interface Contribution {
   id: string;
@@ -500,6 +535,18 @@ export interface Contribution {
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
+
+  /**
+   * FSC toolkit (ESD Data): an Enterprise Development contribution supporting
+   * black stockbrokers, fund managers or intermediaries — the FSC ED bonus line.
+   */
+  supportsBlackFinancialIntermediary?: boolean;
+  /**
+   * FSC toolkit (SED & CE Data[Pillar]): which FSC line a socio-economic row
+   * counts on — SED proper, Consumer Education, or the Fundisa Retail Fund.
+   * Absent = SED.
+   */
+  sedPillar?: 'sed' | 'consumer_education' | 'fundisa';
 }
 
 export interface ESDData {
@@ -570,6 +617,8 @@ export interface AfsData {
   marketPenetrationPolicies?: number;
   /** SAIA communicated reference number of policies (denominator). */
   saiaCommunicatedPolicies?: number;
+  /** FSC toolkit (LTI): credit-life policies on book — up to 0.25 extra market-penetration points. */
+  creditLifePolicies?: number;
   /** % of polygons covered (Transactional Accesses; target 80%). */
   transactionalAccessCoverage?: number;
   // ---- Short-Term Insurers (FS703) ----
@@ -581,6 +630,24 @@ export interface AfsData {
   commercialOther?: boolean;
   /** Meets the Insurance Policies target (yes/no simplified from SAIA policy count). */
   insurancePoliciesCompliant?: boolean;
+  /**
+   * FSC toolkit (STI, 'AFS Scorecard - Short Term'): the line of products
+   * offered, which sets the appropriate-product rows and the insurance-policy
+   * split (personal 10; commercial 10; both 8 + 2).
+   */
+  stiProductLines?: 'Personal' | 'Commercial' | 'Personal and Commercial';
+  /** Granted exemption by the FSTC: the appropriate-product points fall away. */
+  stiExempt?: boolean;
+  /** Target number of personal-line policies. */
+  stiPersonalTargetPolicies?: number;
+  /** Target number of commercial-line policies. */
+  stiCommercialTargetPolicies?: number;
+  /**
+   * Qualifying policies by product ('AFS Data - Short Term'): the product
+   * (e.g. 'Personal - Motor Vehicle', 'Commercial - Equipment'), the number of
+   * qualifying policies and their compliance share (0–1).
+   */
+  stiPolicies?: Array<{ product: string; qualifyingPolicies: number; compliance: number }>;
 }
 
 /**

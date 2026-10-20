@@ -41,10 +41,12 @@ export const FSC_GENERIC_SCORECARD_TYPE = 'Generic' as const;
  *
  * The aggregate `calculateSkillsScore` model maps the four managed-level Black +
  * Black-women sub-totals onto the single `learningProgrammesMaxPts` (11 pts). Full
- * per-level / African computation requires the per-trainee management band and an
- * EAP-African target on each `TrainingProgram`, which are not present in the current
- * Toolkit input model (owned by the workbook/import worker). These verified targets
- * are encoded here as the authoritative reference for that future wiring.
+ * per-level / African computation requires each level's payroll
+ * (`SkillsData.payrollByLevel`) and each trainee's management position
+ * (`TrainingProgram.managementPosition`), which no screen or import captures yet.
+ * calculators/fscToolkit.ts scores per level when a record carries both, and
+ * otherwise scores skills with this aggregate model (findings/fsc.md, "Inputs the
+ * live app does not capture yet").
  */
 export const FSC_SKILLS_PER_LEVEL_TARGETS = {
   seniorExec: { subTotalPts: 2, blackTargetPct: 0.02, blackPts: 1, blackWomenTargetPct: 0.01, blackWomenPts: 0.5, africanPts: 0.5 },
@@ -329,9 +331,19 @@ export function sectorConfigToFscCalculatorConfig(sc: SectorConfig): CalculatorC
   };
 }
 
-/** Complete FSC Generic (Others) config — use for scorecard, tests, and explicit sector wiring. */
-export const FSC_GENERIC_CALCULATOR_CONFIG: CalculatorConfig =
-  sectorConfigToFscCalculatorConfig(FSC_GENERIC);
+/**
+ * Complete FSC Generic (Others) config — use for scorecard, tests, and explicit sector wiring.
+ *
+ * The scorecard scores FSC the way the FSC Empower toolkit (BBBEE Toolkit
+ * (FSC) Template v1.0) does — checked line by line against Excel
+ * (docs/toolkits/parity/findings/fsc.md): `fscToolkit` routes calculateScorecard
+ * to calculators/fscToolkit.ts. The fields above still configure the
+ * individual pillar calculators, which other callers use directly.
+ */
+export const FSC_GENERIC_CALCULATOR_CONFIG: CalculatorConfig = {
+  ...sectorConfigToFscCalculatorConfig(FSC_GENERIC),
+  fscToolkit: { subSector: 'Others' },
+};
 
 export function isFscGenericSector(
   sectorCode: string,

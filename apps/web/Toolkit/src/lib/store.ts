@@ -69,6 +69,7 @@ import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
 import { calculateAfsScore } from './calculators/afs';
 import { calculateEmpowermentFinancingScore } from './calculators/empowermentFinancing';
+import { calculateFscScorecard } from './calculators/fscToolkit';
 import {
   calculateTransportQseManagement,
   calculateTransportQseEmploymentEquity,
@@ -664,6 +665,10 @@ export function calculateScorecard(
   }
 
   assertSectorConfigLoaded(cfg, state.client);
+  // FSC scores the way its own Empower toolkit does (calculators/fscToolkit.ts).
+  if (cfg.fscToolkit && !(overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0)) {
+    return calculateFscScorecard(state, cfg);
+  }
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
   const transportLarge = !transportQse && isTransportLargeSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;

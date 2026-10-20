@@ -236,7 +236,7 @@ export interface CalculatorConfig {
      *    black owned, or a QSE/EME ≥51% flow-through SD beneficiary on a 3-year
      *    contract.
      */
-    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'flow_through';
+    enhancedRecognitionRule?: 'black_owned_small_supplier' | 'black_owned_small_supplier_or_first_time' | 'flow_through';
     /**
      * RCOGP Generic only: a Generic supplier first procured as a QSE (EME),
      * ≥51% black and ≥51% flow-through black owned, still counts on the QSE
@@ -275,6 +275,14 @@ export interface CalculatorConfig {
      * ownership. Other templates do not gate the amount this way.
      */
     applyBeneficiaryQualification?: boolean;
+    /**
+     * FSC: contribution types the sector's toolkit recognises beyond the
+     * shared ESD table, with their benefit factor — the FSC toolkit's "Bad Debt
+     * written-offs incurred from the financing of Enterprise and Supplier
+     * Development" at 100% ('ESD and SED Calcs'!D3). Absent elsewhere: an
+     * unlisted type stays unrecognised (0).
+     */
+    additionalContributionFactors?: Record<string, number>;
   };
   sed: {
     maxPoints: number;
@@ -387,6 +395,16 @@ export interface CalculatorConfig {
   };
   benefitFactors: { type: string; factor: number }[];
   industryNorms: { name: string; norm: string }[];
+  /**
+   * FSC only: score the scorecard the way the FSC Empower toolkit (BBBEE
+   * Toolkit (FSC) Template v1.0) does, checked line by line against Excel —
+   * per-level skills spend against each level's payroll, management-control
+   * points that move between bands by who is employed in them, the stock
+   * broker / intermediary procurement bonuses, SED and consumer education
+   * lines, and level thresholds scaled to the scorecard's own base points.
+   * Absent on every other sector, which scores as before.
+   */
+  fscToolkit?: { subSector: 'Others' | 'Banks' | 'LTI' | 'STI' };
 }
 
 export interface User {
