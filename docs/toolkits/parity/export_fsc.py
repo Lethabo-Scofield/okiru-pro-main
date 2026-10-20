@@ -48,7 +48,7 @@ TABLES = {
     "tblSkillsData": ["Data Date", "Learner Name *", "Black", "Black Females?", "Africans?", "Disabled.calcs",
                       "Management Position.calcs", "Cat A-F Spend", "Salaries (BCD)", "Cat G Spend",
                       "Other Legitimate Cost", "All Spend", "LAI", "Completed LAI (Unemployed)",
-                      "Absorbed LAI [Unemployed]"],
+                      "Absorbed LAI [Unemployed]", "Within FY?"],
     "tblPPData": ["Data Date", "Supplier Name *", f"All Spend{NL}adjusted", _SCEN("Company Size"), _SCEN("Black Ownership"),
                   _SCEN("Black Female ownership"), _SCEN("Black Designated Group  ownership"),
                   _SCEN("Supplier development recipient? (Yes/No)"), _SCEN("3 year contract in place? (Yes/No)"),

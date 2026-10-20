@@ -286,11 +286,16 @@ interface SkillRow {
  * 'Skills Toolkit'!D3 and D6 — locked cells holding another company's
  * leviable amount and headcount — instead of the workbook's own
  * (Financials!I3, 'Client Information'!E16).
+ *
+ * `asToolkit` computes the same lines the toolkit's faulty way (its own
+ * "Within FY?" answers, D3 and D6): the referee overrides a line only when
+ * that replica reproduces the toolkit's figure, so a difference with any
+ * other cause is never hidden behind these faults.
  */
-function refereeSkills(sheets: ToolkitSheets, tables: ToolkitTables) {
+function refereeSkills(sheets: ToolkitSheets, tables: ToolkitTables, asToolkit = false) {
   const v = (ref: string) => n(sheets['Skills Toolkit']?.[ref]?.v);
   const rows: SkillRow[] = tableRows(tables, 'tblSkillsData')
-    .filter((r) => !blankish(r['Data Date']))
+    .filter((r) => !blankish(r['Data Date']) && (!asToolkit || yes(r['Within FY?'])))
     .map((r) => ({
       black: yes(r['Black']), female: yes(r['Black Females?']), african: yes(r['Africans?']),
       disabled: yes(r['Disabled.calcs']), position: String(r['Management Position.calcs'] ?? '').trim(),
@@ -300,8 +305,8 @@ function refereeSkills(sheets: ToolkitSheets, tables: ToolkitTables) {
       completedU: yes(r['Completed LAI (Unemployed)']), absorbedU: yes(r['Absorbed LAI [Unemployed]']),
       name: String(r['Learner Name *'] ?? '').trim(),
     }));
-  const leviable = n(sheets['Financials']?.I3?.v);
-  const headcount = n(sheets['Client Information']?.E16?.v);
+  const leviable = asToolkit ? v('D3') : n(sheets['Financials']?.I3?.v);
+  const headcount = asToolkit ? v('D6') : n(sheets['Client Information']?.E16?.v);
   const sum = (f: (r: SkillRow) => boolean, val: (r: SkillRow) => number) => rows.filter(f).reduce((a, r) => a + val(r), 0);
   const bands: Array<{ row: number; o: number; inBand: (r: SkillRow) => boolean }> = [
     { row: 51, o: 0, inBand: (r) => r.position === 'Senior Management' || r.position === 'Executive Management' },
@@ -347,8 +352,10 @@ function refereeSkills(sheets: ToolkitSheets, tables: ToolkitTables) {
  * Preferential procurement from the toolkit's own Procurement Data rows, with
  * the 1.2 recognition factor's first-time-supplier test reading the
  * first-time-supplier answer (the toolkit reads the 3-year-contract column).
+ * `asToolkit` reads the first-time test the toolkit's way, as the replica
+ * that must reproduce the toolkit's lines before the referee overrides them.
  */
-function refereeProcurement(sheets: ToolkitSheets, tables: ToolkitTables) {
+function refereeProcurement(sheets: ToolkitSheets, tables: ToolkitTables, asToolkit = false) {
   const v = (ref: string) => n(sheets['Procurement Scorecard']?.[ref]?.v);
   const S = (k: string) => `${k}\n[Scenario].Calcs`;
   let all = 0, qse = 0, eme = 0, bo = 0, bwo = 0, bdg = 0, inter = 0, broker = 0, fund = 0;
@@ -361,7 +368,8 @@ function refereeProcurement(sheets: ToolkitSheets, tables: ToolkitTables) {
     const sd = yes(r[S('Supplier development recipient? (Yes/No)')]);
     const three = yes(r[S('3 year contract in place? (Yes/No)')]);
     const scenarioFirst = r['First-time supplier? (Yes/No)\n[Scenario]'];
-    const first = blankish(scenarioFirst) ? yes(r['First-time supplier? (Yes/No)']) : yes(scenarioFirst);
+    const fallback = asToolkit ? three : yes(r['First-time supplier? (Yes/No)']);
+    const first = blankish(scenarioFirst) ? fallback : yes(scenarioFirst);
     const enhanced = small && own >= 0.51 && (sd || three || first);
     if (small && own >= 0.51 && first && !sd && !three) firstTimeOnly += 1;
     const x = n(r['All Spend\nadjusted']) * (enhanced ? 1.2 : 1);
@@ -410,15 +418,34 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
         set(27, own.nvPts, `Toolkit formula fault: the net value nets indebted stakes the same faulty way${own.lateLoan ? ', and a loan in its tenth year or later finds no graduation factor and scores nothing' : ''}. Reworked: ${own.nvPts.toFixed(2)}; the toolkit shows ${F(27).toFixed(2)}.`);
       }
     }
+    // Skills: the training rows its "Within FY?" test drops (dated in the
+    // year, answered "No"), and whether D3 / D6 differ from the workbook's own.
+    const skillRows = tableRows(tables, 'tblSkillsData');
+    const dropped = skillRows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => !blankish(r['Data Date']) && !yes(r['Within FY?']))
+      .map(({ i }) => i + 1);
+    const droppedText = dropped.length === 0 ? '' : `its "Within FY?" test compares each training row with a cell that moves down the Validation sheet, so training row${dropped.length > 1 ? 's' : ''} ${dropped.join(', ')} drop${dropped.length > 1 ? '' : 's'} out`;
+    const lockedLeviable = Math.abs(v('Skills Toolkit', 'D3') - v('Financials', 'I3')) > 0.5;
+    const lockedHeadcount = Math.abs(v('Skills Toolkit', 'D6') - v('Client Information', 'E16')) > 0.5;
+    const skillsAsToolkit = refereeSkills(sheets, tables, true);
     for (const [row, value] of Array.from(refereeSkills(sheets, tables).entries())) {
-      const frozen = row === 55 || row === 56 || row === 57;
-      set(row, value, frozen
-        ? `Toolkit formula faults: this line measures against 'Skills Toolkit'!${row === 57 ? 'D6 (headcount 14,212)' : 'D3 (leviable amount R6.53bn)'} — a locked cell holding another company's figure — and its "Within FY?" test drops training rows 6, 13 and 25. Against the workbook's own ${row === 57 ? 'headcount' : 'leviable amount'}, every row counted: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`
-        : `Toolkit formula fault: its "Within FY?" test compares each training row with a cell that moves down the Validation sheet, so rows 6, 13 and 25 drop out. Every row counted: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
+      // Override only where the toolkit's own (faulty) computation is reproduced.
+      if (Math.abs((skillsAsToolkit.get(row) ?? NaN) - F(row)) > 1e-6) continue;
+      const locked = (row === 55 || row === 56) && lockedLeviable
+        ? `this line measures against 'Skills Toolkit'!D3 (leviable amount R${(v('Skills Toolkit', 'D3') / 1e9).toFixed(2)}bn), a locked cell holding another company's figure, instead of the workbook's own (R${(v('Financials', 'I3') / 1e6).toFixed(2)}m)`
+        : row === 57 && lockedHeadcount
+          ? `this line measures against 'Skills Toolkit'!D6 (headcount ${String(Math.round(v('Skills Toolkit', 'D6'))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}), a locked cell holding another company's figure, instead of the workbook's own (${v('Client Information', 'E16')})`
+          : '';
+      const why = [locked, droppedText].filter(Boolean);
+      if (why.length === 0) continue;
+      set(row, value, `Toolkit formula fault${why.length > 1 ? 's' : ''}: ${why.join('; and ')}. ${locked ? 'Against the workbook\'s own figure' : 'Every row in the year counted'}${locked && droppedText ? ', every row in the year counted' : ''}: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
     }
     const pp = refereeProcurement(sheets, tables);
+    const ppAsToolkit = refereeProcurement(sheets, tables, true);
     if (pp.firstTimeOnly > 0) {
       for (const [row, value] of Array.from(pp.lines.entries())) {
+        if (Math.abs((ppAsToolkit.lines.get(row) ?? NaN) - F(row)) > 1e-6) continue;
         set(row, value, `Toolkit formula fault: the 1.2 recognition factor's first-time-supplier test reads the 3-year-contract column, so ${pp.firstTimeOnly} first-time black-owned QSE/EME supplier(s) lose it. With it: ${value.toFixed(2)}; the toolkit shows ${F(row).toFixed(2)}.`);
       }
     }
