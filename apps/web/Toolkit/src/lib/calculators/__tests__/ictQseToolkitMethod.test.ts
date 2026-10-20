@@ -126,8 +126,8 @@ describe('procurement: the first-time supplier earns the 1.2 factor', () => {
 describe('SED: ICT-specific initiatives only', () => {
   const sed: SEDData = {
     id: 'sed', clientId: 'c', contributions: [
-      { id: 'a', beneficiary: 'A', type: 'grant', amount: 5_000, category: 'socio_economic', ictSpecificInitiative: true },
-      { id: 'b', beneficiary: 'B', type: 'grant', amount: 5_000, category: 'socio_economic', ictSpecificInitiative: false },
+      { id: 'a', beneficiary: 'A', type: 'grant', amount: 5_000, category: 'socio_economic', isSectorSpecificInitiative: true },
+      { id: 'b', beneficiary: 'B', type: 'grant', amount: 5_000, category: 'socio_economic', isSectorSpecificInitiative: false },
     ],
   } as SEDData;
   it('a contribution that is not ICT-specific counts 0 (SED Data[Recognised Amount])', () => {
@@ -146,14 +146,22 @@ describe('SED: ICT-specific initiatives only', () => {
     const r = calculateSedScore(unanswered, 1_000_000, ICT_QSE);
     expect(r.total).toBeCloseTo(6, 6);
     // …and says so: the No and the unanswered row are reported, not dropped silently.
-    expect(r.notIctSpecific).toEqual({ spend: 10_000, count: 2 });
+    expect(r.notSectorSpecific).toEqual({ spend: 10_000, count: 2, rule: 'require_yes' });
     expect(r.subLines[0].note).toContain('R10.0k across 2 contributions not counted: not marked as an ICT-specific initiative');
   });
   it('a sector without the rule counts both, and reports nothing about ICT', () => {
-    const cfg = { ...ICT_QSE, sed: { ...ICT_QSE.sed, requireIctSpecificInitiative: undefined } };
+    const cfg = { ...ICT_QSE, sed: { ...ICT_QSE.sed, sectorSpecificInitiatives: undefined } };
     const r = calculateSedScore(sed, 1_000_000, cfg);
     expect(r.total).toBeCloseTo(12, 6);
-    expect(r.notIctSpecific).toBeUndefined();
+    expect(r.notSectorSpecific).toBeUndefined();
+  });
+  it("ICT Generic's reading of the same answer drops only the No, and still counts the unanswered", () => {
+    const cfg = { ...ICT_QSE, sed: { ...ICT_QSE.sed, sectorSpecificInitiatives: 'exclude_no' as const } };
+    const unanswered = { ...sed, contributions: [...sed.contributions, { id: 'c', beneficiary: 'C', type: 'grant', amount: 5_000, category: 'socio_economic' }] } as SEDData;
+    const r = calculateSedScore(unanswered, 1_000_000, cfg);
+    expect(r.total).toBeCloseTo(12, 6); // R10,000 of the R10,000 target
+    expect(r.notSectorSpecific).toEqual({ spend: 5_000, count: 1, rule: 'exclude_no' });
+    expect(r.subLines[0].note).toContain('R5.0k not counted: not a sector-specific initiative');
   });
 });
 
@@ -173,6 +181,7 @@ describe('the ICT QSE config', () => {
     expect(ICT_QSE.skills.absorptionBasis).toBe('absorbedLearners');
     expect(RCOGP_QSE.discounting.qseRequiresAllPriorityElements).toBeUndefined();
     expect(RCOGP_QSE.managementControl?.qseCombineExcoSenior).toBeUndefined();
-    expect(RCOGP_QSE.sed.requireIctSpecificInitiative).toBeUndefined();
+    expect(RCOGP_QSE.sed.sectorSpecificInitiatives).toBeUndefined();
+    expect(ICT_QSE.sed.sectorSpecificInitiatives).toBe('require_yes');
   });
 });

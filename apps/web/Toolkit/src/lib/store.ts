@@ -1608,11 +1608,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         contributions: (data.sed?.contributions || []).map((c: any) => ({
           ...c,
           amount: c.amount || 0,
-          // ICT SED counts sector-specific initiatives only, so an explicit
-          // "No" removes a row. Kept unset unless someone answered: never
-          // read from `ictSpecificInitiative`, which the api schema defaults
-          // to false and the projection coerces to false when blank.
-          isSectorSpecificInitiative: coerceYesNoOrUnset(c.isSectorSpecificInitiative),
+          // ICT and AgriBEE SED count sector-specific initiatives only. Kept
+          // unset unless someone answered. A record from before the one
+          // answer existed carries `ictSpecificInitiative` instead: only its
+          // Yes is read — its false is the api schema's default (and what the
+          // importer stamped on every row), never an answer.
+          isSectorSpecificInitiative: coerceYesNoOrUnset(c.isSectorSpecificInitiative)
+            ?? (coerceYesNo(c.ictSpecificInitiative) ? true : undefined),
         })),
       };
 

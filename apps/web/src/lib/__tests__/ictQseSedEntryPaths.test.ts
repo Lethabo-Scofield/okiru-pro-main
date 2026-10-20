@@ -1,6 +1,6 @@
 /**
  * ICT QSE scores a SED contribution only when it is marked an ICT-specific
- * initiative (sed.requireIctSpecificInitiative, the Empower toolkit's
+ * initiative (sed.sectorSpecificInitiatives 'require_yes', the Empower toolkit's
  * SED Data[Recognised Amount] = IF([ICT Specific Initiative?]="Yes", …, 0)).
  * That makes the answer load-bearing on every path a contribution enters by,
  * so each path is run here to the score: the Excel import and the workbook
@@ -74,13 +74,15 @@ describe("ICT QSE SED: the ICT-specific answer survives every entry path to the 
 
     const projected = project(sections);
     const contributions = projected.sedContributions as Array<Contribution>;
-    expect(contributions.map((c) => c.ictSpecificInitiative)).toEqual([true, false, undefined]);
+    // The workbook's "ICT-Specific?" column becomes the one answer the scorer reads.
+    expect(contributions.map((c) => c.isSectorSpecificInitiative)).toEqual([true, false, undefined]);
+    expect(contributions.some((c) => "ictSpecificInitiative" in c)).toBe(false);
 
     // Only the Yes counts: R5,000 ÷ R10,000 × 12 = 6. Before the import read
     // the column it wrote "No" on every row, and this scored 0.
     const r = score(contributions);
     expect(r.total).toBeCloseTo(6, 6);
-    expect(r.notIctSpecific).toEqual({ spend: 5_000, count: 2 });
+    expect(r.notSectorSpecific).toEqual({ spend: 5_000, count: 2, rule: "require_yes" });
     expect(r.subLines[0].note).toContain("R5.0k across 2 contributions not counted: not marked as an ICT-specific initiative");
   });
 
@@ -95,7 +97,7 @@ describe("ICT QSE SED: the ICT-specific answer survives every entry path to the 
     const contributions = project(sections).sedContributions;
     const r = score(contributions);
     expect(r.total).toBe(0);
-    expect(r.notIctSpecific).toEqual({ spend: 5_000, count: 1 });
+    expect(r.notSectorSpecific).toEqual({ spend: 5_000, count: 1, rule: "require_yes" });
     // A sector that does not ask the question still counts the row in full.
     expect(score(contributions, RCOGP_QSE).total).toBeGreaterThan(0);
   });
@@ -120,7 +122,7 @@ describe("ICT QSE SED: the ICT-specific answer survives every entry path to the 
       },
     };
     const contributions = project(sections as never).sedContributions as Array<Contribution>;
-    expect(contributions.map((c) => c.ictSpecificInitiative)).toEqual([true, undefined]);
+    expect(contributions.map((c) => c.isSectorSpecificInitiative)).toEqual([true, undefined]);
     expect(score(contributions).total).toBeCloseTo(6, 6);
   });
 
@@ -129,9 +131,9 @@ describe("ICT QSE SED: the ICT-specific answer survives every entry path to the 
     const yes = spec.toEntity({ beneficiaryName: "Township Coding Club", contributionType: "grant", amount: 5_000, ictSpecificInitiative: true });
     const no = spec.toEntity({ beneficiaryName: "Rural Clinic Fund", contributionType: "grant", amount: 3_000, ictSpecificInitiative: "No" });
     const blank = spec.toEntity({ beneficiaryName: "Library Trust", contributionType: "grant", amount: 2_000, ictSpecificInitiative: "" });
-    expect(yes.ictSpecificInitiative).toBe(true);
-    expect(no.ictSpecificInitiative).toBe(false);
-    expect("ictSpecificInitiative" in blank).toBe(false);
+    expect(yes.isSectorSpecificInitiative).toBe(true);
+    expect(no.isSectorSpecificInitiative).toBe(false);
+    expect("isSectorSpecificInitiative" in blank).toBe(false);
     expect(score([yes, no, blank]).total).toBeCloseTo(6, 6);
   });
 });

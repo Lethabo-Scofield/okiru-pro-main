@@ -1409,14 +1409,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       contributionType: rawType,
       category: "socio_economic" as const,
       descriptionOfSpend: s((r as any).descriptionOfSpend),
-      // Yes, No, or unset when the cell is blank: an unanswered row is not
-      // recorded as "No" (ICT scores only a Yes either way; the SED line
-      // reports both as not marked ICT-specific).
-      ictSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
-      // What the ICT SED calculator reads (sed.sectorSpecificInitiativesOnly):
-      // only an ANSWER counts. A blank cell stays unset and the row still
-      // scores; coercing it to false would drop every row nobody was asked
-      // about, the way the importer's stamped "No" used to.
+      // The workbook's "ICT-Specific?" cell, as the one answer the SED
+      // calculator reads (sed.sectorSpecificInitiatives): Yes, No, or unset
+      // when the cell is blank. ICT Generic still counts an unanswered row and
+      // ICT QSE does not; coercing a blank to false would drop every row
+      // nobody was asked about, the way the importer's stamped "No" used to.
       isSectorSpecificInitiative: coerceYesNoOrUnset((r as any).ictSpecificInitiative),
       percentBenefitingBlack: num((r as any).percentBenefitingBlack),
       blackBenefitPercent: num((r as any).percentBenefitingBlack),

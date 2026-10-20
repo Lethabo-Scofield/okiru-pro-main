@@ -553,12 +553,6 @@ export interface Contribution {
   // Construction-specific beneficiary flags (Phase 1 wiring — see docs/construction-wiring-spec.md)
   isBlackWomenOwnedBeneficiary?: boolean;  // ESD: ≥51% Black-Women-Owned SD beneficiary
   isStructuredProject?: boolean;           // SED: Structured SED Project
-  /**
-   * ICT SED: "ICT Specific Initiative?" — true (Yes), false (No) or unset (not
-   * answered). Read only where sed.requireIctSpecificInitiative is set, and
-   * there only true counts.
-   */
-  ictSpecificInitiative?: boolean;
   isLimitedServicesCommunity?: boolean;    // SED: Community with Limited Services
 
   /**
@@ -572,7 +566,14 @@ export interface Contribution {
    * Absent = SED.
    */
   sedPillar?: 'sed' | 'consumer_education' | 'fundisa';
-  /** SED: a sector-specific initiative (AgriBEE 'Agri Specific Initiative?', ICT "ICT Specific Initiative?"). */
+  /**
+   * SED: a sector-specific initiative — AgriBEE "Agri Specific Initiative?",
+   * ICT "ICT Specific Initiative?" (the workbook's "ICT-Specific?" column).
+   * true (Yes), false (No) or unset (not answered); the sector's
+   * sed.sectorSpecificInitiatives says how each counts. The one stored
+   * answer: records written before it carried `ictSpecificInitiative`, whose
+   * Yes the store still reads (its false was an api default, never an answer).
+   */
   isSectorSpecificInitiative?: boolean;
 }
 

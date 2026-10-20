@@ -153,6 +153,18 @@ describe('ICT SED: "ICT-Specific?" reaches the calculator as an answer, never as
     expect(sedLine(s)?.note ?? '').not.toMatch(/not a sector-specific initiative/);
   });
 
+  it('a record from before the one answer keeps its stored Yes (ictSpecificInitiative:true), and only that', async () => {
+    const wb = workbook({ sedAnswers: ['', ''] });
+    const p = payload(wb);
+    p.sed.contributions = p.sed.contributions.map((c, i) => ({
+      ...c, isSectorSpecificInitiative: undefined, ictSpecificInitiative: i === 0,
+    }));
+    vi.mocked(api.getClientData).mockResolvedValue(p as never);
+    useBbeeStore.setState({ pendingWrites: 0, saveError: null, activeClientId: null } as never);
+    await useBbeeStore.getState().loadClientData('ict-answers');
+    expect(useBbeeStore.getState().sed.contributions.map((c) => c.isSectorSpecificInitiative)).toEqual([true, undefined]);
+  });
+
   it('the importer brings in the sheet\'s own answer, and no answer when the sheet has no such column', () => {
     const sheet = (rows: unknown[][]) => {
       const wb = XLSX.utils.book_new();

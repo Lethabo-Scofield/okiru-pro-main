@@ -368,15 +368,23 @@ export interface CalculatorConfig {
     maxPoints: number;
     npatTarget: number;
     /**
-     * ICT: only ICT-specific initiatives count. A contribution counts only when
-     * `ictSpecificInitiative` is true; one answered No, or with no answer on
-     * record, counts 0 — the toolkit's SED Data[Recognised Amount] =
-     * IF([ICT Specific Initiative?]="Yes", Amount × Benefit Factor, 0), where a
-     * blank answer scores 0. Every entry path carries the answer (workbook
-     * grid, Excel import, Toolkit form and bulk upload), and the uncounted
-     * spend is reported on the SED line and page (SedResult.notIctSpecific).
+     * Only sector-specific initiatives count ('SED Data'[Recognised Amount] is
+     * 0 unless the row is one), read from Contribution.isSectorSpecificInitiative
+     * (Yes / No / not answered). The sectors read an unanswered row
+     * differently, each as its own branch decided:
+     *  - 'exclude_no' (AgriBEE Generic "Agri Specific Initiative?", ICT
+     *    Generic "ICT Specific Initiative?"): a row answered No counts
+     *    nothing; an unanswered one still counts — the app does not ask on
+     *    every path, and older records carry no answer (the toolkits
+     *    themselves count a blank as No);
+     *  - 'require_yes' (ICT QSE): only a row answered Yes counts; No and no
+     *    answer count 0, as IF([ICT Specific Initiative?]="Yes", …, 0) does.
+     *    Every ICT entry path carries the answer (workbook grid, Excel
+     *    import, Toolkit form, bulk upload).
+     * The uncounted spend is reported on the SED line and page
+     * (SedResult.notSectorSpecific). Unset: the answer is not read.
      */
-    requireIctSpecificInitiative?: boolean;
+    sectorSpecificInitiatives?: 'exclude_no' | 'require_yes';
     /** FSC: SED base portion max points (row contributions). Default: maxPoints (combined model). */
     sedBaseMaxPts?: number;
     /** FSC: SED base NPAT target fraction (e.g. 0.006 = 0.6%). */
@@ -390,12 +398,6 @@ export interface CalculatorConfig {
     /** FSC: Fundisa grant bonus from fundisaSpend meta. */
     fundisaMaxPts?: number;
     fundisaNpatTarget?: number;
-    /**
-     * AgriBEE Generic toolkit ('SED Data'[Recognised Amount]): a contribution
-     * answered as NOT an agri-specific initiative counts nothing. An
-     * unanswered one still counts.
-     */
-    sectorSpecificInitiativesOnly?: boolean;
   };
   yes?: {
     tier1Points: number;

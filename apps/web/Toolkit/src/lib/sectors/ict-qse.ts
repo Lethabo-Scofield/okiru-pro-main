@@ -319,7 +319,7 @@ function withEmpowerIctQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig
       enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
     },
     esd: { ...cfg.esd, supplierDevTarget: 0.01, enterpriseDevTarget: 0.01 },
-    sed: { ...cfg.sed, requireIctSpecificInitiative: true },
+    sed: { ...cfg.sed, sectorSpecificInitiatives: 'require_yes' },
     discounting: { ...cfg.discounting, qseRequiresAllPriorityElements: true },
     pillarConfigs: {
       ...pc,

@@ -746,7 +746,7 @@ describe('ICT QSE — SED pillar (12 pts)', () => {
             blackBenefitPercent: 100,
             transactionDate: '2025-07-15',
             // ICT QSE counts ICT-specific initiatives only (toolkit SED Data).
-            ictSpecificInitiative: true,
+            isSectorSpecificInitiative: true,
           },
         ],
       },
@@ -773,7 +773,7 @@ describe('ICT QSE — SED pillar (12 pts)', () => {
             category: 'socio_economic',
             blackBenefitPercent: 100,
             transactionDate: '2025-07-15',
-            ictSpecificInitiative: true,
+            isSectorSpecificInitiative: true,
           },
         ],
       },

@@ -323,7 +323,7 @@ export function adaptIctQseToolkitCase(c: ToolkitCase): AdaptedCase {
       // A blank cell is no answer (unset), as our own entry paths keep it —
       // the toolkit scores it 0, and so must we.
       ...(present(r['ICT Specific Initiative?'])
-        ? { ictSpecificInitiative: yes(r['ICT Specific Initiative?']) }
+        ? { isSectorSpecificInitiative: yes(r['ICT Specific Initiative?']) }
         : {}),
     })),
   };

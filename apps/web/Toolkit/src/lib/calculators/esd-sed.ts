@@ -85,11 +85,12 @@ export interface SedResult {
   unrecognisedTypes: string[];
   excludedSpend: number;
   /**
-   * Where only ICT-specific initiatives count (sed.requireIctSpecificInitiative):
-   * the contributions not marked as one (answered No, or not answered) and
+   * Where the sector counts sector-specific initiatives only
+   * (sed.sectorSpecificInitiatives): the contributions that did not count for
+   * it — answered No ('exclude_no'), or not answered Yes ('require_yes') — and
    * their rand value, none of which is scored. Absent elsewhere.
    */
-  notIctSpecific?: { spend: number; count: number };
+  notSectorSpecific?: { spend: number; count: number; rule: 'exclude_no' | 'require_yes' };
   total: number;
   /** The total before rounding: the scorecard adds these, as the toolkit adds full precision. */
   exactTotal?: number;
@@ -608,26 +609,23 @@ export function calculateSedScore(
   const sedFactors = SED_BENEFIT_FACTORS;
   const unrecognisedTypes = new Set<string>();
   let excludedSpend = 0;
-  // AgriBEE Generic and ICT Generic ('SED Data'[Recognised Amount]): a row
-  // answered as not a sector-specific initiative counts nothing; an unanswered
-  // one still counts (older captures have no such answer).
-  const initiativesOnly = sc.sectorSpecificInitiativesOnly === true;
+  // Sector-specific initiatives only ('SED Data'[Recognised Amount] is 0
+  // unless the row is one), by the sector's reading of an unanswered row:
+  // 'exclude_no' (AgriBEE Generic, ICT Generic) drops a row answered No and
+  // still counts one nobody answered; 'require_yes' (ICT QSE) counts only a
+  // Yes, as IF([ICT Specific Initiative?]="Yes", …, 0) does.
+  const initiativeRule = sc.sectorSpecificInitiatives;
+  const countsAsInitiative = (c: Contribution): boolean =>
+    initiativeRule === 'require_yes' ? c.isSectorSpecificInitiative === true
+      : initiativeRule === 'exclude_no' ? c.isSectorSpecificInitiative !== false
+        : true;
   let notInitiativeSpend = 0;
-  // ICT: only a contribution marked as an ICT-specific initiative counts. One
-  // answered No, or with no answer, counts 0, as the toolkit's
-  // SED Data[Recognised Amount] = IF([ICT Specific Initiative?]="Yes", …, 0).
-  const requireIct = sc.requireIctSpecificInitiative === true;
-  let notIctSpend = 0;
-  let notIctCount = 0;
+  let notInitiativeCount = 0;
   const rowSpend = contributions.reduce((acc, c) => {
     const amount = Number(c.amount) || 0;
-    if (initiativesOnly && c.isSectorSpecificInitiative === false) {
+    if (!countsAsInitiative(c)) {
       notInitiativeSpend += amount;
-      return acc;
-    }
-    if (requireIct && c.ictSpecificInitiative !== true) {
-      notIctSpend += amount;
-      notIctCount += 1;
+      notInitiativeCount += 1;
       return acc;
     }
     const { factor, recognised } = benefitFactorFor(canonicalContributionType(c.type), sedFactors);
@@ -679,16 +677,17 @@ export function calculateSedScore(
   const total = round2(clampScore(score, maxPoints));
   const excludedClause = (excludedSpend > 0
     ? `; ${formatRand(excludedSpend)} not counted: contribution type not recognised`
-    : '') + (notInitiativeSpend > 0
+    : '') + (initiativeRule === 'exclude_no' && notInitiativeSpend > 0
     ? `; ${formatRand(notInitiativeSpend)} not counted: not a sector-specific initiative`
-    : '') + (notIctCount > 0
-    ? `; ${formatRand(notIctSpend)} across ${notIctCount} contribution${notIctCount === 1 ? '' : 's'} not counted: not marked as an ICT-specific initiative`
+    : '') + (initiativeRule === 'require_yes' && notInitiativeCount > 0
+    ? `; ${formatRand(notInitiativeSpend)} across ${notInitiativeCount} contribution${notInitiativeCount === 1 ? '' : 's'} not counted: ` +
+      `not marked as ${String(sectorCode ?? '').toUpperCase() === 'ICT' ? 'an ICT-specific' : 'a sector-specific'} initiative`
     : '');
 
   return {
     unrecognisedTypes: Array.from(unrecognisedTypes),
     excludedSpend: round2(excludedSpend),
-    ...(requireIct ? { notIctSpecific: { spend: round2(notIctSpend), count: notIctCount } } : {}),
+    ...(initiativeRule ? { notSectorSpecific: { spend: round2(notInitiativeSpend), count: notInitiativeCount, rule: initiativeRule } } : {}),
     total,
     exactTotal: clampScore(score, maxPoints),
     subMinimumMet: true,

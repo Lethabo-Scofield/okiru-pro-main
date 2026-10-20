@@ -42,14 +42,15 @@ export default function SED() {
     // already scores these but no UI to enter (audit Wave 3 safe subset).
     isStructuredProject: false,
     isLimitedServicesCommunity: false,
-    // ICT: only a contribution marked as an ICT-specific initiative scores.
-    ictSpecificInitiative: false,
+    // ICT QSE: only a contribution marked as an ICT-specific initiative scores.
+    isSectorSpecificInitiative: false,
   });
   const errs = useFieldErrors();
   const isConstructionSector = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'CONSTRUCTION';
-  // A sector that scores ICT-specific initiatives only (ICT QSE) asks the
+  // A sector that scores only contributions answered Yes (ICT QSE) asks the
   // question on every contribution; without it a contribution never scores.
-  const asksIctSpecific = calculatorConfig?.sed?.requireIctSpecificInitiative === true;
+  const asksIctSpecific = calculatorConfig?.sed?.sectorSpecificInitiatives === 'require_yes';
+  const initiativeWord = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'AGRI' ? 'agri-specific' : 'ICT-specific';
 
   const npat = client.npat;
   // Drive target % and max points from the sector calculatorConfig instead of
@@ -104,10 +105,10 @@ export default function SED() {
       isStructuredProject: newSed.isStructuredProject,
       isLimitedServicesCommunity: newSed.isLimitedServicesCommunity,
       // Asked only where the sector scores by it; elsewhere left unset.
-      ...(asksIctSpecific ? { ictSpecificInitiative: newSed.ictSpecificInitiative } : {}),
+      ...(asksIctSpecific ? { isSectorSpecificInitiative: newSed.isSectorSpecificInitiative } : {}),
     } as any);
 
-    setNewSed({ beneficiary: '', type: 'grant', amount: 0, isStructuredProject: false, isLimitedServicesCommunity: false, ictSpecificInitiative: false });
+    setNewSed({ beneficiary: '', type: 'grant', amount: 0, isStructuredProject: false, isLimitedServicesCommunity: false, isSectorSpecificInitiative: false });
     setIsAddOpen(false);
     toast({ title: "Contribution Added", description: `Added to SED ledger.` });
   };
@@ -196,8 +197,8 @@ export default function SED() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={newSed.ictSpecificInitiative}
-                        onChange={e => setNewSed({...newSed, ictSpecificInitiative: e.target.checked})}
+                        checked={newSed.isSectorSpecificInitiative}
+                        onChange={e => setNewSed({...newSed, isSectorSpecificInitiative: e.target.checked})}
                         data-testid="input-sed-ict-specific"
                       />
                       ICT-specific initiative
@@ -364,11 +365,13 @@ export default function SED() {
               classified: {score.unrecognisedTypes.join(", ")}. Set the contribution type on those rows to include them.
             </div>
           )}
-          {(score.notIctSpecific?.count ?? 0) > 0 && (
-            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200" data-testid="sed-not-ict-note">
-              R{score.notIctSpecific!.spend.toLocaleString("en-ZA")} across {score.notIctSpecific!.count} contribution{score.notIctSpecific!.count === 1 ? "" : "s"} scored
-              nothing because {score.notIctSpecific!.count === 1 ? "it is" : "they are"} not marked as an ICT-specific initiative. Only ICT-specific
-              initiatives count towards ICT SED; answer Yes to "ICT-Specific?" on those that are.
+          {(score.notSectorSpecific?.count ?? 0) > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200" data-testid="sed-not-sector-specific-note">
+              R{score.notSectorSpecific!.spend.toLocaleString("en-ZA")} across {score.notSectorSpecific!.count} contribution{score.notSectorSpecific!.count === 1 ? "" : "s"} scored
+              nothing because {score.notSectorSpecific!.count === 1 ? "it is" : "they are"}{" "}
+              {score.notSectorSpecific!.rule === 'require_yes'
+                ? <>not marked as an {initiativeWord} initiative. Only {initiativeWord} initiatives count towards this SED score; answer Yes on those that are.</>
+                : <>answered as not an {initiativeWord} initiative. Only {initiativeWord} initiatives count towards this SED score.</>}
             </div>
           )}
           <div className="rounded-md border overflow-x-auto">
@@ -447,7 +450,7 @@ export default function SED() {
                     </td>
                     {asksIctSpecific && (
                       <td className="p-4 text-sm" data-testid={`sed-ict-specific-${idx}`}>
-                        {c.ictSpecificInitiative === true ? 'Yes' : c.ictSpecificInitiative === false ? 'No' : 'Not answered'}
+                        {c.isSectorSpecificInitiative === true ? 'Yes' : c.isSectorSpecificInitiative === false ? 'No' : 'Not answered'}
                       </td>
                     )}
                     <td className="p-4 text-right font-mono font-medium">R {c.amount.toLocaleString()}</td>

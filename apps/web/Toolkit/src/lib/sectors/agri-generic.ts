@@ -334,7 +334,7 @@ function withEmpowerAgriToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
       allSuppliersIgnoreEmpoweringFlag: true,
       enhancedRecognitionRule: 'black_owned_small_supplier_or_first_time',
     },
-    sed: { ...cfg.sed, sectorSpecificInitiativesOnly: true },
+    sed: { ...cfg.sed, sectorSpecificInitiatives: 'exclude_no' },
     benefitFactors: cfg.benefitFactors.map((bf) =>
       Object.prototype.hasOwnProperty.call(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES, bf.type)
         ? { ...bf, factor: EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES[bf.type] }
