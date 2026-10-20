@@ -145,8 +145,9 @@ export type EnhancedRecognitionRule =
  *   below, which a sector opts into.
  *
  * 'black_owned_small_supplier_or_first_time' — RCOGP QSE v1.1, ICT Generic
- *   v1.4, ICT QSE v1.1, FSC v1.0 and AgriBEE Generic v1.0.1 as they mean it: the rule above, or a
- *   QSE/EME ≥51% black owned first-time supplier (Supplier.isFirstTimeSupplier).
+ *   v1.4, ICT QSE v1.1, FSC v1.0 and AgriBEE Generic v1.0.1 as they mean it:
+ *   the rule above, or a QSE/EME ≥51% black owned first-time supplier
+ *   (Supplier.isFirstTimeSupplier).
  *   The RCOGP QSE, ICT Generic and AgriBEE templates' own first-time test
  *   reads the 3-year-contract answer instead (a copy slip), so in those
  *   spreadsheets the first-time answer never counts.

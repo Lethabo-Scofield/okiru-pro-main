@@ -1512,7 +1512,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isDesignatedGroup: coerceYesNo(s.isDesignatedGroup),
           isSupplierDevRecipient: coerceYesNo(s.isSupplierDevRecipient),
           hasThreeYearContract: coerceYesNo(s.hasThreeYearContract),
-          // ICT Generic's 1.2 factor for a first-time supplier; adds only.
+          // The 1.2 factor's first-time route, where the sector's rule reads
+          // it (RCOGP QSE, ICT, AgriBEE Generic, FSC); adds only.
           isFirstTimeSupplier: coerceYesNo(s.isFirstTimeSupplier),
           // Carried, not cherry-picked away. This map listed the flags and
           // dropped everything else, so a supplier matched against the
