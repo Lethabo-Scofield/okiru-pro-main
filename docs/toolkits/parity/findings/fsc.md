@@ -289,6 +289,44 @@ Nothing that was compared. What was not compared, and why:
 - **Training manager's salary and training overhead**: the toolkit shares them
   out by a typed workforce row (fault 3); our companies type that row from
   their own employees, so both sides share them the same way.
+- **Records without the inputs below.** The comparison is on companies that
+  carry every input the toolkit reads. A record without them is scored as
+  the next section says, not the toolkit's way, on the lines concerned.
+
+## Inputs the live app does not capture yet
+
+The toolkit method reads some inputs that no screen, upload or import in the
+app fills yet; only the synthetic companies above carry them. A live FSC
+record lacks them, so the scorecard handles each one in a way that a missing
+input never costs points the company earned elsewhere, or fails a priority
+element by itself:
+
+| Toolkit input | What reads it | Without it |
+|---|---|---|
+| Payroll per management level ('Client Information'!I20:I23) and each training row's Management Position | Skills: the four per-level spend lines (11 of the 20 base points), and which learners count as unemployed | Skills is scored on the leviable amount, as every FSC record was before the toolkit method (learning programmes 11, bursaries 4, disabled 1, learnerships 4, absorption bonus 3; sub-minimum 8), and the element says why. Without this, the per-level lines read 0 whatever was spent: with these two inputs removed from our 27 companies, skills fell to 1.70–8.00 and failed its sub-minimum on all 27; on the leviable amount it is 4.33–16.25 and passes on 15. |
+| Total allocated trade value; suppliers marked intermediary, stock broker or fund manager | Procurement: the two FSC bonus lines | Both score 0, and the element says which input is missing. Nothing measured them before (the earlier scorer had only the designated-group bonus). They are bonus lines, so no sub-minimum depends on them. |
+| A supplier marked first-time supplier | Procurement: one ground for the 1.2 recognition factor | Not applied on that ground (a supplier-development recipient or a 3-year contract still earns it). The toolkit as shipped never applies it either (fault 5). |
+| ESD rows marked as supporting black stock brokers, fund managers or intermediaries | ED: the stock-broker bonus (Others and insurers) | The spend captured for it as one figure on the ESD build form ("ED support of black stockbrokers / fund managers / intermediaries") counts, as it did before. |
+| The SED & CE rows' Pillar column (SED, Consumer Education, Fundisa) | SED, consumer education, additional consumer education, Fundisa | The SED page's own figures count: Consumer Education spend, Additional CE spend (where larger than the consumer education beyond its 0.4% target) and Fundisa spend; rows count as SED. Held that way, every one of our companies scores SED & CE exactly as with the Pillar column. |
+| An indebted shareholder's loan date | Net value: Formula A's graduation factor | Read as year 1, and it changes nothing: Formula A divides by the graduation factor, so it is never below Formula B, and the lesser of the two counts. Ownership is the same on all 27 companies with or without loan dates (only a loan dated after the data date would differ). |
+| Long-term insurers: credit-life policies on book | Market penetration: up to 0.25 extra | No extra. |
+| Short-term insurers: lines of products, FSTC exemption, target policies, qualifying policies per product | Access to financial services (12 points) | The earlier calculator scores it from the yes/no product answers the AFS page collects, and the element says so. |
+
+apps/web/Toolkit/src/lib/calculators/__tests__/fscToolkit.liveInputs.test.ts
+keeps this so: each of the 27 Excel-scored companies is scored again without
+any of these inputs (consumer education, Fundisa and stock-broker spend held
+as the app's own figures), and skills must equal the leviable-amount score;
+ownership, management control, SD, ED, SED & CE and empowerment financing must
+equal the complete record's; and no priority element may fail, nor the level
+be discounted, unless it also does with every input or on the earlier scorer.
+
+To score these lines the toolkit's way, the app needs: a payroll per
+management level; a Management Position column on the skills register; the
+allocated trade value, and intermediary / stock broker / fund manager /
+first-time supplier columns on the procurement register; a stock-broker flag
+on ESD rows; a Pillar column on SED rows; credit-life policies on the
+long-term AFS page; and the short-term qualifying-policies table — each in
+the screens, the upload mapping and storage.
 
 ## Rulings needed
 

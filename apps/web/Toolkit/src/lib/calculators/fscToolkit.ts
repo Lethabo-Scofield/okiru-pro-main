@@ -27,6 +27,16 @@
  * Where the template's formulas are evidently broken they are not copied; each
  * is listed in docs/toolkits/parity/findings/fsc.md and reworked by the parity
  * referee (lib/parity/toolkitParity.fsc.ts) from the toolkit's own figures.
+ *
+ * Some inputs only this method reads are not captured by any screen or import
+ * yet (findings/fsc.md, "Inputs the live app does not capture yet"). A record
+ * without them must not lose points it earned or fail a priority element for
+ * want of an input: skills without per-level payroll or positions is scored on
+ * the leviable amount (fscSkillsOnLeviable); short-term insurers without
+ * qualifying policies keep the older AFS calculator; the ED stock-broker and
+ * additional consumer-education lines keep the figures the app does capture;
+ * the procurement bonuses that need the trade value and supplier flags score 0
+ * and say so. fscToolkit.liveInputs.test.ts holds it.
  */
 import type {
   AfsData, EmpowermentFinancingData, BreakdownLine, Client, Contribution, Employee, ManagementData, OwnershipData, ProcurementData,
@@ -38,10 +48,11 @@ import { calculateProcurementScore, qualifiesForEnhancedRecognition } from './pr
 import { calculateEsdScore } from './esd-sed';
 import { calculateYESScore } from './yes';
 import { calculateAfsScore } from './afs';
+import { calculateSkillsScore, withSkillsWorkforce } from './skills';
 import { clampScore, isBlackRace, normalizeDesignationForScoring, round2 } from './shared';
 import { getEffectiveEap, normalizeProvince, type Province } from './eapTargets';
 import { parseCalcDate, yearFrac30360US } from './toolkitDates';
-import { toBreakdownLines } from './breakdown';
+import { skillsCategoryRows, toBreakdownLines } from './breakdown';
 import { formatRand, ratioLineNote } from './calcNotes';
 import {
   benefitFactorFor,
@@ -307,6 +318,36 @@ interface SkillsRow {
   gOther: number;
 }
 
+/** Skills Data[Management Position *] — the toolkit's dropdown, in its own spelling. */
+export const FSC_SKILLS_POSITIONS = [
+  'Executive Management', 'Senior Management', 'Middle Management', 'Junior Management', 'Non-Management', 'Unemployed',
+] as const;
+
+/** A training row's management position in the toolkit's spelling, or '' when it is not one of them. */
+export function fscSkillsPosition(p: Pick<TrainingProgram, 'managementPosition'>): string {
+  const raw = String(p.managementPosition ?? '').trim().toLowerCase();
+  return FSC_SKILLS_POSITIONS.find((x) => x.toLowerCase() === raw) ?? '';
+}
+
+/**
+ * What the record lacks for the FSC toolkit's skills method: the payroll of
+ * each management level ('Client Information'!I20:I23) — every per-level
+ * spend target is a share of it — and each training row's management position.
+ * Empty when the method can be applied. Without either, the four per-level
+ * lines (11 of the 20 base points) would read 0 whatever was spent, so the
+ * element is scored on the leviable amount instead (calculateFscScorecard).
+ */
+export function fscSkillsInputGaps(data: SkillsData): string[] {
+  const gaps: string[] = [];
+  const p = data.payrollByLevel;
+  const payroll = p ? [p.execSenior, p.middle, p.junior, p.nonManagement].reduce((a, x) => a + (Number(x) > 0 ? Number(x) : 0), 0) : 0;
+  if (!(payroll > 0)) gaps.push('the payroll of each management level');
+  const rows = data.trainingPrograms || [];
+  const unplaced = rows.filter((t) => fscSkillsPosition(t) === '').length;
+  if (unplaced > 0) gaps.push(`the management position of ${unplaced === rows.length ? 'every' : `${unplaced} of ${rows.length}`} training row${rows.length === 1 ? '' : 's'}`);
+  return gaps;
+}
+
 function skillsRow(p: TrainingProgram): SkillsRow {
   const cat = String(p.categoryCode ?? '').trim().toUpperCase();
   const extras = (p.travelCost || 0) + (p.accommodationCost || 0) + (p.cateringCost || 0)
@@ -320,7 +361,7 @@ function skillsRow(p: TrainingProgram): SkillsRow {
     female: black && p.gender === 'Female',
     african: black && String(p.race).trim() === 'African',
     disabled: Boolean(p.isDisabled),
-    position: String(p.managementPosition ?? '').trim(),
+    position: fscSkillsPosition(p),
     employed: p.employmentStatus !== 'Unemployed',
     lai,
     completed: Boolean(p.isCompleted),
@@ -466,7 +507,34 @@ export function fscSkills(data: SkillsData, province: string | undefined, eapYea
 
   const base = lines.filter((l) => !l.isBonus).reduce((s, l) => s + l.score, 0);
   const exact = lines.reduce((s, l) => s + l.score, 0);
-  return { lines, exact, base, subMinimumMet: base >= 8 };
+  return { lines, exact, base, subMinimumMet: base >= 8, note: undefined as string | undefined, detail: [] as BreakdownLine[] };
+}
+
+/**
+ * Skills for a record without the toolkit method's inputs (fscSkillsInputGaps
+ * not empty): scored on the leviable amount, the way every FSC record was
+ * scored before the toolkit method (calculators/skills.ts with the sector's
+ * own targets — learning programmes 11, unemployed / bursaries 4, disabled 1,
+ * learnerships 4, absorption bonus 3; sub-minimum 8 of the 20 base points).
+ * Without per-level payroll and positions the four per-level lines would read
+ * 0 whatever was spent, so the element would fail its sub-minimum and
+ * discount the level for want of an input, not for want of spend.
+ */
+export function fscSkillsOnLeviable(
+  skills: SkillsData, management: ManagementData, cfg: CalculatorConfig,
+  province: string | undefined, eapYear: number | undefined, gaps: string[],
+) {
+  const r = calculateSkillsScore(withSkillsWorkforce(skills, management), cfg, province, eapYear);
+  const lines: Line[] = r.subLines.map((l) => ({
+    name: l.name, target: l.target, weighting: l.weighting, score: l.score, isBonus: l.isBonus, note: l.note,
+  }));
+  const note = `Scored on the leviable amount: the FSC toolkit measures skills spend per management level against that level's payroll, and this record does not carry ${gaps.join(' or ')}.`;
+  return {
+    lines, exact: r.exactTotal ?? r.total, base: lines.filter((l) => !l.isBonus).reduce((s, l) => s + l.score, 0),
+    subMinimumMet: r.subMinimumMet, note,
+    // The learning-programme category detail rows, as that method has always shown them.
+    detail: skillsCategoryRows(r.categoryBreakdown),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -512,14 +580,18 @@ export function fscProcurement(data: ProcurementData, cfg: CalculatorConfig, sub
   const brokerSpend = Math.max(brokers, managers);
   const intermediatedScore = pts(intermediated, trade * 0.05, 2);
   const brokerScore = pts(brokerSpend, trade * 0.05, 2);
-  const tradeNote = (spend: number, score: number) => trade > 0
+  const suppliers = data.suppliers || [];
+  const flaggedIntermediaries = suppliers.some((s) => s.isIntermediary);
+  const flaggedBrokers = suppliers.some((s) => s.isStockBroker || s.isFundManager);
+  const tradeNote = (spend: number, score: number, flagged: boolean, who: string) => trade > 0
     ? `${formatRand(spend)} of a ${formatRand(trade * 0.05)} target (5% of the ${formatRand(trade)} allocated trade value) → ${score.toFixed(2)} of 2.`
+      + (flagged ? '' : ` No supplier is marked as ${who}.`)
     : 'No total allocated trade value is recorded, so this bonus line cannot be measured.';
   const [allLine, qse, eme, bo, bwo, dg] = pp.subLines;
   const lines: Line[] = [
     allLine, qse, eme, bo, bwo,
-    { name: 'Spend from intermediated black professional service providers', target: '5% of allocated trade value', weighting: 2, score: intermediatedScore, isBonus: true, note: tradeNote(intermediated, intermediatedScore) },
-    { name: 'Spend from black stock brokers or fund managers', target: '5% of allocated trade value', weighting: 2, score: brokerScore, isBonus: true, note: tradeNote(brokerSpend, brokerScore) + (brokers > 0 && managers > 0 ? ' The larger of stock-broker and fund-manager spend counts.' : '') },
+    { name: 'Spend from intermediated black professional service providers', target: '5% of allocated trade value', weighting: 2, score: intermediatedScore, isBonus: true, note: tradeNote(intermediated, intermediatedScore, flaggedIntermediaries, 'an intermediary') },
+    { name: 'Spend from black stock brokers or fund managers', target: '5% of allocated trade value', weighting: 2, score: brokerScore, isBonus: true, note: tradeNote(brokerSpend, brokerScore, flaggedBrokers, 'a stock broker or fund manager') + (brokers > 0 && managers > 0 ? ' The larger of stock-broker and fund-manager spend counts.' : '') },
     dg,
   ];
   const base = [allLine, qse, eme, bo, bwo].reduce((s, l) => s + l.score, 0);
@@ -528,7 +600,15 @@ export function fscProcurement(data: ProcurementData, cfg: CalculatorConfig, sub
   const exactParts = (pp.exactTotal ?? pp.total) - (dg?.score ?? 0);
   const exact = exactParts + Math.max(intermediatedScore, brokerScore) + (dg?.score ?? 0);
   const baseMax = (bl ? 4 + 2 + 2 + 5 + 2 : 5 + 3 + 2 + 7 + 3);
-  return { lines, exact, base, subMinimumMet: base >= baseMax * 0.4, coverageNotes: pp.coverageNotes };
+  const coverageNotes = [...(pp.coverageNotes ?? [])];
+  if (!(trade > 0) || !(flaggedIntermediaries || flaggedBrokers)) {
+    const missing = [
+      trade > 0 ? '' : 'the total allocated trade value',
+      flaggedIntermediaries || flaggedBrokers ? '' : 'which suppliers are intermediaries, stock brokers or fund managers',
+    ].filter(Boolean).join(' or ');
+    coverageNotes.push(`The two FSC bonus lines for intermediated black professional services and black stock brokers / fund managers score 0: this record does not carry ${missing}.`);
+  }
+  return { lines, exact, base, subMinimumMet: base >= baseMax * 0.4, coverageNotes };
 }
 
 /** One supplier's recognised spend: its level's recognition, × 1.2 where it qualifies. */
@@ -555,13 +635,14 @@ export function fscEsdWeights(sub: FscSubSector) {
   return { sdMax: 10, sdTarget: 0.02, edMax: 5, edTarget: 0.01, brokerMax: 2 };
 }
 
-export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: FscSubSector = 'Others') {
+/** The ESD calculator's config for an FSC sub-sector's SD / ED lines and bonuses. */
+function fscEsdConfig(cfg: CalculatorConfig, sub: FscSubSector): CalculatorConfig {
   const w = fscEsdWeights(sub);
   // Guarantees at 50% of the guarantee ('ESD and SED Calcs'!D8), as every
   // Empower template has them (the Codes: 3%).
   const factors = cfg.benefitFactors.filter((bf) => !(bf.type in EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES));
   for (const [type, factor] of Object.entries(EMPOWER_TOOLKIT_ESD_FACTOR_OVERRIDES)) factors.push({ type, factor });
-  const esdCfg: CalculatorConfig = {
+  return {
     ...cfg,
     benefitFactors: factors,
     esd: {
@@ -582,14 +663,27 @@ export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: 
       enterpriseDevelopment: { maxPoints: w.edMax + 2 + w.brokerMax, basePoints: w.edMax, subMinimumPercent: 40 },
     },
   };
-  // The stock-broker line counts the recognised value of the Enterprise
-  // Development rows flagged as supporting black stock brokers, fund
-  // managers or intermediaries.
+}
+
+/**
+ * The recognised value of the Enterprise Development rows flagged as
+ * supporting black stock brokers, fund managers or intermediaries (ESD
+ * Data[Stock brokers, Fund managers or Intermediaries?]) — what the ED
+ * stock-broker bonus counts. null when no row carries the flag.
+ */
+export function fscFlaggedStockbrokerSpend(data: ESDData, npat: number, cfg: CalculatorConfig, sub: FscSubSector = 'Others'): number | null {
   const flagged = (data.contributions || []).filter((c) => c.category === 'enterprise_development' && c.supportsBlackFinancialIntermediary);
-  const stockbrokerSpend = flagged.length > 0
-    ? calculateEsdScore({ ...data, contributions: flagged, graduationBonus: false, jobsCreatedBonus: false }, npat, esdCfg).edSpend
-    : 0;
-  return calculateEsdScore({ ...data, stockbrokerSpend }, npat, esdCfg);
+  if (flagged.length === 0) return null;
+  return calculateEsdScore({ ...data, contributions: flagged, graduationBonus: false, jobsCreatedBonus: false }, npat, fscEsdConfig(cfg, sub)).edSpend;
+}
+
+export function fscEsd(data: ESDData, npat: number, cfg: CalculatorConfig, sub: FscSubSector = 'Others') {
+  // The stock-broker line counts the flagged Enterprise Development rows. A
+  // record whose rows carry no such flag keeps the spend captured for the
+  // line as one figure (ESDData.stockbrokerSpend, the build form's input), as
+  // it was scored before.
+  const stockbrokerSpend = fscFlaggedStockbrokerSpend(data, npat, cfg, sub) ?? Math.max(Number(data.stockbrokerSpend) || 0, 0);
+  return calculateEsdScore({ ...data, stockbrokerSpend }, npat, fscEsdConfig(cfg, sub));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -621,10 +715,16 @@ export function fscSedCe(data: SEDData, npat: number, reinsurer: boolean) {
     add('Grant contribution to the Fundisa Retail Fund (reinsurers)', fundisa, 0.002, 2);
   } else {
     add('Consumer Education contributions', ce, 0.004, 2);
-    // Consumer education beyond its own 0.4% target earns the bonus.
-    const additional = Math.max(ce - npat * 0.004, 0);
-    add('Additional Consumer Education contributions', additional, 0.001, 1, true,
-      `; consumer education beyond its 0.4% target (${formatRand(ce)} less ${formatRand(npat * 0.004)})`);
+    // Consumer education beyond its own 0.4% target earns the bonus. A record
+    // that captured the additional contributions as their own figure
+    // (SEDData.ceBonusSpend, "above the 0.4% base target") keeps it where it
+    // is the larger, as it was scored before.
+    const beyond = Math.max(ce - npat * 0.004, 0);
+    const stated = Math.max(Number(data.ceBonusSpend) || 0, 0);
+    const additional = Math.max(beyond, stated);
+    add('Additional Consumer Education contributions', additional, 0.001, 1, true, stated > beyond
+      ? `; the additional consumer education captured (${formatRand(stated)})`
+      : `; consumer education beyond its 0.4% target (${formatRand(ce)} less ${formatRand(npat * 0.004)})`);
     add('Grant contribution to the Fundisa Retail Fund and similar initiatives', fundisa, 0.002, 2, true);
   }
   const exact = lines.reduce((s, l) => s + l.score, 0);
@@ -792,8 +892,12 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
 
   const own = fscOwnership(state.ownership, cfg, sub, dataDate);
   const mc = fscManagement(state.management, client.eapProvince, client.eapYear);
-  const demographics = fscSkillsDemographics(state.management);
-  const skills = fscSkills(state.skills, client.eapProvince, client.eapYear, demographics);
+  // Skills per management level needs each level's payroll and each training
+  // row's position; a record without them is scored on the leviable amount.
+  const skillsGaps = fscSkillsInputGaps(state.skills);
+  const skills = skillsGaps.length === 0
+    ? fscSkills(state.skills, client.eapProvince, client.eapYear, fscSkillsDemographics(state.management))
+    : fscSkillsOnLeviable(state.skills, state.management, cfg, client.eapProvince, client.eapYear, skillsGaps);
   const pp = fscProcurement({ ...state.procurement, measurementPeriodEnd: state.procurement.measurementPeriodEnd ?? client.measurementPeriodEnd }, cfg, sub);
   const esd = fscEsd({ ...state.esd, measurementPeriodEnd: state.esd.measurementPeriodEnd ?? client.measurementPeriodEnd }, npat, cfg, sub);
   const sed = fscSedCe(state.sed, npat, Boolean(client.fscReinsurer));
@@ -864,13 +968,17 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
   return {
     ownership: { score: round2(own.exact), target: sumW(own.lines), weighting: sumW(own.lines), subMinimumMet: own.subMinimumMet, subLines: toLines(own.lines) },
     managementControl: { score: round2(mc.exact), target: round2(mc.max), weighting: round2(mc.max), subLines: toLines(mc.lines) },
-    skillsDevelopment: { score: round2(skills.exact), target: 23, weighting: 23, subMinimumMet: skills.subMinimumMet, subLines: toLines(skills.lines) },
+    skillsDevelopment: { score: round2(skills.exact), target: 23, weighting: 23, subMinimumMet: skills.subMinimumMet, subLines: [...toLines(skills.lines), ...skills.detail], ...(skills.note ? { coverageNotes: [skills.note] } : {}) },
     procurement: { score: round2(pp.exact), target: sumW(pp.lines.filter((l, i) => i !== 6)), weighting: sumW(pp.lines.filter((l, i) => i !== 6)), subMinimumMet: ef ? undefined : pp.subMinimumMet, subLines: toLines(pp.lines), coverageNotes: pp.coverageNotes },
     supplierDevelopment: { score: round2(esd.sdExactTotal!), target: esdW.sdMax, weighting: esdW.sdMax, subMinimumMet: sdMet, subLines: toBreakdownLines(esd.sdSubLines) },
     enterpriseDevelopment: { score: round2(esd.edExactTotal!), target: esdW.edMax + 2 + esdW.brokerMax, weighting: esdW.edMax + 2 + esdW.brokerMax, subMinimumMet: edMet, subLines: toBreakdownLines(esd.edSubLines) },
     socioEconomicDevelopment: { score: round2(sed.exact), target: sed.max, weighting: sed.max, subLines: toLines(sed.lines) },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: 0, weighting: 0 },
-    ...(afs ? { accessToFinancialServices: { score: round2(afs.total), target: afs.maxPoints, weighting: afs.maxPoints, subLines: afs.lines.map((l) => ({ name: l.name, target: l.target, weighting: l.maxPoints, score: l.score })) } } : {}),
+    ...(afs ? { accessToFinancialServices: {
+      score: round2(afs.total), target: afs.maxPoints, weighting: afs.maxPoints,
+      subLines: afs.lines.map((l) => ({ name: l.name, target: l.target, weighting: l.maxPoints, score: l.score })),
+      ...(afsOther ? { coverageNotes: ['Scored from the yes/no product answers: the FSC toolkit scores short-term insurers from their qualifying policies per product, and this record carries none.'] } : {}),
+    } } : {}),
     ...(ef ? { empowermentFinancing: { score: round2(ef.exact), target: 15, weighting: 15, subMinimumMet: ppOrEfMet, subLines: toLines(ef.lines) } } : {}),
     total: { score: round2(total), target: round2(basePoints), weighting: round2(basePoints), coverageNotes: [thresholdNote] },
     achievedLevel: level,
