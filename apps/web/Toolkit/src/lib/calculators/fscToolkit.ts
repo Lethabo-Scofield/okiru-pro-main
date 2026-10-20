@@ -796,9 +796,9 @@ export function calculateFscScorecard(state: FscScorecardInput, cfg: CalculatorC
   const ef = BANKS_OR_LTI(sub) ? fscEmpowermentFinancing(state.empowermentFinancing, sub) : null;
   // Short-term insurers score from their qualifying policies; a record that
   // only carries the older yes/no answers keeps the older AFS calculator.
-  const stiPolicies = sub === 'STI' && (state.afs?.stiProductLines != null || (state.afs?.stiPolicies?.length ?? 0) > 0);
-  const afsFsc = sub === 'Banks' ? fscAfsBanks(state.afs) : sub === 'LTI' ? fscAfsLti(state.afs) : stiPolicies ? fscAfsSti(state.afs) : null;
-  const afsOther = sub === 'STI' && !stiPolicies && cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
+  const stiFromPolicies = sub === 'STI' && (state.afs?.stiProductLines != null || (state.afs?.stiPolicies?.length ?? 0) > 0);
+  const afsFsc = sub === 'Banks' ? fscAfsBanks(state.afs) : sub === 'LTI' ? fscAfsLti(state.afs) : stiFromPolicies ? fscAfsSti(state.afs) : null;
+  const afsOther = sub === 'STI' && !stiFromPolicies && cfg.accessToFinancialServices ? calculateAfsScore(state.afs, cfg) : null;
   const afs = afsFsc
     ? { total: afsFsc.exact, maxPoints: afsFsc.max, lines: afsFsc.lines.map((l) => ({ name: l.name, target: l.target, maxPoints: l.weighting, score: l.score })) }
     : afsOther;
