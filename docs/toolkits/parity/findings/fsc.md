@@ -184,7 +184,10 @@ figures, and our scorecard scores what the formula evidently means.
 6. **Procurement: the sub-minimum can never fail.** 'Scorecard Calculations'!G6
    is 40% of 'Procurement Scorecard'!C60:C64, which are empty, so the
    procurement priority element always passes. We test 40% of the five base
-   lines (8 points for Others and short-term insurers).
+   lines (8 points for Others and short-term insurers). Banks and long-term
+   insurers are not affected: G6 and H6 are blank for them, and the discount
+   test ('Scorecard Calculations'!C15) reads empowerment financing (H7 < G7,
+   40% of its 15 points) in procurement's place, as we do.
 7. **Ownership: debt netting depends on row order and ignores the black share.**
    'Oustanding Debts Calcs': the first indebted shareholder row uses the 40%
    rule, the rows below use a different formula, every row credits the whole

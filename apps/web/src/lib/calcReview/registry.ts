@@ -281,6 +281,8 @@ export const REVIEW_SCORECARDS: ReviewScorecard[] = [
     sectorCode: 'FSC',
     scorecardType: 'Generic',
     anchorPrefix: 'lti.',
+    note:
+      'The sample company employs no senior, middle or junior managers, so the toolkit moves those bands\' 11 points to other executive management, which then carries 14 (10 for black and 4 for black women, at targets of 75% and 38%). The senior, middle and junior management lines carry no points on this scorecard.',
     decisions: FSC_LTI_DECISIONS,
     spec: fscSpec('lti.'),
     load: () => import('./reference/fsc-lti.json'),

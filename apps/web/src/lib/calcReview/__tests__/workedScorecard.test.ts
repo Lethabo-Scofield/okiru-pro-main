@@ -157,6 +157,47 @@ describe("the Calculation Review's scorecards", () => {
     for (const e of fsc) for (const d of e.decisions) if ((counts.get(d.id) ?? 0) > 1) expect(d.appliesTo, d.id).toBeTruthy();
   });
 
+  it("asks for the procurement sub-minimum ruling only where the scorecard has that sub-minimum", () => {
+    // Banks and long-term insurers test empowerment financing in procurement's
+    // place (the toolkit's procurement test cells are blank for them).
+    const has = (id: string) => reviewScorecard(id)!.decisions.some((d) => d.id === "fsc-pp-sub-minimum");
+    expect(["fsc-others", "fsc-banks", "fsc-lti", "fsc-sti"].map(has)).toEqual([true, false, false, true]);
+    const ruling = reviewScorecard("fsc-others")!.decisions.find((d) => d.id === "fsc-pp-sub-minimum")!;
+    expect(ruling.appliesTo).toBe("Others and short-term insurers: one ruling covers both.");
+    expect(decisionAnchor(ruling)).toBe("indicator:decision-fsc-pp-sub-minimum");
+    expect(reviewScorecard("fsc-banks")!.decisions).toHaveLength(17);
+    expect(reviewScorecard("fsc-lti")!.decisions).toHaveLength(18);
+    for (const id of ["fsc-banks", "fsc-lti"]) {
+      const w = worked.get(id)!;
+      expect(`${w.achieved.note ?? ""} ${w.discounted.note ?? ""}`, id).not.toMatch(/procurement/i);
+    }
+  });
+
+  it("prints no floating-point noise in a line's target or working", () => {
+    for (const entry of REVIEW_SCORECARDS) {
+      for (const l of workedLines(worked.get(entry.id)!)) {
+        expect(`${l.target ?? ""} ${l.working ?? ""}`, `${entry.id} ${l.label}`).not.toMatch(/\d\.\d{7,}/);
+      }
+    }
+  });
+
+  it("says why a line carries no points, instead of dividing by a 0% target", () => {
+    let seen = 0;
+    for (const entry of REVIEW_SCORECARDS) {
+      for (const l of workedLines(worked.get(entry.id)!).filter((x) => x.weighting === 0)) {
+        seen++;
+        expect(l.working, `${entry.id} ${l.label}`).toMatch(/^No points on this scorecard: .{20,}\.$/);
+        expect(l.working, `${entry.id} ${l.label}`).not.toMatch(/÷ 0%/);
+      }
+    }
+    // Every FSC sample has one (the toolkit's unlabelled other-executive African
+    // row), and the long-term insurer's senior, middle and junior bands nine more.
+    expect(seen).toBe(13);
+    expect(workedLines(worked.get("fsc-lti")!).filter((l) => l.weighting === 0).map((l) => l.row))
+      .toEqual([38, 39, 40, 41, 42, 43, 44, 45, 46, 47]);
+    expect(reviewScorecard("fsc-lti")!.note).toMatch(/no senior, middle or junior managers/);
+  });
+
   it("scores each FSC scorecard's sample as that sub-sector", async () => {
     const want: Record<string, string> = { "fsc-others": "Others", "fsc-banks": "Banks", "fsc-lti": "LTI", "fsc-sti": "STI" };
     for (const [id, sub] of Object.entries(want)) {

@@ -172,14 +172,16 @@ export function fscOwnership(data: OwnershipData, cfg: CalculatorConfig, sub: Fs
   const unencumbered = Math.min((free / 0.25) * nvMax, nvMax);
   const netValue = Math.min(unencumbered + Math.min(formulaA, formulaB), nvMax);
   const subMinThreshold = nvMax * 0.4;
+  // For display only: 6 × 0.4 is 2.4000000000000004 in floating point.
+  const subMinShown = round2(subMinThreshold);
   lines.push({
     name: 'Net value',
-    target: `≥ ${subMinThreshold} pts`,
+    target: `≥ ${subMinShown} pts`,
     weighting: nvMax,
     score: netValue,
     note: `Unencumbered black economic interest ${pct(free, 2)} ÷ 25% × ${nvMax} = ${unencumbered.toFixed(2)}`
       + (debtNotes.length ? `; indebted black stakes: ${debtNotes.join('; ')}; Formula A ${formulaA.toFixed(2)}, Formula B ${formulaB.toFixed(2)} → the lesser` : '')
-      + `. Sub-minimum ${subMinThreshold} points: ${netValue >= subMinThreshold ? 'met' : 'not met'}.`,
+      + `. Sub-minimum ${subMinShown} points: ${netValue >= subMinThreshold ? 'met' : 'not met'}.`,
   });
   if (!others) {
     // Bonus: voting rights beyond 15% (against 10%, 3 points), and economic
@@ -262,8 +264,13 @@ export function fscManagement(data: ManagementData, province: string | undefined
   const africanEap = (eff.AM ?? 0) + (eff.AF ?? 0);
 
   const lines: Line[] = [];
-  const add = (name: string, actual: number, target: number, max: number, detail: string) => {
+  // A line the band points leave at 0 says why, rather than "0% ÷ 0% × 0".
+  const add = (name: string, actual: number, target: number, max: number, detail: string, noPoints?: string) => {
     const score = pts(actual, target, max);
+    if (max === 0 && noPoints) {
+      lines.push({ name, target: '—', weighting: 0, score, note: `No points on this scorecard: ${noPoints}.` });
+      return;
+    }
     lines.push({ name, target: pct(target), weighting: max, score, note: `${detail}: ${pct(actual)} ÷ ${pct(target)} × ${round2(max)} = ${score.toFixed(2)}` });
   };
   add('Exercisable voting rights of black board members', share(board, isBlack), 0.5, 2, 'Black board members by headcount');
@@ -281,14 +288,31 @@ export function fscManagement(data: ManagementData, province: string | undefined
   const label = combined && included.senior ? 'other executive & senior management' : 'other executive management';
   add('Black other executive management', share(otherExec, isBlack), oeBlackTarget, oe.black.otherExec, `Black ${label}`);
   add('Black female other executive management', share(otherExec, isBlackFemale), oeFemaleTarget, oe.female.otherExec, `Black women in ${label}`);
-  add('Black African other executive management', combined && included.senior ? share(otherExec, isAfrican) : 0, oeAfricanTarget, oe.african.otherExec, `Africans in ${label}`);
+  // The toolkit scores Africans in other executive management only in a
+  // combined other-executive and senior band, with middle or junior managers
+  // employed too; otherwise the line (unlabelled in the toolkit) is weighted 0.
+  const oeAfricanNoPoints = !combined
+    ? 'the toolkit scores Africans in other executive management only where other executive and senior management are reported together'
+    : !included.senior
+      ? 'the toolkit scores Africans in the combined other executive and senior band only where senior managers are employed'
+      : 'the toolkit scores Africans in the combined other executive and senior band only where middle or junior managers are employed too';
+  add('Black African other executive management', combined && included.senior ? share(otherExec, isAfrican) : 0, oeAfricanTarget, oe.african.otherExec, `Africans in ${label}`, oeAfricanNoPoints);
 
   const bandLines = (band: 'senior' | 'middle' | 'junior', emps: Employee[], tBlack: number, tFemale: number, title: string) => {
     const counted = band === 'senior' && combined ? [] : emps;
     const on = included[band] && !(band === 'senior' && combined);
-    add(`Black employees in ${title}`, share(counted, isBlack), on ? tBlack : 0, points.black[band], `Black ${title}`);
-    add(`Black female employees in ${title}`, share(counted, isBlackFemale), on ? tFemale : 0, points.female[band], `Black women in ${title}`);
-    add(`Black African employees in ${title}`, share(counted, isAfrican), on ? africanEap * tBlack : 0, points.african[band], `Africans in ${title} (target ${pct(tBlack, 0)} of the African EAP share ${pct(africanEap)})`);
+    // A band with nobody in it is "not included": the toolkit moves its points
+    // to the bands that are (to other executive management when none is). A
+    // senior band reported with other executives is scored in theirs — unless
+    // no senior manager is employed, when its points go to no band.
+    const noPoints = band === 'senior' && combined
+      ? included.senior
+        ? 'senior management is reported together with other executive management and scored there'
+        : 'senior management is reported together with other executive management, and with no senior manager employed the toolkit gives this band\'s points to no band'
+      : `the company employs no one in ${title}, so the toolkit moves this band's points to the management bands that are employed`;
+    add(`Black employees in ${title}`, share(counted, isBlack), on ? tBlack : 0, points.black[band], `Black ${title}`, noPoints);
+    add(`Black female employees in ${title}`, share(counted, isBlackFemale), on ? tFemale : 0, points.female[band], `Black women in ${title}`, noPoints);
+    add(`Black African employees in ${title}`, share(counted, isAfrican), on ? africanEap * tBlack : 0, points.african[band], `Africans in ${title} (target ${pct(tBlack, 0)} of the African EAP share ${pct(africanEap)})`, noPoints);
   };
   bandLines('senior', senior, 0.60, 0.30, 'senior management');
   bandLines('middle', middle, 0.75, 0.38, 'middle management');

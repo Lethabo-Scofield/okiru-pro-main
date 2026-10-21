@@ -12,8 +12,9 @@ import type { ReviewDecision } from './decisions';
 const ALL_FOUR = 'All four FSC scorecards (one toolkit): one ruling covers all four.';
 const BANKS_AND_INSURERS = 'Banks, long-term and short-term insurers: one ruling covers all three.';
 const BANKS_AND_LTI = 'Banks and long-term insurers: one ruling covers both.';
+const OTHERS_AND_STI = 'Others and short-term insurers: one ruling covers both.';
 
-const SHARED: ReviewDecision[] = [
+const SHARED_BEFORE_PP_SUB_MINIMUM: ReviewDecision[] = [
   {
     id: 'fsc-skills-within-year',
     element: 'Skills development',
@@ -67,16 +68,25 @@ const SHARED: ReviewDecision[] = [
     question: 'Confirm a first-time, 51% black-owned QSE or EME supplier earns the 1.2 factor.',
     appliesTo: ALL_FOUR,
   },
-  {
-    id: 'fsc-pp-sub-minimum',
-    element: 'Preferential procurement',
-    title: 'The procurement sub-minimum can never fail',
-    kind: 'toolkit-fault',
-    toolkit: 'The discount test takes 40% of empty cells, so procurement always passes as a priority element.',
-    okiru: 'Tests 40% of the five base procurement lines (8 points for Others and short-term insurers).',
-    question: 'Confirm procurement is tested at 40% of its base lines.',
-    appliesTo: ALL_FOUR,
-  },
+];
+
+/**
+ * Banks and long-term insurers have no procurement sub-minimum: empowerment
+ * financing is the priority element in its place, and the toolkit tests that
+ * one correctly (as Okiru does), so this ruling is not theirs.
+ */
+const PP_SUB_MINIMUM: ReviewDecision = {
+  id: 'fsc-pp-sub-minimum',
+  element: 'Preferential procurement',
+  title: 'The procurement sub-minimum can never fail',
+  kind: 'toolkit-fault',
+  toolkit: 'The discount test takes 40% of empty cells, so procurement always passes as a priority element.',
+  okiru: 'Tests 40% of the five base procurement lines: 8 of their 20 points.',
+  question: 'Confirm procurement is tested at 40% of its base lines.',
+  appliesTo: OTHERS_AND_STI,
+};
+
+const SHARED_AFTER_PP_SUB_MINIMUM: ReviewDecision[] = [
   {
     id: 'fsc-ownership-debt-netting',
     element: 'Ownership',
@@ -254,13 +264,20 @@ const STI_ONLY: ReviewDecision[] = [
   },
 ];
 
-export const FSC_OTHERS_DECISIONS: ReviewDecision[] = [...SHARED];
+/** The rulings on the sheets all four share, with the procurement sub-minimum where that scorecard has one. */
+const shared = (procurementSubMinimum: boolean): ReviewDecision[] => [
+  ...SHARED_BEFORE_PP_SUB_MINIMUM,
+  ...(procurementSubMinimum ? [PP_SUB_MINIMUM] : []),
+  ...SHARED_AFTER_PP_SUB_MINIMUM,
+];
+
+export const FSC_OTHERS_DECISIONS: ReviewDecision[] = [...shared(true)];
 export const FSC_BANKS_DECISIONS: ReviewDecision[] = [
-  ...SHARED, OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ESD_PERIOD, BAD_DEBTS, ...BANKS_ONLY,
+  ...shared(false), OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ESD_PERIOD, BAD_DEBTS, ...BANKS_ONLY,
 ];
 export const FSC_LTI_DECISIONS: ReviewDecision[] = [
-  ...SHARED, OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ESD_PERIOD, BAD_DEBTS, ...LTI_ONLY,
+  ...shared(false), OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ESD_PERIOD, BAD_DEBTS, ...LTI_ONLY,
 ];
 export const FSC_STI_DECISIONS: ReviewDecision[] = [
-  ...SHARED, OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ...STI_ONLY,
+  ...shared(true), OWNERSHIP_BONUS_NEGATIVE, NET_VALUE_CAP, ...STI_ONLY,
 ];

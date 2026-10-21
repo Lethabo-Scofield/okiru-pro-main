@@ -167,8 +167,15 @@ function WorkedLineCard({
           <div className="mt-1 text-sm text-muted-foreground">
             Okiru <span className="font-medium text-foreground tabular-nums">{fmt(line.ours)}</span>
             {" · "}Toolkit <span className="font-medium text-foreground tabular-nums">{fmt(line.toolkit)}</span>
-            {" · "}of {fmt(line.weighting, line.weighting % 1 ? 2 : 0)} point{line.weighting === 1 ? "" : "s"}
-            {line.target ? ` · target ${line.target}` : ""}
+            {line.weighting === 0 ? (
+              // A line the scorecard weights 0 (its points moved elsewhere) has no target to show.
+              " · no points on this scorecard"
+            ) : (
+              <>
+                {" · "}of {fmt(line.weighting, line.weighting % 1 ? 2 : 0)} point{line.weighting === 1 ? "" : "s"}
+                {line.target ? ` · target ${line.target}` : ""}
+              </>
+            )}
           </div>
         </div>
       </button>

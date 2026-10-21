@@ -15,7 +15,9 @@
  *    locked cells holding another company's figures, so the unemployed,
  *    disabled, learnership and absorption lines measure against them;
  *  - the first-time-supplier recognition test reads the 3-year-contract column;
- *  - the preferential-procurement sub-minimum reads empty cells, so it never fails;
+ *  - Others and short-term insurers: the preferential-procurement sub-minimum
+ *    reads empty cells, so it never fails (banks and long-term insurers test
+ *    empowerment financing in its place, correctly);
  *  - a duplicated blank "Minority Investment" row zeroes that supplier-
  *    development contribution, as in RCOGP Generic;
  *  - additional consumer education is measured above the SED target instead
@@ -640,6 +642,13 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
     achieved,
     discounted,
     achievedNote: achieved !== exAchieved ? `The toolkit shows ${lvl(exAchieved)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.` : undefined,
-    discountedNote: discounted !== exDiscounted ? `The toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its procurement sub-minimum reading empty cells (it never fails).` : undefined,
+    // Banks and long-term insurers test empowerment financing in procurement's
+    // place, and the toolkit tests that one correctly: the procurement
+    // sub-minimum's empty cells are not why their level differs.
+    discountedNote: discounted !== exDiscounted
+      ? efElement
+        ? `After discounting, the toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.`
+        : `After discounting, the toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its procurement sub-minimum reading empty cells (it never fails).`
+      : undefined,
   };
 }
