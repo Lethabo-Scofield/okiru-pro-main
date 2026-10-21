@@ -312,7 +312,7 @@ function DecisionCard({
             {noteCount > 0 ? (
               <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                 <MessageSquare className="mr-1 h-3 w-3" aria-hidden />
-                Answered ({noteCount})
+                {noteCount} {noteCount === 1 ? "note" : "notes"}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-muted-foreground">Awaiting a ruling</Badge>
