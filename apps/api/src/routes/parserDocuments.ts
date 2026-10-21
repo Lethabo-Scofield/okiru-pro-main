@@ -22,6 +22,26 @@ const SAFE_FIELD_CONFIDENCE = 0.85;
 
 router.use(requireAuth);
 
+/**
+ * Reading switched off on this host (DOCUMENT_READING_DISABLED=true, the same
+ * switch as apps/web's server/documentReading.ts): a library upload or a
+ * re-read would need the parser's AI and be priced in tokens, so refuse it
+ * with the same plain message before multer reads the file. Listing, opening
+ * and correcting documents already read stays open.
+ */
+export const DOCUMENT_READING_UNAVAILABLE_MESSAGE =
+  'Reading documents is temporarily unavailable. You can still enter your figures on each scorecard page or import your completed Excel workbook.';
+export function startsLibraryRead(method: string, path: string): boolean {
+  return method.toUpperCase() === 'POST' && /^\/(upload|[^/]+\/(reparse|reread(\/quote)?))\/?$/.test(path);
+}
+router.use((req: Request, res: Response, next) => {
+  if ((process.env.DOCUMENT_READING_DISABLED || '').trim().toLowerCase() === 'true' && startsLibraryRead(req.method, req.path)) {
+    res.status(503).json({ message: DOCUMENT_READING_UNAVAILABLE_MESSAGE, code: 'document_reading_unavailable' });
+    return;
+  }
+  next();
+});
+
 type SessionIdentity = { userId: string; organizationId: string | null };
 
 function identity(req: Request): SessionIdentity {

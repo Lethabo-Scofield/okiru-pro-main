@@ -286,7 +286,12 @@ const sedContributionSchema = new Schema({
   contributionType: { type: String, default: '' },
   descriptionOfSpend: { type: String, default: '' },
   dateOfTransaction: { type: String, default: '' },
+  // Legacy ICT answer: defaulted to false whether asked or not, so only its
+  // true is read (Toolkit store). New writes use isSectorSpecificInitiative.
   ictSpecificInitiative: { type: Boolean, default: false },
+  // SED "sector-specific initiative?" answer (ICT, AgriBEE): true, false, or
+  // absent when nobody answered — no default, so absent stays absent.
+  isSectorSpecificInitiative: { type: Boolean },
   isStructuredProject: { type: Boolean, default: false },
   isLimitedServicesCommunity: { type: Boolean, default: false },
   workbookRowId: { type: String, default: null, index: true, sparse: true },
