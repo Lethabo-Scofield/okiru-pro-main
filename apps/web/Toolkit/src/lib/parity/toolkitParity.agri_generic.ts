@@ -263,7 +263,7 @@ export function refereeAgriGeneric(sheets: ToolkitSheets, tables?: ToolkitTables
     }
     const pp = intendedProcurement(sheets, tables);
     if (pp) {
-      for (const [row, value] of pp) {
+      for (const [row, value] of Array.from(pp)) {
         set(row, value, `Toolkit formula fault: its first-time-supplier test for the 1.2 recognition factor reads the 3-year-contract answer. With the first-time answer: ${value.toFixed(2)}; the toolkit shows ${summary(row).toFixed(2)}.`);
       }
     }
@@ -275,7 +275,7 @@ export function refereeAgriGeneric(sheets: ToolkitSheets, tables?: ToolkitTables
 
   // Element totals and the grand total carry the corrected lines.
   const delta: Record<number, number> = {};
-  for (const [row, fix] of lines) {
+  for (const [row, fix] of Array.from(lines)) {
     const el = ELEMENT_OF[row];
     if (el) delta[el] = (delta[el] ?? 0) + fix.value - summary(row);
   }

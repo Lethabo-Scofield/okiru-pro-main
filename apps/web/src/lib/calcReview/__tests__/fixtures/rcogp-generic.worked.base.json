@@ -1,0 +1,2151 @@
+{
+ "sectorCode": "RCOGP",
+ "scorecardType": "Generic",
+ "pillars": [
+  {
+   "key": "ownership",
+   "label": "Ownership",
+   "ours": 20.72,
+   "toolkit": 20.71563981042654,
+   "toolkitNote": "Includes the corrected ownership lines.",
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-20",
+     "row": 20,
+     "label": "Voting rights: black",
+     "weighting": 4,
+     "target": "25% + 1 vote",
+     "bonus": false,
+     "ours": 4,
+     "working": "Black voting rights 46.4% ÷ 25% × 4 = 7.43, capped at 4. Each shareholder counts by the value of their shares.",
+     "toolkit": 4,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F20",
+       "formula": "=IF('Ownership Scorecard'!J5=\"\",'Ownership Scorecard'!H5,'Ownership Scorecard'!J5)",
+       "value": 4
+      },
+      {
+       "cell": "Ownership Scorecard!H5",
+       "formula": "=IFERROR(MIN(IF(J5=\"\",I5/LEFT(E5,3)*D5,J5),D5),0)",
+       "value": 4
+      },
+      {
+       "cell": "Ownership Scorecard!I5",
+       "formula": "=IF(J5=\"\",'Ownership Data'!$W$4,J5)",
+       "value": 0.464455
+      },
+      {
+       "cell": "Ownership Scorecard!E5",
+       "formula": null,
+       "value": "25% + 1 vote"
+      },
+      {
+       "cell": "Ownership Scorecard!D5",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "Ownership Data!W4",
+       "formula": "=SUMIFS(tblOwnershipData[ME BO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$17)",
+       "value": 0.464455
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-21",
+     "row": 21,
+     "label": "Voting rights: black women",
+     "weighting": 2,
+     "target": "10%",
+     "bonus": false,
+     "ours": 2,
+     "working": "Black women's voting rights 22.1% ÷ 10% × 2 = 4.41, capped at 2.",
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F21",
+       "formula": "=IF('Ownership Scorecard'!J6=\"\",'Ownership Scorecard'!H6,'Ownership Scorecard'!J6)",
+       "value": 2
+      },
+      {
+       "cell": "Ownership Scorecard!H6",
+       "formula": "=IFERROR(MIN(IF(J6=\"\",I6/LEFT(E6,3)*D6,J6),D6),0)",
+       "value": 2
+      },
+      {
+       "cell": "Ownership Scorecard!I6",
+       "formula": "=IF(J6=\"\",'Ownership Data'!$X$4,J6)",
+       "value": 0.220675
+      },
+      {
+       "cell": "Ownership Scorecard!E6",
+       "formula": null,
+       "value": 0.1
+      },
+      {
+       "cell": "Ownership Scorecard!D6",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "Ownership Data!X4",
+       "formula": "=SUMIFS(tblOwnershipData[ME BWO%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$17)",
+       "value": 0.220675
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-22",
+     "row": 22,
+     "label": "Economic interest: black",
+     "weighting": 4,
+     "target": "25%",
+     "bonus": false,
+     "ours": 4,
+     "working": "Black economic interest 46.4% ÷ 25% × 4 = 7.43, capped at 4. That is 16.1% held by black shareholders without acquisition debt + 30.3% net value of the indebted black shareholders' stakes (their share of the R290 000 000 company value less their debt).",
+     "toolkit": 4,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F22",
+       "formula": "=IF('Ownership Scorecard'!J7=\"\",'Ownership Scorecard'!H7,'Ownership Scorecard'!J7)",
+       "value": 4
+      },
+      {
+       "cell": "Ownership Scorecard!H7",
+       "formula": "=IFERROR(MIN(IF(J7=\"\",I7/LEFT(E7,3)*D7,J7),D7),0)",
+       "value": 4
+      },
+      {
+       "cell": "Ownership Scorecard!I7",
+       "formula": "=IF(J7=\"\",'Ownership Data'!$W$3+'Oustanding Debts Calcs'!$H$1,J7)",
+       "value": 0.308241
+      },
+      {
+       "cell": "Ownership Scorecard!E7",
+       "formula": null,
+       "value": 0.25
+      },
+      {
+       "cell": "Ownership Scorecard!D7",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "Ownership Data!W3",
+       "formula": "=W4-W2",
+       "value": 0.161137
+      },
+      {
+       "cell": "Oustanding Debts Calcs!H1",
+       "formula": "=SUM(H3:H1000)",
+       "value": 0.147104
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-23",
+     "row": 23,
+     "label": "Economic interest: black women",
+     "weighting": 2,
+     "target": "10%",
+     "bonus": false,
+     "ours": 2,
+     "working": "Black women's economic interest 14.3% ÷ 10% × 2 = 2.85, capped at 2. That is 6.9% held by black women without acquisition debt + 7.4% net value of the indebted black shareholders' stakes (their share of the R290 000 000 company value less their debt).",
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F23",
+       "formula": "=IF('Ownership Scorecard'!J8=\"\",'Ownership Scorecard'!H8,'Ownership Scorecard'!J8)",
+       "value": 2
+      },
+      {
+       "cell": "Ownership Scorecard!H8",
+       "formula": "=IFERROR(MIN(IF(J8=\"\",I8/LEFT(E8,3)*D8,J8),D8),0)",
+       "value": 2
+      },
+      {
+       "cell": "Ownership Scorecard!I8",
+       "formula": "=IF(J8=\"\",'Ownership Data'!$X$3+'Oustanding Debts Calcs'!$V$1,J8)",
+       "value": 0.142568
+      },
+      {
+       "cell": "Ownership Scorecard!E8",
+       "formula": null,
+       "value": 0.1
+      },
+      {
+       "cell": "Ownership Scorecard!D8",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "Ownership Data!X3",
+       "formula": "=X4-X2",
+       "value": 0.069017
+      },
+      {
+       "cell": "Oustanding Debts Calcs!V1",
+       "formula": "=SUM(V3:V1000)",
+       "value": 0.073552
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-24",
+     "row": 24,
+     "label": "Economic interest: designated groups",
+     "weighting": 3,
+     "target": "3%",
+     "bonus": false,
+     "ours": 3,
+     "working": "Designated groups' economic interest 3.5% ÷ 3% × 3 = 3.50, capped at 3.",
+     "toolkit": 3,
+     "toolkitNote": "Toolkit formula fault (its target is cut to \"0.0\"): its own measure 3.50% against the real 3% target gives 3.00; the toolkit shows 0.00.",
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F24",
+       "formula": "=IF('Ownership Scorecard'!J10=\"\",'Ownership Scorecard'!H10,'Ownership Scorecard'!J10)",
+       "value": 0
+      },
+      {
+       "cell": "Ownership Scorecard!H10",
+       "formula": "=IFERROR(MIN(IF(J10=\"\",I10/LEFT(E10,3)*D10,J10),D10),0)",
+       "value": 0
+      },
+      {
+       "cell": "Ownership Scorecard!I10",
+       "formula": "=IF(J10=\"\",'Ownership Data'!$Y$4,J10)",
+       "value": 0.034953
+      },
+      {
+       "cell": "Ownership Scorecard!E10",
+       "formula": null,
+       "value": 0.03
+      },
+      {
+       "cell": "Ownership Scorecard!D10",
+       "formula": null,
+       "value": 3
+      },
+      {
+       "cell": "Ownership Data!Y4",
+       "formula": "=SUMIFS(tblOwnershipData[ME BDG%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$17)",
+       "value": 0.034953
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-25",
+     "row": 25,
+     "label": "Economic interest: new entrants",
+     "weighting": 2,
+     "target": "2%",
+     "bonus": false,
+     "ours": 2,
+     "working": "Black new entrants' economic interest 31.3% ÷ 2% × 2 = 31.26, capped at 2.",
+     "toolkit": 2,
+     "toolkitNote": "Toolkit formula fault (its target is cut to \"0.0\"): its own measure 31.26% against the real 2% target gives 2.00; the toolkit shows 0.00.",
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F25",
+       "formula": "=IF('Ownership Scorecard'!J12=\"\",'Ownership Scorecard'!H12,'Ownership Scorecard'!J12)",
+       "value": 0
+      },
+      {
+       "cell": "Ownership Scorecard!H12",
+       "formula": "=IFERROR(MIN(IF(J12=\"\",I12/LEFT(E12,3)*D12,J12),D12),0)",
+       "value": 0
+      },
+      {
+       "cell": "Ownership Scorecard!I12",
+       "formula": "=IF(J12=\"\",'Ownership Data'!$Z$4,J12)",
+       "value": 0.312559
+      },
+      {
+       "cell": "Ownership Scorecard!E12",
+       "formula": null,
+       "value": 0.02
+      },
+      {
+       "cell": "Ownership Scorecard!D12",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "Ownership Data!Z4",
+       "formula": "=SUMIFS(tblOwnershipData[ME BNE%],tblOwnershipData[End of month],'Ownership Scorecard'!$G$17)",
+       "value": 0.312559
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-26",
+     "row": 26,
+     "label": "Net value",
+     "weighting": 8,
+     "target": "≥ 3.2 pts",
+     "bonus": false,
+     "ours": 3.72,
+     "working": "Black economic interest after acquisition debt 46.4% ÷ 100% × 8 = 3.72. Sub-minimum 3.2 points: met.",
+     "toolkit": 3.7156398104265405,
+     "toolkitNote": "Toolkit formula fault: it nets an indebted shareholder's stake by a formula that depends on the row the shareholder sits in, and counts the whole stake as black. Its own figures, netted the one way and for the black share only, give 46.45% black economic interest → 3.72; the toolkit shows 2.47.",
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F26",
+       "formula": "=IF('Ownership Scorecard'!J13=\"\",'Ownership Scorecard'!H13,'Ownership Scorecard'!J13)",
+       "value": 2.465928
+      },
+      {
+       "cell": "Ownership Scorecard!H13",
+       "formula": "=IFERROR(MIN(IF(J13=\"\",I13/LEFT(E13,3)*D13,J13),D13),0)",
+       "value": 2.465928
+      },
+      {
+       "cell": "Ownership Scorecard!I13",
+       "formula": "=IF(J13=\"\",'Ownership Data'!$W$3+'Oustanding Debts Calcs'!$H$1,J13)",
+       "value": 0.308241
+      },
+      {
+       "cell": "Ownership Scorecard!E13",
+       "formula": null,
+       "value": 1
+      },
+      {
+       "cell": "Ownership Scorecard!D13",
+       "formula": null,
+       "value": 8
+      },
+      {
+       "cell": "Ownership Data!W3",
+       "formula": "=W4-W2",
+       "value": 0.161137
+      },
+      {
+       "cell": "Oustanding Debts Calcs!H1",
+       "formula": "=SUM(H3:H1000)",
+       "value": 0.147104
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "managementControl",
+   "label": "Management control",
+   "ours": 13,
+   "toolkit": 13.000083769325135,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-29",
+     "row": 29,
+     "label": "Board: black members",
+     "weighting": 2,
+     "target": "50%",
+     "bonus": false,
+     "ours": 2,
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F29",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L20,'MC Scorecard'!L21)",
+       "value": 2
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L20",
+       "formula": "=MIN(K20/E20*F20,F20)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!L21",
+       "formula": "=MIN(K21/E21*F21,F21)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K20",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.833333
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E20",
+       "formula": null,
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F20",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!K21",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.833333
+      },
+      {
+       "cell": "MC Scorecard!E21",
+       "formula": null,
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard!F21",
+       "formula": null,
+       "value": 2
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-30",
+     "row": 30,
+     "label": "Board: black women members",
+     "weighting": 1,
+     "target": "25%",
+     "bonus": false,
+     "ours": 1,
+     "toolkit": 1,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F30",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L21,'MC Scorecard'!L22)",
+       "value": 1
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L21",
+       "formula": "=MIN(K21/E21*F21,F21)",
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard!L22",
+       "formula": "=MIN(K22/E22*F22,F22)",
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K21",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Board?],\"Yes\",tblMCData[Gender '[Verified']],\"Female\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.333333
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E21",
+       "formula": null,
+       "value": 0.25
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F21",
+       "formula": null,
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard!K22",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Board?],\"Yes\",tblMCData[Gender.calcs],\"Female\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Board?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.333333
+      },
+      {
+       "cell": "MC Scorecard!E22",
+       "formula": null,
+       "value": 0.25
+      },
+      {
+       "cell": "MC Scorecard!F22",
+       "formula": null,
+       "value": 1
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-31",
+     "row": 31,
+     "label": "Executive directors: black",
+     "weighting": 2,
+     "target": "50%",
+     "bonus": false,
+     "ours": 2,
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F31",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L22,'MC Scorecard'!L23)",
+       "value": 2
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L22",
+       "formula": "=MIN(K22/E22*F22,F22)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!L23",
+       "formula": "=MIN(K23/E23*F23,F23)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K22",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Designation *],$C$22,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$22,tblMCData[End of Month],$L$12),0)",
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E22",
+       "formula": null,
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F22",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!K23",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Designation.calcs],$C$23,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$23,tblMCData[End of Month],$L$12),0)",
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard!E23",
+       "formula": null,
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard!F23",
+       "formula": null,
+       "value": 2
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-32",
+     "row": 32,
+     "label": "Executive directors: black women",
+     "weighting": 1,
+     "target": "25%",
+     "bonus": false,
+     "ours": 1,
+     "toolkit": 1,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F32",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L23,'MC Scorecard'!L24)",
+       "value": 1
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L23",
+       "formula": "=MIN(K23/E23*F23,F23)",
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard!L24",
+       "formula": "=MIN(K24/E24*F24,F24)",
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K23",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],\"Female\",tblMCData[Designation *],$C$22,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$22,tblMCData[End of Month],$L$12),0)",
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E23",
+       "formula": null,
+       "value": 0.25
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F23",
+       "formula": null,
+       "value": 1
+      },
+      {
+       "cell": "MC Scorecard!K24",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],\"Female\",tblMCData[Designation.calcs],$C$23,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$23,tblMCData[End of Month],$L$12),0)",
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard!E24",
+       "formula": null,
+       "value": 0.25
+      },
+      {
+       "cell": "MC Scorecard!F24",
+       "formula": null,
+       "value": 1
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-33",
+     "row": 33,
+     "label": "Other executive (& senior): black",
+     "weighting": 2,
+     "target": "60%",
+     "bonus": false,
+     "ours": 0,
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F33",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L24,'MC Scorecard'!L25)",
+       "value": 0
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L24",
+       "formula": "=MIN(K24/E24*F24,F24)",
+       "value": 2.857143
+      },
+      {
+       "cell": "MC Scorecard!L25",
+       "formula": "=MIN(K25/E25*F25,F25)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K24",
+       "formula": "=IFERROR((COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Designation *],\"Other Executive Manager\",tblMCData[End of Month],$L$12)+COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Designation *],\"Senior Manager\",tblMCData[End of Month],$L$12))/(COUNTIFS(tblMCData[Designation *],\"Other Executive Manager\",tblMCData[End of Month],$L$12)+COUNTIFS(tblMCData[Designation *],\"Senior Manager\",tblMCData[End of Month],$L$12)),0)",
+       "value": 0.428571
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E24",
+       "formula": null,
+       "value": 0.6
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F24",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "MC Scorecard!K25",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Designation.calcs],$C$25,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$25,tblMCData[End of Month],$L$12),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!E25",
+       "formula": null,
+       "value": 0.6
+      },
+      {
+       "cell": "MC Scorecard!F25",
+       "formula": null,
+       "value": 2
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-34",
+     "row": 34,
+     "label": "Other executive (& senior): black women",
+     "weighting": 1,
+     "target": "30%",
+     "bonus": false,
+     "ours": 0,
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F34",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L25,'MC Scorecard'!L26)",
+       "value": 0
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L25",
+       "formula": "=MIN(K25/E25*F25,F25)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!L26",
+       "formula": "=MIN(K26/E26*F26,F26)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K25",
+       "formula": "=IFERROR((COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],\"Female\",tblMCData[Designation *],\"Other Executive Manager\",tblMCData[End of Month],$L$12)+COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],\"Female\",tblMCData[Designation *],\"Senior Manager\",tblMCData[End of Month],$L$12))/(COUNTIFS(tblMCData[Designation *],\"Other Executive Manager\",tblMCData[End of Month],$L$12)+COUNTIFS(tblMCData[Designation *],\"Senior Manager\",tblMCData[End of Month],$L$12)),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E25",
+       "formula": null,
+       "value": 0.3
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F25",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!K26",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],\"Female\",tblMCData[Designation.calcs],$C$25,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$25,tblMCData[End of Month],$L$12),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!E26",
+       "formula": null,
+       "value": 0.3
+      },
+      {
+       "cell": "MC Scorecard!F26",
+       "formula": null,
+       "value": 1
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-35",
+     "row": 35,
+     "label": "Senior management: black",
+     "weighting": 2,
+     "target": "60% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 0.92,
+     "toolkit": 0.9181347150259068,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F35",
+       "formula": "=IF(B35=\"N/A\",\"\",'MC Scorecard'!L30)",
+       "value": 0.918135
+      },
+      {
+       "cell": "Summary Scorecard!B35",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",\"N/A\",\"Black employees in senior management\")",
+       "value": "Black employees in senior management"
+      },
+      {
+       "cell": "MC Scorecard!L30",
+       "formula": "=SUM(L31:L36)",
+       "value": 0.918135
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard!L31",
+       "formula": "=IFERROR(MIN(K31/E31*F31,F31),0)",
+       "value": 0.905699
+      },
+      {
+       "cell": "MC Scorecard!L36",
+       "formula": "=IFERROR(MIN(K36/E36*F36,F36),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!K31",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],TRIM(RIGHT(SUBSTITUTE(D31,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D31,\" \",REPT(\" \",100)),100)),tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12),0)",
+       "value": 0.333333
+      },
+      {
+       "cell": "MC Scorecard!E31",
+       "formula": "=$E$30*EAP!C23",
+       "value": 0.27171
+      },
+      {
+       "cell": "MC Scorecard!F31",
+       "formula": "=F$30*EAP!C23",
+       "value": 0.905699
+      },
+      {
+       "cell": "MC Scorecard!K36",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],TRIM(RIGHT(SUBSTITUTE(D36,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D36,\" \",REPT(\" \",100)),100)),tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12),0)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-36",
+     "row": 36,
+     "label": "Senior management: black women",
+     "weighting": 1,
+     "target": "30% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 0,
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F36",
+       "formula": "=IF(B36=\"N/A\",\"\",'MC Scorecard'!L37)",
+       "value": 0
+      },
+      {
+       "cell": "Summary Scorecard!B36",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",\"N/A\",\"Black female employees in senior management\")",
+       "value": "Black female employees in senior management"
+      },
+      {
+       "cell": "MC Scorecard!L37",
+       "formula": "=SUM(L38:L40)",
+       "value": 0
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard!L38",
+       "formula": "=IFERROR(MIN(K38/E38*F38,F38),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!L40",
+       "formula": "=IFERROR(MIN(K40/E40*F40,F40),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!K38",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],TRIM(RIGHT(SUBSTITUTE(D38,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D38,\" \",REPT(\" \",100)),100)),tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!E38",
+       "formula": "=$E$37*EAP!C30",
+       "value": 0.273529
+      },
+      {
+       "cell": "MC Scorecard!F38",
+       "formula": "=F$37*EAP!C30",
+       "value": 0.911765
+      },
+      {
+       "cell": "MC Scorecard!K40",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Gender.calcs],TRIM(RIGHT(SUBSTITUTE(D40,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D40,\" \",REPT(\" \",100)),100)),tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Designation.calcs],$C$29,tblMCData[End of Month],$L$12),0)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-37",
+     "row": 37,
+     "label": "Middle management: black",
+     "weighting": 2,
+     "target": "75% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 1.79,
+     "toolkit": 1.7945883707541739,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F37",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L28,'MC Scorecard'!L43)",
+       "value": 1.794588
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L28",
+       "formula": "=SUM(L29:L34)",
+       "value": 1.794588
+      },
+      {
+       "cell": "MC Scorecard!L43",
+       "formula": "=SUM(L44:L49)",
+       "value": 1.794588
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L29",
+       "formula": "=IFERROR(MIN(K29/E29*F29,F29),0)",
+       "value": 0.905699
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L34",
+       "formula": "=IFERROR(MIN(K34/E34*F34,F34),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!L44",
+       "formula": "=IFERROR(MIN(K44/E44*F44,F44),0)",
+       "value": 0.905699
+      },
+      {
+       "cell": "MC Scorecard!L49",
+       "formula": "=IFERROR(MIN(K49/E49*F49,F49),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K29",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],TRIM(RIGHT(SUBSTITUTE(D29,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D29,\" \",REPT(\" \",100)),100)),tblMCData[Designation *],$C$28,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$28,tblMCData[End of Month],$L$12),0)",
+       "value": 0.5
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E29",
+       "formula": "=$E$28*EAP!C23",
+       "value": 0.339637
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-38",
+     "row": 38,
+     "label": "Middle management: black women",
+     "weighting": 1,
+     "target": "38% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 0.88,
+     "toolkit": 0.8771929824561402,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F38",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L35,'MC Scorecard'!L50)",
+       "value": 0.877193
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L35",
+       "formula": "=SUM(L36:L38)",
+       "value": 0.877193
+      },
+      {
+       "cell": "MC Scorecard!L50",
+       "formula": "=SUM(L51:L53)",
+       "value": 0.877193
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L36",
+       "formula": "=IFERROR(MIN(K36/E36*F36,F36),0)",
+       "value": 0.877193
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L38",
+       "formula": "=IFERROR(MIN(K38/E38*F38,F38),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard!L51",
+       "formula": "=IFERROR(MIN(K51/E51*F51,F51),0)",
+       "value": 0.877193
+      },
+      {
+       "cell": "MC Scorecard!L53",
+       "formula": "=IFERROR(MIN(K53/E53*F53,F53),0)",
+       "value": 0
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K36",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],TRIM(RIGHT(SUBSTITUTE(D36,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D36,\" \",REPT(\" \",100)),100)),tblMCData[Designation *],$C$28,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$28,tblMCData[End of Month],$L$12),0)",
+       "value": 0.333333
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E36",
+       "formula": "=$E$35*EAP!C30",
+       "value": 0.346471
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-39",
+     "row": 39,
+     "label": "Junior management: black",
+     "weighting": 1,
+     "target": "88% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 0.75,
+     "toolkit": 0.753750588789449,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F39",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L41,'MC Scorecard'!L56)",
+       "value": 0.753751
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L41",
+       "formula": "=SUM(L42:L47)",
+       "value": 0.753751
+      },
+      {
+       "cell": "MC Scorecard!L56",
+       "formula": "=SUM(L57:L62)",
+       "value": 0.753751
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L42",
+       "formula": "=IFERROR(MIN(K42/E42*F42,F42),0)",
+       "value": 0.426136
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L47",
+       "formula": "=IFERROR(MIN(K47/E47*F47,F47),0)",
+       "value": 0.036269
+      },
+      {
+       "cell": "MC Scorecard!L57",
+       "formula": "=IFERROR(MIN(K57/E57*F57,F57),0)",
+       "value": 0.426136
+      },
+      {
+       "cell": "MC Scorecard!L62",
+       "formula": "=IFERROR(MIN(K62/E62*F62,F62),0)",
+       "value": 0.036269
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K42",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],TRIM(RIGHT(SUBSTITUTE(D42,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D29,\" \",REPT(\" \",100)),100)),tblMCData[Designation *],$C$41,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$41,tblMCData[End of Month],$L$12),0)",
+       "value": 0.375
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E42",
+       "formula": "=$E$41*EAP!C23",
+       "value": 0.398508
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-40",
+     "row": 40,
+     "label": "Junior management: black women",
+     "weighting": 1,
+     "target": "44% (EAP-adjusted)",
+     "bonus": false,
+     "ours": 0.66,
+     "toolkit": 0.6564171122994651,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F40",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L48,'MC Scorecard'!L63)",
+       "value": 0.656417
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L48",
+       "formula": "=SUM(L49:L51)",
+       "value": 0.656417
+      },
+      {
+       "cell": "MC Scorecard!L63",
+       "formula": "=SUM(L64:L66)",
+       "value": 0.656417
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L49",
+       "formula": "=IFERROR(MIN(K49/E49*F49,F49),0)",
+       "value": 0.568182
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L51",
+       "formula": "=IFERROR(MIN(K51/E51*F51,F51),0)",
+       "value": 0.073529
+      },
+      {
+       "cell": "MC Scorecard!L64",
+       "formula": "=IFERROR(MIN(K64/E64*F64,F64),0)",
+       "value": 0.568182
+      },
+      {
+       "cell": "MC Scorecard!L66",
+       "formula": "=IFERROR(MIN(K66/E66*F66,F66),0)",
+       "value": 0.073529
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K49",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Black?],\"Yes\",tblMCData[Gender '[Verified']],TRIM(RIGHT(SUBSTITUTE(D49,\" \",REPT(\" \",100)),100)),tblMCData[Race *],TRIM(LEFT(SUBSTITUTE(D36,\" \",REPT(\" \",100)),100)),tblMCData[Designation *],$C$41,tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Designation *],$C$41,tblMCData[End of Month],$L$12),0)",
+       "value": 0.25
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E49",
+       "formula": "=$E$48*EAP!C30",
+       "value": 0.401176
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-41",
+     "row": 41,
+     "label": "Employees with disabilities",
+     "weighting": 2,
+     "target": "2%",
+     "bonus": false,
+     "ours": 2,
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F41",
+       "formula": "=IF('Client Information'!$C$25=\"Yes\",'MC Scorecard (Exco + Senior)'!L54,'MC Scorecard'!L69)",
+       "value": 2
+      },
+      {
+       "cell": "Client Information!C25",
+       "formula": null,
+       "value": "No"
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!L54",
+       "formula": "=IFERROR(MIN(K54/E54*F54,F54),0)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!L69",
+       "formula": "=IFERROR(MIN(K69/E69*F69,F69),0)",
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!K54",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Disabled *],\"Yes\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.088235
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!E54",
+       "formula": null,
+       "value": 0.02
+      },
+      {
+       "cell": "MC Scorecard (Exco + Senior)!F54",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "MC Scorecard!K69",
+       "formula": "=IFERROR(COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[Black?],\"Yes\",tblMCData[Disabled *],\"Yes\",tblMCData[End of Month],$L$12)/COUNTIFS(tblMCData[Employee?],\"Yes\",tblMCData[End of Month],$L$12),0)",
+       "value": 0.088235
+      },
+      {
+       "cell": "MC Scorecard!E69",
+       "formula": null,
+       "value": 0.02
+      },
+      {
+       "cell": "MC Scorecard!F69",
+       "formula": null,
+       "value": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "skillsDevelopment",
+   "label": "Skills development",
+   "ours": 5.24,
+   "toolkit": 5.239131176626722,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-44",
+     "row": 44,
+     "label": "Learning programmes",
+     "weighting": 6,
+     "target": "3.5% of payroll",
+     "bonus": false,
+     "ours": 0.76,
+     "working": "Each black group is measured against its effective-EAP share of 3.5% × R68.49m leviable and can earn up to its share of 6 points. African male R190,303 ÷ R1.09m → 0.48 of 2.72; African female R112,279 ÷ R1.08m → 0.28 of 2.70. Bursaries are scored on their own line. F & G course costs are capped at 25.0% and other costs at 15.0% of all training spend (R375,538), per group share.",
+     "toolkit": 0.7573268486779251,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F44",
+       "formula": "='Skills Toolkit'!P22",
+       "value": 0.757327
+      },
+      {
+       "cell": "Skills Toolkit!P22",
+       "formula": "=IF($D$8=\"Current YTD\",'Skills Calcs'!$V$13,'Skills Calcs'!$V$71)",
+       "value": 0.757327
+      },
+      {
+       "cell": "Skills Toolkit!D8",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Skills Calcs!V13",
+       "formula": "=SUM(V7:V12)",
+       "value": 0.757327
+      },
+      {
+       "cell": "Skills Calcs!V71",
+       "formula": "=SUM(V65:V70)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!V7",
+       "formula": "=IFERROR(MIN(SUM(S7:U7)/D7*E7,E7),0)",
+       "value": 0.476306
+      },
+      {
+       "cell": "Skills Calcs!V12",
+       "formula": "=IFERROR(MIN(SUM(S12:U12)/D12*E12,E12),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!V65",
+       "formula": "=IFERROR(MIN(SUM(S65:U65)/D65*E65,E65),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!V70",
+       "formula": "=IFERROR(MIN(SUM(S70:U70)/D70*E70,E70),0)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-45",
+     "row": 45,
+     "label": "Bursaries",
+     "weighting": 4,
+     "target": "2.5% of payroll",
+     "bonus": false,
+     "ours": 0,
+     "working": "Category A rows marked as higher-education bursaries for black students, each group against its EAP share of 2.5% × R68.49m: none recorded. A stipend counts only for a learner who was unemployed or on a fixed-term contract.",
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F45",
+       "formula": "='Skills Toolkit'!P58",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!P58",
+       "formula": "=IF($D$8=\"Current YTD\",'Skills Calcs'!$M$25,'Skills Calcs'!$M$83)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!D8",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Skills Calcs!M25",
+       "formula": "=SUM(M19:M24)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M83",
+       "formula": "=SUM(M77:M82)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M19",
+       "formula": "=IFERROR(MIN(SUM(K19:L19)/D19*E19,E19),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M24",
+       "formula": "=IFERROR(MIN(SUM(K24:L24)/D24*E24,E24),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M77",
+       "formula": "=IFERROR(MIN(SUM(K77:L77)/D77*E77,E77),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M82",
+       "formula": "=IFERROR(MIN(SUM(K82:L82)/D82*E82,E82),0)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-46",
+     "row": 46,
+     "label": "Disabled learners",
+     "weighting": 4,
+     "target": "0.3% of payroll",
+     "bonus": false,
+     "ours": 0,
+     "working": "Black learners with disabilities: R0 recognised ÷ R205,478 (0.3% × R68.49m) × 4 = 0.00 (max 4).",
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F46",
+       "formula": "='Skills Toolkit'!H90",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!H90",
+       "formula": "=IF($D$8=\"Current YTD\",'Skills Calcs'!$V$31,'Skills Calcs'!$V$89)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!D8",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Skills Calcs!V31",
+       "formula": "=IFERROR(MIN(SUM(S31:U31)/D31*E31,E31),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!V89",
+       "formula": "=IFERROR(MIN(SUM(S89:U89)/D89*E89,E89),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!S31",
+       "formula": "=SUM(G31,H31,K31)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!U31",
+       "formula": "=L31+MIN(SUM(J31,N31),R31)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!D31",
+       "formula": "=LeviableAmount*C31",
+       "value": 205477.776
+      },
+      {
+       "cell": "Skills Calcs!E31",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "Skills Calcs!S89",
+       "formula": "=SUM(G89,H89,K89)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-47",
+     "row": 47,
+     "label": "Learnerships / apprenticeships / internships",
+     "weighting": 6,
+     "target": "5.0% of headcount",
+     "bonus": false,
+     "ours": 4.48,
+     "working": "Black learners in categories B, C and D (employed or not), each group against its EAP share of 5% × 68 headcount: African male 3 ÷ 1.54 → 2.72 of 2.72; African female 1 ÷ 1.53 → 1.76 of 2.70.",
+     "toolkit": 4.4818043279487965,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F47",
+       "formula": "='Skills Toolkit'!P125",
+       "value": 4.481804
+      },
+      {
+       "cell": "Skills Toolkit!P125",
+       "formula": "=IF($D$8=\"Current YTD\",'Skills Calcs'!$N$43,'Skills Calcs'!$N$101)",
+       "value": 4.481804
+      },
+      {
+       "cell": "Skills Toolkit!D8",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Skills Calcs!N43",
+       "formula": "=SUM(N37:N42)",
+       "value": 4.481804
+      },
+      {
+       "cell": "Skills Calcs!N101",
+       "formula": "=SUM(N95:N100)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!N37",
+       "formula": "=IFERROR(MIN(K37/D37*E37,E37),0)",
+       "value": 2.717098
+      },
+      {
+       "cell": "Skills Calcs!N42",
+       "formula": "=IFERROR(MIN(K42/D42*E42,E42),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!N95",
+       "formula": "=IFERROR(MIN(K95/D95*E95,E95),0)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!N100",
+       "formula": "=IFERROR(MIN(K100/D100*E100,E100),0)",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-48",
+     "row": 48,
+     "label": "Absorption (bonus)",
+     "weighting": 5,
+     "target": "5.0% of headcount",
+     "bonus": true,
+     "ours": 0,
+     "working": "0 unemployed or fixed-term black learner(s) completed a learnership, apprenticeship or internship and were absorbed: 0 ÷ 68 headcount = 0.0% vs 5% target → 0.00 (max 5).",
+     "toolkit": 0,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F48",
+       "formula": "='Skills Toolkit'!P158",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!P158",
+       "formula": "=IF($D$8=\"Current YTD\",'Skills Calcs'!$M$56,'Skills Calcs'!$M$114)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Toolkit!D8",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Skills Calcs!M56",
+       "formula": "=MIN(J56/$C$56*$E$56,$E$56)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!M114",
+       "formula": "=MIN(J114/$C$56*$E$56,$E$56)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!J56",
+       "formula": "=SUM(J50:J55)",
+       "value": 0
+      },
+      {
+       "cell": "Skills Calcs!C56",
+       "formula": null,
+       "value": 0.05
+      },
+      {
+       "cell": "Skills Calcs!E56",
+       "formula": null,
+       "value": 5
+      },
+      {
+       "cell": "Skills Calcs!J114",
+       "formula": "=SUM(J108:J113)",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "procurement",
+   "label": "Preferential procurement",
+   "ours": 24.37,
+   "toolkit": 24.370061055539814,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-51",
+     "row": 51,
+     "label": "Empowering suppliers",
+     "weighting": 5,
+     "target": "80% of TMPS",
+     "bonus": false,
+     "ours": 4.29,
+     "working": "R137.3m ÷ R199.8m (TMPS) = 68.7% ÷ 80% × 5 = 4.29",
+     "toolkit": 4.29435772869201,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F51",
+       "formula": "=IF('Procurement Scorecard'!I9=\"\",'Procurement Scorecard'!F9,'Procurement Scorecard'!I9)",
+       "value": 4.294358
+      },
+      {
+       "cell": "Procurement Scorecard!F9",
+       "formula": "=MIN(IF(I9=\"\",G9/D9*C9,I9),C9)",
+       "value": 4.294358
+      },
+      {
+       "cell": "Procurement Scorecard!G9",
+       "formula": "=IFERROR(\nIF(J9=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H9/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H9/$C$5,IF($C$19=\"Prior Year\",H9/MAX($C$3:$C$4),0)))),J9),0)",
+       "value": 0.687097
+      },
+      {
+       "cell": "Procurement Scorecard!D9",
+       "formula": null,
+       "value": 0.8
+      },
+      {
+       "cell": "Procurement Scorecard!C9",
+       "formula": null,
+       "value": 5
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H9",
+       "formula": "=IF(K9=\"\",PPAllSpend,K9)",
+       "value": 137303688.5425
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-52",
+     "row": 52,
+     "label": "QSE empowering suppliers",
+     "weighting": 3,
+     "target": "15% of TMPS",
+     "bonus": false,
+     "ours": 3,
+     "working": "R70.3m ÷ R199.8m (TMPS) = 35.2% ÷ 15% × 3 = 7.04, capped at 3",
+     "toolkit": 3,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F52",
+       "formula": "=IF('Procurement Scorecard'!I10=\"\",'Procurement Scorecard'!F10,'Procurement Scorecard'!I10)",
+       "value": 3
+      },
+      {
+       "cell": "Procurement Scorecard!F10",
+       "formula": "=MIN(IF(I10=\"\",G10/D10*C10,I10),C10)",
+       "value": 3
+      },
+      {
+       "cell": "Procurement Scorecard!G10",
+       "formula": "=IFERROR(\nIF(J10=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H10/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H10/$C$5,IF($C$19=\"Prior Year\",H10/MAX($C$3:$C$4),0)))),J10),0)",
+       "value": 0.3519
+      },
+      {
+       "cell": "Procurement Scorecard!D10",
+       "formula": null,
+       "value": 0.15
+      },
+      {
+       "cell": "Procurement Scorecard!C10",
+       "formula": null,
+       "value": 3
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H10",
+       "formula": "=IF(K10=\"\",PPQSESpend,K10)",
+       "value": 70320664.4545
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-53",
+     "row": 53,
+     "label": "EME suppliers",
+     "weighting": 4,
+     "target": "15% of TMPS",
+     "bonus": false,
+     "ours": 4,
+     "working": "R54.8m ÷ R199.8m (TMPS) = 27.4% ÷ 15% × 4 = 7.31, capped at 4",
+     "toolkit": 4,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F53",
+       "formula": "=IF('Procurement Scorecard'!I11=\"\",'Procurement Scorecard'!F11,'Procurement Scorecard'!I11)",
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!F11",
+       "formula": "=MIN(IF(I11=\"\",G11/D11*C11,I11),C11)",
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!G11",
+       "formula": "=IFERROR(\nIF(J11=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H11/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H11/$C$5,IF($C$19=\"Prior Year\",H11/MAX($C$3:$C$4),0)))),J11),0)",
+       "value": 0.274165
+      },
+      {
+       "cell": "Procurement Scorecard!D11",
+       "formula": null,
+       "value": 0.15
+      },
+      {
+       "cell": "Procurement Scorecard!C11",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H11",
+       "formula": "=IF(K11=\"\",PPEMESpend,K11)",
+       "value": 54786757.9595
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-54",
+     "row": 54,
+     "label": "51% black-owned suppliers",
+     "weighting": 11,
+     "target": "50% of TMPS",
+     "bonus": false,
+     "ours": 7.08,
+     "working": "R64.3m ÷ R199.8m (TMPS) = 32.2% ÷ 50% × 11 = 7.08",
+     "toolkit": 7.075703326847805,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F54",
+       "formula": "=IF('Procurement Scorecard'!I12=\"\",'Procurement Scorecard'!F12,'Procurement Scorecard'!I12)",
+       "value": 7.075703
+      },
+      {
+       "cell": "Procurement Scorecard!F12",
+       "formula": "=MIN(IF(I12=\"\",G12/D12*C12,I12),C12)",
+       "value": 7.075703
+      },
+      {
+       "cell": "Procurement Scorecard!G12",
+       "formula": "=IFERROR(\nIF(J12=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H12/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H12/$C$5,IF($C$19=\"Prior Year\",H12/MAX($C$3:$C$4),0)))),J12),0)",
+       "value": 0.321623
+      },
+      {
+       "cell": "Procurement Scorecard!D12",
+       "formula": null,
+       "value": 0.5
+      },
+      {
+       "cell": "Procurement Scorecard!C12",
+       "formula": null,
+       "value": 11
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H12",
+       "formula": "=IF(K12=\"\",PPBOSpend,K12)",
+       "value": 64270390.252
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-55",
+     "row": 55,
+     "label": "30% black-women-owned suppliers",
+     "weighting": 4,
+     "target": "12% of TMPS",
+     "bonus": false,
+     "ours": 4,
+     "working": "R48.4m ÷ R199.8m (TMPS) = 24.2% ÷ 12% × 4 = 8.08, capped at 4",
+     "toolkit": 4,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F55",
+       "formula": "=IF('Procurement Scorecard'!I13=\"\",'Procurement Scorecard'!F13,'Procurement Scorecard'!I13)",
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!F13",
+       "formula": "=MIN(IF(I13=\"\",G13/D13*C13,I13),C13)",
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!G13",
+       "formula": "=IFERROR(\nIF(J13=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H13/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H13/$C$5,IF($C$19=\"Prior Year\",H13/MAX($C$3:$C$4),0)))),J13),0)",
+       "value": 0.242295
+      },
+      {
+       "cell": "Procurement Scorecard!D13",
+       "formula": null,
+       "value": 0.12
+      },
+      {
+       "cell": "Procurement Scorecard!C13",
+       "formula": null,
+       "value": 4
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H13",
+       "formula": "=IF(K13=\"\",PPBWOSpend,K13)",
+       "value": 48418257.936
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-56",
+     "row": 56,
+     "label": "Designated-group suppliers (bonus)",
+     "weighting": 2,
+     "target": "2% of TMPS",
+     "bonus": true,
+     "ours": 2,
+     "working": "R14.8m ÷ R199.8m (TMPS) = 7.43% ÷ 2% × 2 = 7.43, capped at 2",
+     "toolkit": 2,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F56",
+       "formula": "=IF('Procurement Scorecard'!I15=\"\",'Procurement Scorecard'!F15,'Procurement Scorecard'!I15)",
+       "value": 2
+      },
+      {
+       "cell": "Procurement Scorecard!F15",
+       "formula": "=MIN(IF(I15=\"\",G15/D15*C15,I15),C15)",
+       "value": 2
+      },
+      {
+       "cell": "Procurement Scorecard!G15",
+       "formula": "=IFERROR(\nIF(J15=\"\",(IF(AND($E$6=\"Actual\",$C$19<>\"Prior Year\"),H15/MAX($C$3:$C$4),IF(AND($E$6=\"Projected\",$C$19<>\"Prior Year\"),H15/$C$5,IF($C$19=\"Prior Year\",H15/MAX($C$3:$C$4),0)))),J15),0)",
+       "value": 0.074308
+      },
+      {
+       "cell": "Procurement Scorecard!D15",
+       "formula": null,
+       "value": 0.02
+      },
+      {
+       "cell": "Procurement Scorecard!C15",
+       "formula": null,
+       "value": 2
+      },
+      {
+       "cell": "Procurement Scorecard!E6",
+       "formula": null,
+       "value": "Actual"
+      },
+      {
+       "cell": "Procurement Scorecard!C19",
+       "formula": null,
+       "value": "Current YTD"
+      },
+      {
+       "cell": "Procurement Scorecard!H15",
+       "formula": "=IF(K15=\"\",PPBDGSpend,K15)",
+       "value": 14849154.9115
+      },
+      {
+       "cell": "Procurement Scorecard!C3",
+       "formula": "=IF($C$19=\"Prior Year\",TMPS!$G$32,TMPS!$C$32)",
+       "value": 199831524.9
+      },
+      {
+       "cell": "Procurement Scorecard!C4",
+       "formula": "=TotalPPSpend*(100%+D4)",
+       "value": 152450156.87
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "supplierDevelopment",
+   "label": "Supplier development",
+   "ours": 10,
+   "toolkit": 10,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-59",
+     "row": 59,
+     "label": "Supplier development",
+     "weighting": 10,
+     "target": "2% of NPAT",
+     "bonus": false,
+     "ours": 10,
+     "working": "R1.47m ÷ R17.4m (NPAT) = 8.45% ÷ 2% × 10 = 42.24, capped at 10",
+     "toolkit": 10,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F59",
+       "formula": "='ESD Scorecard'!H6",
+       "value": 10
+      },
+      {
+       "cell": "ESD Scorecard!H6",
+       "formula": "=MIN(I6/F6*E6,E6)",
+       "value": 10
+      },
+      {
+       "cell": "ESD Scorecard!I6",
+       "formula": "=IFERROR(J6/$D$2,0)",
+       "value": 0.084473
+      },
+      {
+       "cell": "ESD Scorecard!F6",
+       "formula": null,
+       "value": 0.02
+      },
+      {
+       "cell": "ESD Scorecard!E6",
+       "formula": null,
+       "value": 10
+      },
+      {
+       "cell": "ESD Scorecard!J6",
+       "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I14,tblESDData[Pillar],\"Supplier Development\")",
+       "value": 1469499.034
+      },
+      {
+       "cell": "ESD Scorecard!D2",
+       "formula": "=IF($F$14=\"Prior Year\",Financials!$C$4,DeemedNPAT)",
+       "value": 17395980
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "enterpriseDevelopment",
+   "label": "Enterprise development",
+   "ours": 7,
+   "toolkit": 7,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-62",
+     "row": 62,
+     "label": "Enterprise development",
+     "weighting": 5,
+     "target": "1% of NPAT",
+     "bonus": false,
+     "ours": 5,
+     "working": "R930.6k ÷ R17.4m (NPAT) = 5.35% ÷ 1% × 5 = 26.75, capped at 5",
+     "toolkit": 5,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F62",
+       "formula": "='ESD Scorecard'!H7",
+       "value": 5
+      },
+      {
+       "cell": "ESD Scorecard!H7",
+       "formula": "=MIN(I7/F7*E7,E7)",
+       "value": 5
+      },
+      {
+       "cell": "ESD Scorecard!I7",
+       "formula": "=IFERROR(J7/$D$2,0)",
+       "value": 0.053493
+      },
+      {
+       "cell": "ESD Scorecard!F7",
+       "formula": null,
+       "value": 0.01
+      },
+      {
+       "cell": "ESD Scorecard!E7",
+       "formula": null,
+       "value": 5
+      },
+      {
+       "cell": "ESD Scorecard!J7",
+       "formula": "=SUMIFS(tblESDData[Recognised Amount],tblESDData[End of Month],I14,tblESDData[Pillar],\"Enterprise Development\")",
+       "value": 930557.457
+      },
+      {
+       "cell": "ESD Scorecard!D2",
+       "formula": "=IF($F$14=\"Prior Year\",Financials!$C$4,DeemedNPAT)",
+       "value": 17395980
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-63",
+     "row": 63,
+     "label": "Graduation bonus",
+     "weighting": 1,
+     "target": "Tick-box",
+     "bonus": true,
+     "ours": 1,
+     "working": "At least one ESD beneficiary graduated from Enterprise to Supplier Development: 1 of 1.",
+     "toolkit": 1,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F63",
+       "formula": "='ESD Scorecard'!H9",
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!H9",
+       "formula": "=MIN(IF(J9=\"Yes\",1,0),E9)",
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!J9",
+       "formula": "=IF(COUNTIFS(tblESDData[Graduated to Supplier Development?],\"Yes\",tblESDData[End of Month],$I$14)>=1,\"Yes\",\"No\")",
+       "value": "Yes"
+      },
+      {
+       "cell": "ESD Scorecard!E9",
+       "formula": null,
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!I14",
+       "formula": "=XLOOKUP($F$14,Validation!$G$105:$G$123,Validation!$H$105:$H$123,0,0)",
+       "value": "2026-02-28T00:00:00"
+      }
+     ]
+    },
+    {
+     "anchor": "indicator:line-64",
+     "row": 64,
+     "label": "Jobs created bonus",
+     "weighting": 1,
+     "target": "Tick-box",
+     "bonus": true,
+     "ours": 1,
+     "working": "At least one job was created through ESD initiatives: 1 of 1.",
+     "toolkit": 1,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F64",
+       "formula": "='ESD Scorecard'!H10",
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!H10",
+       "formula": "=MIN(IF(J10=\"Yes\",1,0),E10)",
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!J10",
+       "formula": "=IF(COUNTIFS(tblESDData[At least 1 job created?],\"Yes\",tblESDData[End of Month],$I$14)>=1,\"Yes\",\"No\")",
+       "value": "Yes"
+      },
+      {
+       "cell": "ESD Scorecard!E10",
+       "formula": null,
+       "value": 1
+      },
+      {
+       "cell": "ESD Scorecard!I14",
+       "formula": "=XLOOKUP($F$14,Validation!$G$105:$G$123,Validation!$H$105:$H$123,0,0)",
+       "value": "2026-02-28T00:00:00"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "socioEconomicDevelopment",
+   "label": "Socio-economic development",
+   "ours": 5,
+   "toolkit": 5,
+   "status": "match",
+   "lines": [
+    {
+     "anchor": "indicator:line-67",
+     "row": 67,
+     "label": "Socio-economic development",
+     "weighting": 5,
+     "target": "1% of NPAT",
+     "bonus": false,
+     "ours": 5,
+     "working": "R1.29m ÷ R17.4m (NPAT) = 7.44% ÷ 1% × 5 = 37.20, capped at 5",
+     "toolkit": 5,
+     "status": "match",
+     "chain": [
+      {
+       "cell": "Summary Scorecard!F67",
+       "formula": "='SED Scorecard'!G6",
+       "value": 5
+      },
+      {
+       "cell": "SED Scorecard!G6",
+       "formula": "=MIN(H6/E6*D6,D6)",
+       "value": 5
+      },
+      {
+       "cell": "SED Scorecard!H6",
+       "formula": "=IFERROR(I6/$C$2,0)",
+       "value": 0.074398
+      },
+      {
+       "cell": "SED Scorecard!E6",
+       "formula": null,
+       "value": 0.01
+      },
+      {
+       "cell": "SED Scorecard!D6",
+       "formula": null,
+       "value": 5
+      },
+      {
+       "cell": "SED Scorecard!I6",
+       "formula": "=SUMIFS(tblSED[Recognised Amount],tblSED[End of month],K10)",
+       "value": 1294227.778
+      },
+      {
+       "cell": "SED Scorecard!C2",
+       "formula": "=IF(YEAR(K10)=Validation!I127,DeemedNPAT,Financials!C4)",
+       "value": 17395980
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "total": {
+  "ours": 85.32,
+  "toolkit": 85.3249158119182,
+  "status": "match"
+ },
+ "achieved": {
+  "ours": 4,
+  "toolkit": 4,
+  "note": "The toolkit shows Level 5; its level lookup drops a level exactly on a threshold, or uses the uncorrected ownership lines.",
+  "status": "match"
+ },
+ "discounted": {
+  "ours": 5,
+  "toolkit": 5,
+  "note": "The toolkit shows Level 6; its Skills sub-minimum test reads empty cells and always fails.",
+  "status": "match"
+ },
+ "sample": {
+  "employees": 72,
+  "shareholders": 4,
+  "suppliers": 32,
+  "trainingRows": 10,
+  "esdContributions": 5,
+  "sedContributions": 6,
+  "revenue": 197000000,
+  "npat": 17395980
+ }
+}

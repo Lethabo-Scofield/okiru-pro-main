@@ -24,6 +24,11 @@ export interface ReviewDecision {
   okiru: string;
   /** The question for the expert. */
   question: string;
+  /**
+   * Where one ruling covers several scorecards that share a toolkit (the four
+   * FSC scorecards): who else it applies to. The note is shared with them.
+   */
+  appliesTo?: string;
 }
 
 export const RCOGP_GENERIC_DECISIONS: ReviewDecision[] = [

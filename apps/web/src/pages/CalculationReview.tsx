@@ -2,13 +2,16 @@
  * Calculation Review
  *
  * A sector expert's view of what Okiru's B-BBEE engine actually computes:
- * one scorecard at a time (sector code × scorecard type), element by element,
- * indicator by indicator — with a note box under each indicator.
+ * one scorecard at a time, element by element, indicator by indicator — with
+ * a note box under each indicator.
  *
- * Everything numeric on this page comes from the live sector configuration the
- * scoring engine reads, so the page cannot show a reviewer a target the
- * calculator is not using. The prose explaining each indicator comes from the
- * calculation ledger.
+ * The scorecards checked line by line against their Empower toolkit (the
+ * registry in lib/calcReview/registry) show a worked scorecard: a sample
+ * company scored by the live calculator beside the toolkit's answer, then the
+ * rulings the expert is asked for. Every other scorecard the engine ships says
+ * plainly that it is not checked yet, and shows the written description of
+ * each indicator, read from the live sector configuration the scoring engine
+ * uses (so it cannot show a target the calculator is not using).
  */
 
 import { useMemo, useState } from "react";
@@ -21,7 +24,9 @@ import { Textarea } from "@toolkit/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@toolkit/components/ui/select";
@@ -56,8 +61,16 @@ import {
   type PillarLedger,
   type SectorConfigView,
 } from "@/lib/calcReview/ledger";
-import { buildWorkedScorecard, hasWorkedScorecard } from "@/lib/calcReview/workedScorecard";
-import { RCOGP_GENERIC_DECISIONS } from "@/lib/calcReview/decisions";
+import {
+  DEFAULT_REVIEW_SCORECARD,
+  anchorIsRegistered,
+  hasWorkedScorecard,
+  loadWorkedScorecard,
+  reviewScorecard,
+  reviewScorecardGroups,
+  reviewScorecardsFor,
+} from "@/lib/calcReview/registry";
+import type { WorkedScorecard } from "@/lib/calcReview/workedScorecard";
 import { WorkedScorecardView } from "@/components/calc-review/WorkedScorecardView";
 
 // ---------------------------------------------------------------------------
@@ -434,12 +447,17 @@ function PillarSection({
 
   return (
     <Card data-testid={`pillar-${pillar.key}`}>
-      <CardHeader className="cursor-pointer select-none pb-3" onClick={() => setOpen((v) => !v)}>
-        <div className="flex items-start gap-3">
+      <CardHeader className="pb-3">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full select-none items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
           {open ? (
-            <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+            <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           ) : (
-            <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+            <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           )}
           <div className="min-w-0 flex-1">
             <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
@@ -463,7 +481,7 @@ function PillarSection({
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">{pillar.measures}</p>
           </div>
-        </div>
+        </button>
       </CardHeader>
 
       {open && (
@@ -554,12 +572,210 @@ function PillarSection({
 }
 
 // ---------------------------------------------------------------------------
+// The scorecard picker
+// ---------------------------------------------------------------------------
+
+/** What the page shows: a toolkit-checked worked scorecard, or the written description of one not checked yet. */
+type Selection =
+  | { kind: "worked"; id: string }
+  | { kind: "described"; sectorCode: string; scorecardType: string };
+
+const PICK_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+const CODE = /^[A-Za-z0-9 _-]{1,40}$/;
+
+/**
+ * The scorecard named in the address (?scorecard=<id>, or ?sector=<code>&type=<type>),
+ * so a link can open the review on one scorecard and a reload keeps it; RCOGP Generic otherwise.
+ */
+function selectionFromUrl(): Selection {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const id = q.get("scorecard");
+    if (id && reviewScorecard(id)) return { kind: "worked", id };
+    const sector = q.get("sector");
+    const type = q.get("type");
+    if (sector && type && CODE.test(sector) && CODE.test(type)) {
+      const checked = reviewScorecardsFor(sector.toUpperCase(), type)[0];
+      if (checked) return { kind: "worked", id: checked.id };
+      return { kind: "described", sectorCode: sector.toUpperCase(), scorecardType: type };
+    }
+  } catch {
+    // No address to read (rendered outside a browser): the default.
+  }
+  return { kind: "worked", id: DEFAULT_REVIEW_SCORECARD };
+}
+
+function writeSelectionToUrl(s: Selection) {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    q.delete("scorecard");
+    q.delete("sector");
+    q.delete("type");
+    if (s.kind === "worked") q.set("scorecard", s.id);
+    else {
+      q.set("sector", s.sectorCode);
+      q.set("type", s.scorecardType);
+    }
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}?${q.toString()}`);
+  } catch {
+    // The choice still applies on the page; only the address is not updated.
+  }
+}
+
+function ScorecardPicker({
+  selection,
+  onPick,
+  unchecked,
+}: {
+  selection: Selection;
+  onPick: (s: Selection) => void;
+  unchecked: Array<{ sectorCode: string; scorecardType: string; label: string }>;
+}) {
+  const groups = useMemo(() => reviewScorecardGroups(), []);
+  const describedValue =
+    selection.kind === "described" ? `${selection.sectorCode}|${selection.scorecardType}` : "";
+  return (
+    <Card className="mb-6">
+      <CardContent className="space-y-5 pt-6">
+        <div>
+          <h2 id="calc-review-picker" className="text-sm font-semibold">
+            Scorecards checked against an Empower toolkit
+          </h2>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Each is scored by Okiru's live calculator and by its Empower toolkit for the same invented
+            company, line by line.
+          </p>
+        </div>
+        <div role="group" aria-labelledby="calc-review-picker" className="space-y-3">
+          {groups.map((g) => (
+            <div key={g.sector} className="grid gap-2 sm:grid-cols-[12rem_1fr] sm:items-center">
+              <div className="text-sm">
+                <span className="font-medium">{g.sector}</span>
+                <span className="block text-xs text-muted-foreground">{g.sectorName}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {g.scorecards.map((s) => {
+                  const active = selection.kind === "worked" && selection.id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={`${s.title}: checked against its Empower toolkit`}
+                      onClick={() => onPick({ kind: "worked", id: s.id })}
+                      data-testid={`pick-scorecard-${s.id}`}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${PICK_RING} ${
+                        active
+                          ? "border-primary bg-primary/10 font-medium text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <CheckCircle2
+                        className={`h-3.5 w-3.5 ${active ? "text-primary" : "text-emerald-600 dark:text-emerald-400"}`}
+                        aria-hidden
+                      />
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {unchecked.length > 0 && (
+          <>
+            <Separator />
+            <div className="grid gap-2 sm:grid-cols-[12rem_1fr] sm:items-center">
+              <label htmlFor="calc-review-unchecked" className="text-sm">
+                <span className="font-medium">Other scorecards</span>
+                <span className="block text-xs text-muted-foreground">Not checked against a toolkit yet</span>
+              </label>
+              <Select
+                value={describedValue}
+                onValueChange={(v) => {
+                  const [sectorCode, scorecardType] = v.split("|");
+                  if (sectorCode && scorecardType) onPick({ kind: "described", sectorCode, scorecardType });
+                }}
+              >
+                <SelectTrigger
+                  id="calc-review-unchecked"
+                  className="w-full sm:w-[360px]"
+                  data-testid="select-unchecked-scorecard"
+                >
+                  <SelectValue placeholder="Choose a scorecard not checked yet" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Not checked against a toolkit yet</SelectLabel>
+                    {unchecked.map((u) => (
+                      <SelectItem key={`${u.sectorCode}|${u.scorecardType}`} value={`${u.sectorCode}|${u.scorecardType}`}>
+                        {u.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notes written before a scorecard was checked against its toolkit
+// ---------------------------------------------------------------------------
+
+function EarlierNotes({ notes, describe }: { notes: ReviewNote[]; describe: (anchor: string) => string }) {
+  if (notes.length === 0) return null;
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="text-lg">Earlier notes on this scorecard</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          Written against the earlier description of each indicator, before this scorecard was checked
+          against the toolkit. Kept here so none is lost.
+        </p>
+        {notes.map((n) => (
+          <div key={n.id} className="rounded-md border border-border p-3">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <VerdictBadge verdict={n.verdict} />
+              <span>{n.authorName ?? "Reviewer"}</span>
+              <span>{formatWhen(n.updatedAt)}</span>
+              <span>On: {describe(n.anchor)}</span>
+            </div>
+            <p className="whitespace-pre-wrap leading-relaxed">{n.body}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The page
 // ---------------------------------------------------------------------------
 
 export default function CalculationReview() {
-  const [sectorCode, setSectorCode] = useState<string>("RCOGP");
-  const [scorecardType, setScorecardType] = useState<string>("Generic");
+  const [selection, setSelection] = useState<Selection>(selectionFromUrl);
+  const pick = (s: Selection) => {
+    setSelection(s);
+    writeSelectionToUrl(s);
+  };
+
+  const entry = selection.kind === "worked" ? reviewScorecard(selection.id) ?? null : null;
+  const sectorCode = entry ? entry.sectorCode : selection.kind === "described" ? selection.sectorCode : "RCOGP";
+  const scorecardType = entry
+    ? entry.scorecardType
+    : selection.kind === "described"
+      ? selection.scorecardType
+      : "Generic";
 
   // Named reviewers only — the api holds the allow-list and enforces it on the
   // notes routes too; this only decides whether there is anything to render.
@@ -595,51 +811,61 @@ export default function CalculationReview() {
     },
   });
 
+  // The worked scorecard: the reference bundle is fetched when the scorecard is
+  // opened, and the live calculator scores its sample company here.
+  const workedQuery = useQuery<WorkedScorecard>({
+    queryKey: ["calcReviewWorked", entry?.id ?? ""],
+    enabled: allowed && entry !== null,
+    staleTime: Infinity,
+    queryFn: () => loadWorkedScorecard(entry!.id),
+  });
+
   const sectors = useMemo(() => sectorsQuery.data?.sectors ?? [], [sectorsQuery.data]);
   const notes = useMemo(() => notesQuery.data?.notes ?? [], [notesQuery.data]);
 
-  /** Sector codes, each with the scorecard types the engine actually ships. */
-  const codes = useMemo(() => {
-    const byCode = new Map<string, { code: string; name: string; types: string[] }>();
+  const noteCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of notes) counts.set(n.anchor, (counts.get(n.anchor) ?? 0) + 1);
+    return counts;
+  }, [notes]);
+
+  /** Scorecards the engine ships that no Empower toolkit has been checked against yet. */
+  const unchecked = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ sectorCode: string; scorecardType: string; label: string }> = [];
     for (const s of sectors) {
+      const key = `${s.code}|${s.type}`;
+      if (seen.has(key) || hasWorkedScorecard(s.code, s.type)) continue;
+      seen.add(key);
       const base = (s.name ?? s.code).replace(/\s*\([^)]*\)\s*$/, "");
-      const found = byCode.get(s.code);
-      if (found) {
-        if (!found.types.includes(s.type)) found.types.push(s.type);
-      } else {
-        byCode.set(s.code, { code: s.code, name: base, types: [s.type] });
-      }
+      out.push({ sectorCode: s.code, scorecardType: s.type, label: `${base} (${s.code}) · ${s.type}` });
     }
-    return Array.from(byCode.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return out.sort((a, b) => a.label.localeCompare(b.label));
   }, [sectors]);
 
-  const availableTypes = useMemo(
-    () => codes.find((c) => c.code === sectorCode)?.types ?? [],
-    [codes, sectorCode],
-  );
-
+  // The description view reads the sector configuration the engine scores from.
   const config = useMemo(
     () => sectors.find((s) => s.code === sectorCode && s.type === scorecardType) ?? null,
     [sectors, sectorCode, scorecardType],
   );
-
   const ledger = useMemo(() => (config ? buildLedger(config) : []), [config]);
   const rules = useMemo(() => (config ? levelRules(config) : null), [config]);
 
-  // A scorecard checked line by line against the Empower toolkit shows the
-  // live calculator's own working beside the toolkit's, instead of prose.
-  const verified = hasWorkedScorecard(sectorCode, scorecardType);
-  const worked = useMemo(() => (verified ? buildWorkedScorecard() : null), [verified]);
-  const renderedAnchors = useMemo(() => {
-    const anchors = new Set<string>(["pillar:scorecard"]);
-    for (const p of worked?.pillars ?? []) for (const l of p.lines) anchors.add(l.anchor);
-    for (const d of RCOGP_GENERIC_DECISIONS) anchors.add(`indicator:decision-${d.id}`);
-    return anchors;
-  }, [worked]);
-  const earlierNotes = useMemo(
-    () => (verified ? notes.filter((n) => !renderedAnchors.has(n.anchor)) : []),
-    [verified, notes, renderedAnchors],
-  );
+  // Notes written against the earlier description of a now-checked scorecard.
+  // Shown once, on the first scorecard filed under its code and type.
+  const earlierNotes = useMemo(() => {
+    if (!entry || reviewScorecardsFor(sectorCode, scorecardType)[0]?.id !== entry.id) return [];
+    return notes.filter((n) => !anchorIsRegistered(n.anchor, sectorCode, scorecardType));
+  }, [entry, notes, sectorCode, scorecardType]);
+
+  const describeAnchor = useMemo(() => {
+    const names = new Map<string, string>([["pillar:scorecard", "the scorecard as a whole"]]);
+    for (const p of ledger) {
+      names.set(`pillar:${p.key}`, `${p.name} as a whole`);
+      for (const r of p.rows) names.set(`indicator:${r.code}`, `${p.name}: ${r.name}`);
+    }
+    return (anchor: string) => names.get(anchor) ?? "an indicator in the earlier description";
+  }, [ledger]);
 
   const totalFlags = ledger.reduce(
     (s, p) => s + p.flags.length + p.rows.filter((r) => r.flag).length,
@@ -647,11 +873,17 @@ export default function CalculationReview() {
   );
   const pillarSum = ledger.reduce((s, p) => s + (p.weighting || 0), 0);
 
-  function onPickCode(code: string) {
-    setSectorCode(code);
-    const types = codes.find((c) => c.code === code)?.types ?? [];
-    if (types.length && !types.includes(scorecardType)) setScorecardType(types[0]);
-  }
+  const renderNotes = (anchor: string, pillarKey: string) => (
+    <NoteThread
+      key={`${sectorCode}|${scorecardType}|${anchor}`}
+      anchor={anchor}
+      pillarKey={pillarKey}
+      sectorCode={sectorCode}
+      scorecardType={scorecardType}
+      notes={notes.filter((n) => n.anchor === anchor)}
+      compact
+    />
+  );
 
   if (!allowed) {
     return (
@@ -659,8 +891,8 @@ export default function CalculationReview() {
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
           <AppNavBack href="/hub" eyebrow="Suite" label="Hub" size="compact" />
           {accessQuery.isLoading ? (
-            <div className="flex items-center gap-2 py-12 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="flex items-center gap-2 py-12 text-muted-foreground" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Loading…
             </div>
           ) : (
@@ -680,7 +912,7 @@ export default function CalculationReview() {
 
         <header className="mb-6">
           <h1 className="flex items-center gap-2 text-2xl font-semibold sm:text-3xl">
-            <Scale className="h-7 w-7 text-primary" />
+            <Scale className="h-7 w-7 text-primary" aria-hidden />
             Calculation Review
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
@@ -688,218 +920,163 @@ export default function CalculationReview() {
             is worked out by one calculator; this page runs that same calculator.
           </p>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Scorecards checked against the Empower toolkit show, for every line, Okiru's own
+            Scorecards checked against their Empower toolkit show, for every line, Okiru's own
             arithmetic beside the toolkit's answer for the same company, with the toolkit's cells
-            and formulas. Scorecards not yet checked show a written description of each indicator.
-            Please record what you find in the note box under each line, and give your ruling on
-            each item listed under "Rulings needed".
+            and formulas. Please record what you find in the note box under each line, and give your
+            ruling on each item listed under "Rulings needed".
           </p>
         </header>
 
-        {/* Scorecard picker */}
-        <Card className="mb-6">
-          <CardContent className="flex flex-wrap items-end gap-4 pt-6">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Sector code
-              </label>
-              <Select value={sectorCode} onValueChange={onPickCode}>
-                <SelectTrigger className="w-[300px]" data-testid="select-sector-code">
-                  <SelectValue placeholder="Choose a sector code" />
-                </SelectTrigger>
-                <SelectContent>
-                  {codes.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>
-                      {c.name} ({c.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Scorecard type
-              </label>
-              <Select value={scorecardType} onValueChange={setScorecardType}>
-                <SelectTrigger className="w-[200px]" data-testid="select-scorecard-type">
-                  <SelectValue placeholder="Choose a scorecard" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {config && (
-              <div className="ml-auto text-right text-sm">
-                <div className="font-medium">{config.name}</div>
-                <div className="text-muted-foreground">
-                  {config.totalPoints} points available · {ledger.length} element
-                  {ledger.length === 1 ? "" : "s"} · {totalFlags} item
-                  {totalFlags === 1 ? "" : "s"} to confirm
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ScorecardPicker selection={selection} onPick={pick} unchecked={unchecked} />
 
-        {sectorsQuery.isLoading && (
-          <div className="flex items-center gap-2 py-12 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading the sector rules the engine uses…
-          </div>
-        )}
-
-        {sectorsQuery.isError && (
-          <Card className="mb-6 border-red-500/40">
-            <CardContent className="pt-6 text-sm">
-              The sector rules could not be loaded, so this page cannot show what the engine
-              computes. Please reload; if it persists, the scoring service is unreachable.
-            </CardContent>
-          </Card>
-        )}
-
-        {!sectorsQuery.isLoading && !sectorsQuery.isError && !config && (
-          <Card className="mb-6">
-            <CardContent className="pt-6 text-sm text-muted-foreground">
-              This system does not ship a {scorecardType} scorecard for {sectorCode}. Choose another
-              combination above.
-            </CardContent>
-          </Card>
-        )}
-
-        {config && rules && (
+        {entry ? (
           <>
-            {/* How a total becomes a level */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-lg">From points to a B-BBEE level</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Level</TableHead>
-                        <TableHead>Points required</TableHead>
-                        <TableHead>Procurement recognition</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rules.thresholds.map((t) => (
-                        <TableRow key={t.level}>
-                          <TableCell className="font-medium">Level {t.level}</TableCell>
-                          <TableCell>{t.minPoints} and above</TableCell>
-                          <TableCell>{t.recognition}%</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
-                  {rules.notes.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
-                  {rules.electiveNote && <li>{rules.electiveNote}</li>}
-                </ul>
-
-                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                  <span className="font-medium">
-                    Element weightings add up to {Number(pillarSum.toFixed(2))}
-                  </span>
-                  {Math.abs(pillarSum - config.totalPoints) < 0.01 ? (
-                    <>, which matches the {config.totalPoints} points this scorecard declares.</>
-                  ) : (
-                    <>
-                      {" "}
-                      against the {config.totalPoints} points this scorecard declares — a difference
-                      of {Number(Math.abs(pillarSum - config.totalPoints).toFixed(2))} points, worth
-                      confirming.
-                    </>
-                  )}
-                </div>
-
-                <NoteThread
-                  anchor="pillar:scorecard"
-                  pillarKey="scorecard"
-                  sectorCode={sectorCode}
-                  scorecardType={scorecardType}
-                  notes={notes.filter((n) => n.anchor === "pillar:scorecard")}
-                  compact
-                />
-              </CardContent>
-            </Card>
-
-            {/* The elements */}
-            {worked ? (
-              <WorkedScorecardView
-                worked={worked}
-                decisions={RCOGP_GENERIC_DECISIONS}
-                renderNotes={(anchor, pillarKey) => (
-                  <NoteThread
-                    anchor={anchor}
-                    pillarKey={pillarKey}
-                    sectorCode={sectorCode}
-                    scorecardType={scorecardType}
-                    notes={notes.filter((n) => n.anchor === anchor)}
-                    compact
-                  />
-                )}
-              />
-            ) : (
-              <div className="space-y-4">
-                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm leading-relaxed">
-                  This scorecard has not yet been checked line by line against its Empower toolkit.
-                  The descriptions below say what the calculator does; they are not a worked example.
-                </div>
-                {ledger.map((p, i) => (
-                  <PillarSection
-                    key={p.key}
-                    pillar={p}
-                    sectorCode={sectorCode}
-                    scorecardType={scorecardType}
-                    notes={notes}
-                    defaultOpen={i === 0}
-                  />
-                ))}
+            {workedQuery.isLoading && (
+              <div className="flex items-center gap-2 py-12 text-muted-foreground" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Scoring the sample company for {entry.title}…
               </div>
             )}
 
-            {earlierNotes.length > 0 && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle className="text-lg">Earlier notes on this scorecard</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Written against the earlier description of each indicator, before this scorecard
-                    was checked against the toolkit. Kept here so none is lost.
-                  </p>
-                  {earlierNotes.map((n) => (
-                    <div key={n.id} className="rounded-md border border-border p-3">
-                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <VerdictBadge verdict={n.verdict} />
-                        <span>{n.authorName ?? "Reviewer"}</span>
-                        <span>{formatWhen(n.updatedAt)}</span>
-                        <span className="font-mono">{n.anchor}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap leading-relaxed">{n.body}</p>
-                    </div>
-                  ))}
+            {workedQuery.isError && (
+              <Card className="mb-6 border-red-500/40">
+                <CardContent className="pt-6 text-sm">
+                  The worked scorecard for {entry.title} could not be loaded. Please reload; if it
+                  persists, tell the Okiru team.
                 </CardContent>
               </Card>
             )}
 
-            <p className="py-8 text-center text-xs text-muted-foreground">
-              Notes are saved against the sector code, the scorecard type and the individual
-              indicator, and are visible to everyone reviewing this scorecard.
-            </p>
+            {workedQuery.data && (
+              <WorkedScorecardView
+                key={entry.id}
+                entry={entry}
+                worked={workedQuery.data}
+                renderNotes={renderNotes}
+                noteCounts={noteCounts}
+              />
+            )}
+
+            <EarlierNotes notes={earlierNotes} describe={describeAnchor} />
+          </>
+        ) : (
+          <>
+            <Card className="mb-6" data-testid="not-checked">
+              <CardContent className="space-y-1 pt-6 text-sm leading-relaxed">
+                <p className="font-medium">Not checked against an Empower toolkit yet</p>
+                <p className="text-muted-foreground">
+                  {config ? `${config.name}` : `${sectorCode} ${scorecardType}`} has not been checked line by
+                  line against a toolkit. The descriptions below say what the calculator does; they are not
+                  a worked example.
+                </p>
+              </CardContent>
+            </Card>
+
+            {sectorsQuery.isLoading && (
+              <div className="flex items-center gap-2 py-12 text-muted-foreground" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Loading the sector rules the engine uses…
+              </div>
+            )}
+
+            {sectorsQuery.isError && (
+              <Card className="mb-6 border-red-500/40">
+                <CardContent className="pt-6 text-sm">
+                  The sector rules could not be loaded, so this page cannot show what the engine
+                  computes. Please reload; if it persists, the scoring service is unreachable.
+                </CardContent>
+              </Card>
+            )}
+
+            {config && rules && (
+              <>
+                <div className="mb-4 text-sm text-muted-foreground">
+                  {config.totalPoints} points available · {ledger.length} element
+                  {ledger.length === 1 ? "" : "s"} · {totalFlags} item{totalFlags === 1 ? "" : "s"} to confirm
+                </div>
+
+                {/* How a total becomes a level */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">From points to a B-BBEE level</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Level</TableHead>
+                            <TableHead>Points required</TableHead>
+                            <TableHead>Procurement recognition</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rules.thresholds.map((t) => (
+                            <TableRow key={t.level}>
+                              <TableCell className="font-medium">Level {t.level}</TableCell>
+                              <TableCell>{t.minPoints} and above</TableCell>
+                              <TableCell>{t.recognition}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground">
+                      {rules.notes.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                      {rules.electiveNote && <li>{rules.electiveNote}</li>}
+                    </ul>
+
+                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                      <span className="font-medium">
+                        Element weightings add up to {Number(pillarSum.toFixed(2))}
+                      </span>
+                      {Math.abs(pillarSum - config.totalPoints) < 0.01 ? (
+                        <>, which matches the {config.totalPoints} points this scorecard declares.</>
+                      ) : (
+                        <>
+                          {" "}
+                          against the {config.totalPoints} points this scorecard declares — a difference
+                          of {Number(Math.abs(pillarSum - config.totalPoints).toFixed(2))} points, worth
+                          confirming.
+                        </>
+                      )}
+                    </div>
+
+                    <NoteThread
+                      anchor="pillar:scorecard"
+                      pillarKey="scorecard"
+                      sectorCode={sectorCode}
+                      scorecardType={scorecardType}
+                      notes={notes.filter((n) => n.anchor === "pillar:scorecard")}
+                      compact
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4">
+                  {ledger.map((p, i) => (
+                    <PillarSection
+                      key={`${sectorCode}|${scorecardType}|${p.key}`}
+                      pillar={p}
+                      sectorCode={sectorCode}
+                      scorecardType={scorecardType}
+                      notes={notes}
+                      defaultOpen={i === 0}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
+
+        <p className="py-8 text-center text-xs text-muted-foreground">
+          Notes are saved against the scorecard and the individual line or ruling, and are visible to
+          everyone reviewing this scorecard.
+        </p>
       </div>
     </div>
   );
