@@ -198,6 +198,30 @@ describe("the Calculation Review's scorecards", () => {
     expect(reviewScorecard("fsc-lti")!.note).toMatch(/no senior, middle or junior managers/);
   });
 
+  it("says the long-term insurer's senior, middle and junior points went to other executive management, as its note and the toolkit do", () => {
+    // The sample reports other executive and senior management together and
+    // employs no senior, middle or junior manager: the toolkit gives other
+    // executive management 10 + 4 and management control stays out of 21.
+    const w = worked.get("fsc-lti")!;
+    const mc = w.pillars.find((p) => p.key === "managementControl")!;
+    expect(mc.lines.reduce((s, l) => s + l.weighting, 0)).toBe(21);
+    expect(mc.lines.filter((l) => l.row === 36 || l.row === 37).map((l) => l.weighting)).toEqual([10, 4]);
+    for (const l of mc.lines.filter((x) => x.row >= 39 && x.row <= 47)) {
+      expect(l.working, l.label).toMatch(/moves this band's points to other executive management\.$/);
+      expect(l.working, l.label).not.toMatch(/no band/);
+    }
+    for (const l of mc.lines.filter((x) => x.row >= 39 && x.row <= 41)) {
+      expect(l.working, l.label).toMatch(/reported together with other executive management/);
+    }
+    // The ruling on a combined band losing 4 points names the case it is about,
+    // which this sample is not, and says the sample's case loses nothing.
+    const ruling = reviewScorecard("fsc-lti")!.decisions.find((d) => d.id === "fsc-mc-combined-band")!;
+    expect(ruling.title).toMatch(/middle or junior managers but no senior manager/);
+    expect(ruling.toolkit).toMatch(/does employ middle or junior managers/);
+    expect(ruling.toolkit).toMatch(/stays out of 21/);
+    expect(reviewScorecard("fsc-lti")!.note).toMatch(/stays out of 21/);
+  });
+
   it("scores each FSC scorecard's sample as that sub-sector", async () => {
     const want: Record<string, string> = { "fsc-others": "Others", "fsc-banks": "Banks", "fsc-lti": "LTI", "fsc-sti": "STI" };
     for (const [id, sub] of Object.entries(want)) {

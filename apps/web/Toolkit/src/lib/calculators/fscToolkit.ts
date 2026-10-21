@@ -298,18 +298,32 @@ export function fscManagement(data: ManagementData, province: string | undefined
       : 'the toolkit scores Africans in the combined other executive and senior band only where middle or junior managers are employed too';
   add('Black African other executive management', combined && included.senior ? share(otherExec, isAfrican) : 0, oeAfricanTarget, oe.african.otherExec, `Africans in ${label}`, oeAfricanNoPoints);
 
+  // No band below other executive management carries points (no senior manager
+  // scored in a band of their own, and no middle or junior manager): the
+  // toolkit then gives other executive management 10 + 4, all of the bands'
+  // points (fscManagementBandPoints), and management control stays out of 21.
+  const allToOtherExec = !(included.senior && !combined) && !included.middle && !included.junior;
+
   const bandLines = (band: 'senior' | 'middle' | 'junior', emps: Employee[], tBlack: number, tFemale: number, title: string) => {
     const counted = band === 'senior' && combined ? [] : emps;
     const on = included[band] && !(band === 'senior' && combined);
     // A band with nobody in it is "not included": the toolkit moves its points
-    // to the bands that are (to other executive management when none is). A
-    // senior band reported with other executives is scored in theirs — unless
-    // no senior manager is employed, when its points go to no band.
+    // to the bands that are, or to other executive management when no band
+    // below it is. A senior band reported with other executives is scored in
+    // theirs; with no senior manager employed its points go to other executive
+    // management when no middle or junior manager is employed either, and to
+    // no band when one is (management control is then out of 17).
     const noPoints = band === 'senior' && combined
       ? included.senior
         ? 'senior management is reported together with other executive management and scored there'
-        : 'senior management is reported together with other executive management, and with no senior manager employed the toolkit gives this band\'s points to no band'
-      : `the company employs no one in ${title}, so the toolkit moves this band's points to the management bands that are employed`;
+        : allToOtherExec
+          ? 'senior management is reported together with other executive management, and with no senior, middle or junior manager employed the toolkit moves this band\'s points to other executive management'
+          : 'senior management is reported together with other executive management, and with no senior manager employed (while middle or junior managers are) the toolkit gives this band\'s points to no band'
+      : allToOtherExec
+        ? combined && included.senior
+          ? 'the company employs no middle or junior manager, so the toolkit moves this band\'s points to other executive and senior management'
+          : 'the company employs no senior, middle or junior manager, so the toolkit moves this band\'s points to other executive management'
+        : `the company employs no one in ${title}, so the toolkit moves this band's points to the management bands that are employed`;
     add(`Black employees in ${title}`, share(counted, isBlack), on ? tBlack : 0, points.black[band], `Black ${title}`, noPoints);
     add(`Black female employees in ${title}`, share(counted, isBlackFemale), on ? tFemale : 0, points.female[band], `Black women in ${title}`, noPoints);
     add(`Black African employees in ${title}`, share(counted, isAfrican), on ? africanEap * tBlack : 0, points.african[band], `Africans in ${title} (target ${pct(tBlack, 0)} of the African EAP share ${pct(africanEap)})`, noPoints);

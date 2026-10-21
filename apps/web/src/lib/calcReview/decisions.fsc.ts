@@ -121,12 +121,12 @@ const SHARED_AFTER_PP_SUB_MINIMUM: ReviewDecision[] = [
   {
     id: 'fsc-mc-combined-band',
     element: 'Management control',
-    title: 'A combined executive and senior band with no senior manager loses 4 points',
+    title: 'A combined executive and senior band with middle or junior managers but no senior manager loses 4 points',
     kind: 'judgment',
     toolkit:
-      'When the entity does not distinguish other executives from senior management and employs no senior manager, the other-executive band falls back to its own points and the senior band\'s 4 points go to no band. Management control is then out of 17 instead of 21, and the level thresholds scale to 4 fewer base points.',
+      'When the entity does not distinguish other executives from senior management, employs no senior manager and does employ middle or junior managers, the other-executive band falls back to its own points and the senior band\'s 4 points go to no band. Management control is then out of 17 instead of 21, and the level thresholds scale to 4 fewer base points. With no middle or junior manager either, nothing is lost: the toolkit moves the senior, middle and junior bands\' points to other executive management (10 points for black and 4 for black women) and management control stays out of 21.',
     okiru: 'Follows the toolkit; two test companies hit this and both match its 17-point management control.',
-    question: 'What split of the 14 management points is intended when no senior manager is employed?',
+    question: 'What split of the 14 management points is intended when no senior manager is employed but middle or junior managers are?',
     appliesTo: ALL_FOUR,
   },
   {
