@@ -170,6 +170,11 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Nobody chooses a username (one is made from the email and never shown), so a
+  // refused sign-in with no "@" in it was almost certainly a name typed instead of
+  // the email. Said beside the field, whatever the reason the server gave — it
+  // never says whether an account exists.
+  const [loginNeedsEmailHint, setLoginNeedsEmailHint] = useState(false);
 
   const defaultStatus: AsyncFieldStatus = { checking: false, available: null, message: '' };
   const [emailStatus, setEmailStatus] = useState<AsyncFieldStatus>(defaultStatus);
@@ -288,6 +293,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         return;
       }
       setIsLoading(true);
+      setLoginNeedsEmailHint(false);
       try {
         const result = await login(form.loginEmail.trim(), form.password);
         if (result.requires2FA) {
@@ -301,6 +307,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
           markAuthSessionJustCompleted();
         }
       } catch (error: any) {
+        if (!form.loginEmail.includes('@')) setLoginNeedsEmailHint(true);
         toast({ title: "Login Failed", description: error.message, variant: "destructive" });
       } finally {
         setIsLoading(false);
@@ -473,7 +480,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                   </h2>
                   <p className="text-[13px] text-muted-foreground/60 mt-1">
                     {mode === 'login'
-                      ? 'Sign in with your username or email'
+                      ? 'Sign in with your email address'
                       : mode === 'forgot'
                         ? 'Enter your email to receive a reset code'
                         : mode === 'reset'
@@ -574,23 +581,38 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                     ) : mode === 'login' ? (
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <Label htmlFor="login-email" className="text-[12px] font-medium text-muted-foreground/70">Username or Email</Label>
+                          <Label htmlFor="login-email" className="text-[12px] font-medium text-muted-foreground/70">Email address</Label>
+                          {/* type="text", not "email": the server still accepts a username, and the
+                              browser must not refuse one before the hint below can explain. */}
                           <Input
                             id="login-email"
                             type="text"
+                            inputMode="email"
                             required
                             value={form.loginEmail}
                             onChange={e => {
                               setForm({ ...form, loginEmail: e.target.value });
                               setFieldErrors(prev => ({ ...prev, loginEmail: '' }));
                             }}
-                            placeholder="username or email"
+                            placeholder="name@company.com"
                             className="h-10"
                             autoComplete="username"
+                            aria-describedby={loginNeedsEmailHint && !form.loginEmail.includes('@') ? 'login-email-hint' : undefined}
                             data-testid="input-login-email"
                           />
                           {fieldErrors.loginEmail && (
                             <p className="text-[11px] text-destructive" data-testid="error-login-email">{fieldErrors.loginEmail}</p>
+                          )}
+                          {loginNeedsEmailHint && !form.loginEmail.includes('@') && (
+                            <p
+                              id="login-email-hint"
+                              role="status"
+                              className="flex items-start gap-1 text-[11px] text-amber-400"
+                              data-testid="hint-login-email"
+                            >
+                              <AlertCircle className="mt-px h-3 w-3 shrink-0" aria-hidden />
+                              Sign in with the email address you registered with, for example name@company.com.
+                            </p>
                           )}
                         </div>
                         <div className="space-y-1.5">
