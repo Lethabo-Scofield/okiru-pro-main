@@ -110,7 +110,7 @@ export const ICT_QSE_DECISIONS: ReviewDecision[] = [
   {
     id: 'pp-empowering-gate',
     element: 'Preferential procurement',
-    title: 'Spend on all suppliers counts on the "all suppliers" line',
+    title: 'A supplier marked "not empowering" still counts on the "all suppliers" line',
     kind: 'judgment',
     toolkit: 'The toolkit never reads the "Empowering supplier?" answer: every supplier\'s recognised spend counts.',
     codes: 'The indicator is B-BBEE procurement spend from empowering suppliers.',

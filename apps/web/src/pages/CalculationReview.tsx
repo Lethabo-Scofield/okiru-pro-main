@@ -829,6 +829,12 @@ export default function CalculationReview() {
     return counts;
   }, [notes]);
 
+  // A ruling is answered by any note but an open question.
+  const answered = useMemo(
+    () => new Set(notes.filter((n) => n.verdict !== "question").map((n) => n.anchor)),
+    [notes],
+  );
+
   /** Scorecards the engine ships that no Empower toolkit has been checked against yet. */
   const unchecked = useMemo(() => {
     const seen = new Set<string>();
@@ -954,6 +960,7 @@ export default function CalculationReview() {
                 worked={workedQuery.data}
                 renderNotes={renderNotes}
                 noteCounts={noteCounts}
+                answered={answered}
               />
             )}
 

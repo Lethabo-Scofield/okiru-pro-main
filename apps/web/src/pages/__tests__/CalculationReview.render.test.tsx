@@ -5,8 +5,8 @@
  * Empower toolkit: picking one shows its summary, every line of its worked
  * scorecard and its rulings, without crashing; a scorecard not checked yet
  * says so plainly. The api is stubbed: the reviewer is allowed, the sector
- * registry is empty, and there is one ruling note and one note written against
- * the earlier description.
+ * registry is empty, and there is one ruling note, one open question on
+ * another ruling and one note written against the earlier description.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
@@ -18,14 +18,16 @@ import { workedLines } from "@/lib/calcReview/workedScorecard";
 import CalculationReview from "../CalculationReview";
 
 const NOW = "2026-10-20T09:00:00.000Z";
-const note = (id: string, sectorCode: string, scorecardType: string, anchor: string, body: string) => ({
-  id, sectorCode, scorecardType, pillarKey: "decisions", anchor, body, verdict: "note",
+const note = (id: string, sectorCode: string, scorecardType: string, anchor: string, body: string, verdict = "note") => ({
+  id, sectorCode, scorecardType, pillarKey: "decisions", anchor, body, verdict,
   authorUserId: "reviewer-1", authorName: "Reviewer", createdAt: NOW, updatedAt: NOW, mine: false,
 });
 
 const NOTES = [
   note("n1", "RCOGP", "Generic", decisionAnchor(REVIEW_SCORECARDS[0].decisions[0]), "Empower scores it at 100%."),
   note("n2", "RCOGP", "Generic", "indicator:own.voting.black", "An earlier note on the description."),
+  // An open question asks; it does not answer the ruling it sits under.
+  note("n3", "RCOGP", "Generic", decisionAnchor(REVIEW_SCORECARDS[0].decisions[1]), "Which edition?", "question"),
 ];
 
 function respond(url: string): unknown {
@@ -83,6 +85,18 @@ describe("the Calculation Review page", () => {
     expect(within(summary).getByTestId("worked-all-match")).toBeInTheDocument();
     const decisions = REVIEW_SCORECARDS[0].decisions.length;
     expect(within(summary).getByText(`${decisions - 1} of ${decisions}`)).toBeInTheDocument();
+    const rulings = screen.getByTestId("worked-rulings");
+    expect(within(rulings).getByText(`${decisions - 1} of ${decisions} awaiting a ruling`)).toBeInTheDocument();
+    const answered = within(rulings).getByTestId(`decision-${REVIEW_SCORECARDS[0].decisions[0].id}`);
+    expect(answered).toHaveTextContent("1 note");
+    expect(answered).not.toHaveTextContent("Awaiting a ruling");
+    const asked = within(rulings).getByTestId(`decision-${REVIEW_SCORECARDS[0].decisions[1].id}`);
+    expect(asked).toHaveTextContent("1 note");
+    expect(asked).toHaveTextContent("Awaiting a ruling");
+    // Each level note says which level it is about.
+    const levels = within(summary).getByTestId("worked-level-notes");
+    expect(levels).toHaveTextContent(/Level, before discounting: The toolkit shows Level 5/);
+    expect(levels).toHaveTextContent(/Level after discounting: The toolkit shows Level 6/);
     expect(screen.getByRole("button", { name: /RCOGP Generic: checked/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Earlier notes on this scorecard")).toBeInTheDocument();
     expect(screen.getByText("An earlier note on the description.")).toBeInTheDocument();

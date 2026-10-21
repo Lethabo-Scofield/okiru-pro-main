@@ -644,11 +644,12 @@ export function fscReferee(sheets: ToolkitSheets, tables?: ToolkitTables): Refer
     achievedNote: achieved !== exAchieved ? `The toolkit shows ${lvl(exAchieved)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.` : undefined,
     // Banks and long-term insurers test empowerment financing in procurement's
     // place, and the toolkit tests that one correctly: the procurement
-    // sub-minimum's empty cells are not why their level differs.
+    // sub-minimum's empty cells are not why their level differs. (The review
+    // page labels which level each note is about, as for every referee.)
     discountedNote: discounted !== exDiscounted
       ? efElement
-        ? `After discounting, the toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.`
-        : `After discounting, the toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its procurement sub-minimum reading empty cells (it never fails).`
+        ? `The toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its level lookup dropping a level exactly on a threshold.`
+        : `The toolkit shows ${lvl(exDiscounted)}: from its uncorrected lines, or its procurement sub-minimum reading empty cells (it never fails).`
       : undefined,
   };
 }

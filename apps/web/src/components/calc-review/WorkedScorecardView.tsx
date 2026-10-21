@@ -282,10 +282,13 @@ function DecisionCard({
   decision,
   renderNotes,
   noteCount,
+  isAnswered,
 }: {
   decision: ReviewDecision;
   renderNotes: RenderNotes;
   noteCount: number;
+  /** Whether any of its notes answers it (an open question does not). */
+  isAnswered: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const bodyId = useId();
@@ -316,12 +319,16 @@ function DecisionCard({
             ) : (
               <Badge variant="outline">Judgment call</Badge>
             )}
-            {noteCount > 0 ? (
-              <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+            {noteCount > 0 && (
+              <Badge
+                variant="outline"
+                className={isAnswered ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400" : undefined}
+              >
                 <MessageSquare className="mr-1 h-3 w-3" aria-hidden />
                 {noteCount} {noteCount === 1 ? "note" : "notes"}
               </Badge>
-            ) : (
+            )}
+            {!isAnswered && (
               <Badge variant="outline" className="text-muted-foreground">Awaiting a ruling</Badge>
             )}
           </div>
@@ -457,9 +464,22 @@ function ScorecardSummary({
         )}
 
         {(worked.achieved.note || worked.discounted.note) && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
-            {[worked.achieved.note, worked.discounted.note].filter(Boolean).join(" ")}
-          </p>
+          // Each note is about one of the two levels; say which, since both
+          // can open "The toolkit shows Level …".
+          <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-3" data-testid="worked-level-notes">
+            {worked.achieved.note && (
+              <p>
+                <span className="font-medium">Level, before discounting: </span>
+                {worked.achieved.note}
+              </p>
+            )}
+            {worked.discounted.note && (
+              <p>
+                <span className="font-medium">Level after discounting: </span>
+                {worked.discounted.note}
+              </p>
+            )}
+          </div>
         )}
 
         <p className="text-muted-foreground">
@@ -497,14 +517,20 @@ export function WorkedScorecardView({
   worked,
   renderNotes,
   noteCounts,
+  answered,
 }: {
   entry: ReviewScorecard;
   worked: WorkedScorecard;
   renderNotes: RenderNotes;
   /** How many notes each anchor carries (from every reviewer). */
   noteCounts: ReadonlyMap<string, number>;
+  /**
+   * The anchors carrying a note that answers: any note but an open question.
+   * A ruling whose only notes are open questions is still awaiting its answer.
+   */
+  answered: ReadonlySet<string>;
 }) {
-  const awaiting = entry.decisions.filter((d) => (noteCounts.get(decisionAnchor(d)) ?? 0) === 0).length;
+  const awaiting = entry.decisions.filter((d) => !answered.has(decisionAnchor(d))).length;
   return (
     <div className="space-y-6" data-testid={`worked-scorecard-${entry.id}`}>
       <ScorecardSummary entry={entry} worked={worked} awaiting={awaiting} renderNotes={renderNotes} />
@@ -540,6 +566,7 @@ export function WorkedScorecardView({
               decision={d}
               renderNotes={renderNotes}
               noteCount={noteCounts.get(decisionAnchor(d)) ?? 0}
+              isAnswered={answered.has(decisionAnchor(d))}
             />
           ))}
         </CardContent>
