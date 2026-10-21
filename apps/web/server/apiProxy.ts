@@ -9,6 +9,13 @@
 import http from "http";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createLogger } from "./logger";
+import {
+  DOCUMENT_READING_STATUS_PATH,
+  DOCUMENT_READING_UNAVAILABLE_MESSAGE,
+  documentReadingDisabled,
+  documentReadingStatus,
+  startsDocumentRead,
+} from "./documentReading";
 
 const logger = createLogger("ApiProxy");
 
@@ -201,6 +208,16 @@ function proxyRequest(req: Request, res: Response): void {
 
 export function registerApiProxy(app: Express): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
+    // Answered here, not by the parser: the upload screens ask before showing
+    // a picker, and the answer has to come even when the parser is down.
+    if (req.path === DOCUMENT_READING_STATUS_PATH && req.method === "GET") {
+      res.json(documentReadingStatus());
+      return;
+    }
+    if (documentReadingDisabled() && startsDocumentRead(req.method, req.path)) {
+      res.status(503).json({ message: DOCUMENT_READING_UNAVAILABLE_MESSAGE, code: "document_reading_unavailable" });
+      return;
+    }
     if (shouldProxy(req.path)) {
       logger.debug("Proxying request", { method: req.method, path: req.path, target: API_BASE });
       proxyRequest(req, res);

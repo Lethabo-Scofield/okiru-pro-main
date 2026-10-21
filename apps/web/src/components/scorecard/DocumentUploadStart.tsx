@@ -20,6 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader2, Minus } from "lucide-react";
+import { DocumentReadingUnavailable, useDocumentReadingAvailable } from "@/components/upload/DocumentReadingUnavailable";
 import { UploadSurface } from "@/components/upload/flow/UploadSurface";
 import { ReadBar, type ReadBarState } from "@/components/upload/flow/ReadBar";
 import { CostDetails } from "@/components/upload/flow/CostDetails";
@@ -443,6 +444,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
+  const reading = useDocumentReadingAvailable();
   /**
    * Has the user said they are FINISHED adding documents?
    *
@@ -2128,6 +2130,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       )}
     </>
   );
+
+  // Reading switched off on this host (DOCUMENT_READING_DISABLED): say so
+  // instead of offering a picker, unless a read is already on screen.
+  if (reading.available === false && !parsing && !parserCase && files.length === 0) {
+    return (
+      <div data-testid="document-upload-start">
+        <div className="mb-4">
+          <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
+            {addMode ? `Add documents to ${existingCompany!.name}` : "Add your documents"}
+          </h3>
+        </div>
+        <DocumentReadingUnavailable message={reading.message} testId="document-reading-unavailable" />
+      </div>
+    );
+  }
 
   return (
     <div data-testid="document-upload-start">

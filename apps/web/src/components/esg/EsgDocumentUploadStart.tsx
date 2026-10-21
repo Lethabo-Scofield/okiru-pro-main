@@ -36,6 +36,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, ChevronLeft, CircleSlash, Loader2, RotateCcw } from "lucide-react";
+import { DocumentReadingUnavailable, useDocumentReadingAvailable } from "@/components/upload/DocumentReadingUnavailable";
 import { UploadSurface } from "@/components/upload/flow/UploadSurface";
 import { ReadBar, type ReadBarState } from "@/components/upload/flow/ReadBar";
 import { CostDetails } from "@/components/upload/flow/CostDetails";
@@ -306,6 +307,7 @@ export function EsgDocumentUploadStart({
 
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
+  const reading = useDocumentReadingAvailable();
   /**
    * Has the user said they are FINISHED adding documents? The quote is free and
    * re-issued on every change, but showing a checkout the moment the first file
@@ -1573,6 +1575,30 @@ export function EsgDocumentUploadStart({
       )}
     </>
   );
+
+  // Reading switched off on this host (DOCUMENT_READING_DISABLED): say so
+  // instead of offering a picker, unless a read is already on screen.
+  if (reading.available === false && !parsing && !parserCase && files.length === 0) {
+    return (
+      <div data-testid="esg-document-upload-start">
+        <div className="mb-4">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+              data-testid="esg-upload-back"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+              {backLabel}
+            </button>
+          )}
+          <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">Add your ESG evidence</h3>
+        </div>
+        <DocumentReadingUnavailable message={reading.message} testId="esg-document-reading-unavailable" />
+      </div>
+    );
+  }
 
   return (
     <div data-testid="esg-document-upload-start">
