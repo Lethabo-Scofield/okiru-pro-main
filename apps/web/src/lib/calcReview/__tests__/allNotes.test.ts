@@ -14,7 +14,7 @@ import {
   type ResolveContext,
   type ReviewNoteSummary,
 } from "../allNotes";
-import { loadWorkedScorecard } from "../registry";
+import { REVIEW_SCORECARDS, decisionAnchor, loadWorkedScorecard, scorecardAnchor } from "../registry";
 import { buildLedger, type SectorConfigView } from "../ledger";
 import type { WorkedScorecard } from "../workedScorecard";
 
@@ -179,6 +179,37 @@ describe("what a note is about", () => {
 
     for (const r of [unknownSector, earlier, gone]) {
       expect(`${r.groupTitle} ${r.about}`).not.toMatch(/indicator:|pillar:|line-\d|decision-|own-vr|MARINE/);
+    }
+  });
+});
+
+describe("every line and ruling of the nine scorecards", () => {
+  it("is named in words, on its own scorecard, once the scorecards are loaded", async () => {
+    const names = new Map<string, Map<string, LineName>>();
+    for (const e of REVIEW_SCORECARDS) names.set(e.id, lineNamesOf(await loadWorkedScorecard(e.id)));
+    const all: ResolveContext = { lineNames: (id) => names.get(id) };
+    expect(REVIEW_SCORECARDS).toHaveLength(9);
+    for (const e of REVIEW_SCORECARDS) {
+      const at = (anchor: string, pillarKey: string) =>
+        resolveNote(note({ sectorCode: e.sectorCode, scorecardType: e.scorecardType, anchor, pillarKey }), all);
+      const w = await loadWorkedScorecard(e.id);
+      for (const p of w.pillars) {
+        for (const l of p.lines) {
+          const r = at(l.anchor, p.key);
+          expect([r.subject, r.about, r.element, r.groupTitle], `${e.id} ${l.anchor}`).toEqual(["line", l.label, p.label, e.title]);
+          expect(r.target, `${e.id} ${l.anchor}`).toEqual({ kind: "worked", id: e.id });
+        }
+      }
+      for (const d of e.decisions) {
+        const r = at(decisionAnchor(d), "decisions");
+        expect([r.subject, r.about, r.element], `${e.id} ${d.id}`).toEqual(["ruling", d.title, d.element]);
+        // Its own scorecard's group, or the group of the scorecards that share it — one of them this one.
+        if (r.groupTitle !== e.title) expect(r.groupTitle, `${e.id} ${d.id}`).toMatch(/^FSC rulings shared by /);
+        const holder = REVIEW_SCORECARDS.find((x) => r.target.kind === "worked" && x.id === r.target.id)!;
+        expect(holder.decisions.some((x) => decisionAnchor(x) === decisionAnchor(d)), `${e.id} ${d.id}`).toBe(true);
+      }
+      const whole = at(scorecardAnchor(e), "scorecard");
+      expect([whole.subject, whole.groupTitle], e.id).toEqual(["scorecard", e.title]);
     }
   });
 });
