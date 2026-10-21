@@ -220,7 +220,7 @@ function WorkedPillarCard({
   const differing = pillar.lines.filter((l) => l.status !== "match").length;
   const faults = pillar.lines.filter((l) => l.toolkitNote).length;
   return (
-    <Card data-testid={`worked-pillar-${pillar.key}`}>
+    <Card id={lineDomId(`pillar:${pillar.key}`)} className="scroll-mt-24" data-testid={`worked-pillar-${pillar.key}`}>
       <CardHeader className="pb-3">
         <button
           type="button"
@@ -284,7 +284,11 @@ function DecisionCard({
   const bodyId = useId();
   const anchor = decisionAnchor(decision);
   return (
-    <div className="rounded-lg border border-border bg-card" data-testid={`decision-${decision.id}`}>
+    <div
+      id={lineDomId(anchor)}
+      className="scroll-mt-24 rounded-lg border border-border bg-card"
+      data-testid={`decision-${decision.id}`}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -474,7 +478,7 @@ function ScorecardSummary({
           out from the toolkit's own figures, and says so. Every such place is listed under "Rulings needed" below.
         </p>
 
-        <div className="rounded-lg border border-border p-3">
+        <div id={lineDomId(scorecardAnchor(entry))} className="scroll-mt-24 rounded-lg border border-border p-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Notes on this scorecard as a whole
           </h3>

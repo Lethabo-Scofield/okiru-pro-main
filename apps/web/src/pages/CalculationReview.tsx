@@ -71,7 +71,8 @@ import {
   reviewScorecardsFor,
 } from "@/lib/calcReview/registry";
 import type { WorkedScorecard } from "@/lib/calcReview/workedScorecard";
-import { WorkedScorecardView } from "@/components/calc-review/WorkedScorecardView";
+import { WorkedScorecardView, lineDomId } from "@/components/calc-review/WorkedScorecardView";
+import { AllNotesPanel } from "@/components/calc-review/AllNotesPanel";
 
 // ---------------------------------------------------------------------------
 // Notes
@@ -332,7 +333,7 @@ function IndicatorCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-lg border border-border bg-card" data-testid={`indicator-${row.code}`}>
+    <div id={lineDomId(anchor)} className="rounded-lg border border-border bg-card" data-testid={`indicator-${row.code}`}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -446,7 +447,7 @@ function PillarSection({
   const addsUp = Math.abs(rowsTotal - pillar.weighting) < 0.01;
 
   return (
-    <Card data-testid={`pillar-${pillar.key}`}>
+    <Card id={lineDomId(`pillar:${pillar.key}`)} data-testid={`pillar-${pillar.key}`}>
       <CardHeader className="pb-3">
         <button
           type="button"
@@ -928,6 +929,7 @@ export default function CalculationReview() {
         </header>
 
         <ScorecardPicker selection={selection} onPick={pick} unchecked={unchecked} />
+        <AllNotesPanel sectors={sectors} onOpenScorecard={pick} />
 
         {entry ? (
           <>
