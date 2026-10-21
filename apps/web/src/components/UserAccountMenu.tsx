@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@toolkit/lib/auth";
+import { apiRequest } from "@toolkit/lib/queryClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, ChevronDown, LogOut, Settings, Users } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Scale, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TokenBalancePill } from "@/components/TokenBalancePill";
 
@@ -33,9 +35,34 @@ type UserAccountMenuProps = {
   showTokens?: boolean;
 };
 
+/**
+ * Whether the signed-in user is one of the named calculation reviewers. The api
+ * holds the allow-list; this asks once per mount and says no until it hears yes
+ * — so the link never flashes up for anyone else, and a failed check hides it.
+ */
+function useCalculationReviewAccess(): boolean {
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    apiRequest("GET", "/api/calculation-review/access")
+      .then((res) => res.json())
+      .then((body: { success?: boolean; allowed?: boolean }) => {
+        if (live) setAllowed(body?.success === true && body.allowed === true);
+      })
+      .catch(() => {
+        if (live) setAllowed(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return allowed;
+}
+
 export function UserAccountMenu({ variant = "hub", className, trigger, showTokens = true }: UserAccountMenuProps) {
   const [pathname, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const canReview = useCalculationReviewAccess();
   const returnPath = pathname || "/hub";
   const profileUrl = companyProfilePath(returnPath);
 
@@ -99,6 +126,17 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
           ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {canReview && (
+          <DropdownMenuItem
+            onSelect={() => {
+              navigate("/calculation-review");
+            }}
+            data-testid="menu-calculation-review"
+          >
+            <Scale />
+            Calculation review
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onSelect={() => {
             navigate("/settings");
