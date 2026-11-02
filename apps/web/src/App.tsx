@@ -57,6 +57,7 @@ import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { API_BASE } from "@toolkit/lib/config";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+const StudioApp = lazy(() => import("@/pages/studio/StudioApp"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
 /** Legacy upload/build flows — super-admin only in production go-live. */
@@ -231,6 +232,13 @@ function AppRouter() {
       </Route>
       {/* Settings — account, billing/tokens, team, company in one shell.
           The bare /settings lands on Account; /settings/:tab picks a pane. */}
+      {/* Rules Studio: gated by a Studio grant on the server, not by any platform role. */}
+      <Route path="/studio/:rest*">
+        <ProtectedRoute><StudioApp /></ProtectedRoute>
+      </Route>
+      <Route path="/studio">
+        <ProtectedRoute><StudioApp /></ProtectedRoute>
+      </Route>
       <Route path="/settings">
         <ProtectedRoute><Settings /></ProtectedRoute>
       </Route>
