@@ -21,6 +21,9 @@ COPY apps/api/ apps/api/
 # auth.ts shares the work-email rules with the web app (apps/web/shared/workEmail.ts);
 # esbuild bundles it into dist, so the builder needs the source but the runtime does not.
 COPY apps/web/shared/ apps/web/shared/
+# The Rules Studio impact engine runs the SAME scorer + sector configs as the browser
+# (apps/web/Toolkit/src/lib); esbuild bundles them into dist, so only the builder needs them.
+COPY apps/web/Toolkit/src/lib/ apps/web/Toolkit/src/lib/
 
 RUN pnpm --filter @okiru/types build \
     && cd apps/api && node build.js
