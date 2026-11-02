@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { resolveRules, startRulesWatcher, PublishedRulesUnavailableError, HEADS_POLL_MS, type FetchLike, type WatcherEnv } from '../liveLink';
 import { buildEffectiveConfig, hashEffectiveConfig, hashOverrides } from '../buildEffectiveConfig';
 import { SCORECARD_SOURCES } from '../scorecards';
+import { registryHashOf } from '../registry';
 import type { RuleOverrides } from '../types';
 
 const G = 'benefitFactors[contributionType=guarantees].sdFactor';
@@ -16,6 +17,7 @@ async function publishedBody(overrides: RuleOverrides, tweak: (b: any) => void =
       scorecardId: 'rcogp-generic', version: 3,
       configHash: await hashEffectiveConfig(cfg), overridesHash: await hashOverrides(overrides),
       effectiveFrom: '2026-11-02T00:00:00.000Z',
+      registryHash: await registryHashOf('rcogp-generic'), buildId: 'b1', pinned: false, frozen: false,
     },
     overrides,
   };
@@ -76,6 +78,45 @@ describe('resolveRules (fail-closed live link)', () => {
     const ov: RuleOverrides = { source: { [G]: 0.5 }, calculator: {} };
     const body = await publishedBody(ov, (b) => { b.overrides = { source: { 'targets.nope.x': 1 }, calculator: {} }; });
     await expect(resolveRules('rcogp-generic', shipped, reply(200, body), true)).rejects.toThrow(/valid configuration/);
+  });
+});
+
+describe('resolveRules - version 0, pins and compatibility', () => {
+  it('a version-0 stamp returns the SHIPPED config object itself, hash-verified', async () => {
+    const empty: RuleOverrides = { source: {}, calculator: {} };
+    const body = await publishedBody(empty, (b) => { b.stamp.version = 0; b.stamp.configHash = undefined; });
+    body.stamp.configHash = await hashEffectiveConfig(shipped);
+    const r = await resolveRules('rcogp-generic', shipped, reply(200, body), true);
+    expect(r.config).toBe(shipped);
+    expect(r.stamp).toMatchObject({ version: 0 });
+  });
+
+  it('version 0 with a wrong config hash is refused', async () => {
+    const empty: RuleOverrides = { source: {}, calculator: {} };
+    const body = await publishedBody(empty, (b) => { b.stamp.version = 0; b.stamp.configHash = 'c'.repeat(64); });
+    await expect(resolveRules('rcogp-generic', shipped, reply(200, body), true)).rejects.toThrow(/integrity/);
+  });
+
+  it('fails closed when the version was published against a different registry (app is out of date)', async () => {
+    const ov: RuleOverrides = { source: { [G]: 0.5 }, calculator: {} };
+    const body = await publishedBody(ov, (b) => { b.stamp.registryHash = 'b'.repeat(64); });
+    await expect(resolveRules('rcogp-generic', shipped, reply(200, body), true)).rejects.toThrow(/not compatible/);
+  });
+
+  it('requests the pinned version explicitly and returns it flagged pinned', async () => {
+    const ov: RuleOverrides = { source: { [G]: 0.5 }, calculator: {} };
+    const body = await publishedBody(ov, (b) => { b.stamp.pinned = true; });
+    const seen: string[] = [];
+    const f: FetchLike = async (url) => { seen.push(url); return { ok: true, status: 200, json: async () => body }; };
+    const r = await resolveRules('rcogp-generic', shipped, f, true, 3);
+    expect(seen).toEqual(['/api/rules/published/rcogp-generic?version=3']);
+    expect(r.stamp).toMatchObject({ version: 3, pinned: true });
+  });
+
+  it('rejects a stamp missing the new fields', async () => {
+    const ov: RuleOverrides = { source: { [G]: 0.5 }, calculator: {} };
+    const body = await publishedBody(ov, (b) => { delete b.stamp.buildId; });
+    await expect(resolveRules('rcogp-generic', shipped, reply(200, body), true)).rejects.toThrow(/malformed/);
   });
 });
 

@@ -23,11 +23,20 @@ export class VersionConflictError extends Error {
   }
 }
 
-export interface FreezeState {
-  frozen: boolean;
-  reason: string | null;
-  by: string | null;
-  at: string | null;
+/**
+ * Freeze state is an append-only event log, never a mutable flag: who froze what, when,
+ * and which version was served meanwhile is part of the audit trail.
+ */
+export interface FreezeEvent {
+  id: string;
+  /** A scorecard id, or '*' for every scorecard. */
+  scope: string;
+  action: 'freeze' | 'unfreeze';
+  /** Version served to unpinned clients while frozen; 0 = the shipped rules. */
+  serveVersion: number;
+  reason: string;
+  actor: string;
+  at: string;
 }
 
 export interface RulesStore {
@@ -38,6 +47,20 @@ export interface RulesStore {
    * Versions are never updated or deleted. Throws VersionConflictError on a lost race.
    */
   appendVersion(record: RulesVersionRecord, expectedHeadVersion: number): Promise<void>;
-  getFreezeState(): Promise<FreezeState>;
-  setFreezeState(state: FreezeState): Promise<void>;
+  /** All freeze events, oldest first. */
+  getFreezeEvents(): Promise<FreezeEvent[]>;
+  appendFreezeEvent(event: FreezeEvent): Promise<void>;
+}
+
+/** The effective freeze for a scorecard: the latest event for its own scope and for '*'. */
+export function currentFreeze(events: FreezeEvent[], scorecardId: string): FreezeEvent | null {
+  let own: FreezeEvent | null = null;
+  let all: FreezeEvent | null = null;
+  for (const e of events) {
+    if (e.scope === scorecardId) own = e;
+    else if (e.scope === '*') all = e;
+  }
+  const active = [own, all].filter((e): e is FreezeEvent => !!e && e.action === 'freeze');
+  if (!active.length) return null;
+  return active.reduce((a, b) => (Date.parse(b.at) >= Date.parse(a.at) ? b : a));
 }

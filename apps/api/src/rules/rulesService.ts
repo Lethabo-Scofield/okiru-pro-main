@@ -7,13 +7,15 @@
  * and never used: callers get RulesIntegrityError (HTTP 500 + an alarm), not a guess.
  */
 import { buildEffectiveConfig, hashOverrides, hashEffectiveConfig, RuleValidationError } from '../../../web/Toolkit/src/lib/rules/buildEffectiveConfig';
-import { isScorecardId, SCORECARD_IDS, type ScorecardId } from '../../../web/Toolkit/src/lib/rules/scorecards';
+import { isScorecardId, SCORECARD_IDS, SCORECARD_SOURCES, type ScorecardId } from '../../../web/Toolkit/src/lib/rules/scorecards';
+import { registryHashOf } from '../../../web/Toolkit/src/lib/rules/registry';
 import type { RuleOverrides, RulesetStamp } from '../../../web/Toolkit/src/lib/rules/types';
 import {
   genesisHash, sealVersion, verifyChain, type RulesVersionRecord, type VersionKind, type VerifyFailure,
 } from './ledger.js';
 import type { Signer, Verifier } from './signing.js';
-import type { RulesStore } from './store.js';
+import { currentFreeze, type RulesStore, type FreezeEvent } from './store.js';
+import { randomUUID } from 'crypto';
 
 export class RulesIntegrityError extends Error {
   readonly code = 'RULES_INTEGRITY_FAILURE';
@@ -31,6 +33,23 @@ export class RulesFrozenError extends Error {
   }
 }
 
+export class RulesNotFoundError extends Error {
+  readonly code = 'RULES_VERSION_NOT_FOUND';
+  constructor(public readonly scorecardId: string, public readonly version: number) {
+    super(`Version ${version} does not exist for ${scorecardId}`);
+    this.name = 'RulesNotFoundError';
+  }
+}
+
+/** A stored version cannot be used by the running build (the registry changed under it). */
+export class RulesIncompatibleError extends Error {
+  readonly code = 'RULES_INCOMPATIBLE';
+  constructor(public readonly scorecardId: string, public readonly version: number, detail: string) {
+    super(`Version ${version} of ${scorecardId} is incompatible with this build: ${detail}`);
+    this.name = 'RulesIncompatibleError';
+  }
+}
+
 export class PublishRejectedError extends Error {
   readonly code = 'PUBLISH_REJECTED';
   constructor(message: string) {
@@ -44,8 +63,10 @@ export interface ServiceDeps {
   verifier: Verifier;
   /** Absent => publishing disabled (reads and verification still work). */
   signer?: Signer;
+  /** Identifies the running build; stamped on every version and every served stamp. */
+  buildId: string;
   now?: () => Date;
-  /** RULES_FREEZE=true freezes regardless of stored state. */
+  /** RULES_FREEZE=true freezes publishing everywhere, independent of the Studio. */
   envFrozen?: boolean;
 }
 
@@ -60,12 +81,16 @@ export interface PublishInput {
   effectiveFrom?: Date;
   kind?: VersionKind;
   restoredFromVersion?: number | null;
+  announcement?: string | null;
+  authors?: string[];
+  approvers?: string[];
 }
 
-export async function assertNotFrozen(deps: ServiceDeps): Promise<void> {
+/** Throws RulesFrozenError (HTTP 423) when publishing to `scorecardId` is frozen. */
+export async function assertNotFrozen(deps: ServiceDeps, scorecardId: string): Promise<void> {
   if (deps.envFrozen) throw new RulesFrozenError('RULES_FREEZE is set on this deployment');
-  const s = await deps.store.getFreezeState();
-  if (s.frozen) throw new RulesFrozenError(s.reason);
+  const f = currentFreeze(await deps.store.getFreezeEvents(), scorecardId);
+  if (f) throw new RulesFrozenError(f.reason);
 }
 
 /** Verified history for one scorecard. Throws RulesIntegrityError on any defect. */
@@ -85,7 +110,7 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
   }
   // Freeze stops ordinary publishing and restores. An emergency rollback is the recovery
   // path FROM a bad state, so it is the one operation a freeze must not block.
-  if (input.kind !== 'rollback') await assertNotFrozen(deps);
+  if (input.kind !== 'rollback') await assertNotFrozen(deps, scorecardId);
 
   const history = await loadVerifiedHistory(scorecardId, deps);
   const head = history[history.length - 1];
@@ -119,6 +144,11 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
     overridesHash: await hashOverrides(overrides),
     configHash,
     effectiveFrom: effectiveFrom.toISOString(),
+    registryHash: await registryHashOf(scorecardId),
+    buildId: deps.buildId,
+    announcement: input.announcement ?? null,
+    authors: input.authors ?? [],
+    approvers: input.approvers ?? [],
     publishedAt: now.toISOString(),
     publishedBy: input.publishedBy,
     changesetId: input.changesetId ?? null,
@@ -133,12 +163,21 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
 
 export interface PublishedRules {
   scorecardId: ScorecardId;
-  /** null => no published version is in force yet; callers use the shipped config. */
-  stamp: RulesetStamp | null;
-  overrides: RuleOverrides | null;
+  /** Always present: version 0 (shipped) when nothing is published or a freeze selects it. */
+  stamp: RulesetStamp;
+  overrides: RuleOverrides;
   /** Head of the chain, so clients can cheaply detect "something changed". */
   chainHead: string | null;
   headVersion: number;
+}
+
+export interface ResolveOptions {
+  /** Pin: serve exactly this version (0 = shipped). Ignores the timeline and any freeze. */
+  version?: number;
+  /** Serve the version that was in force at the END of this UTC day (YYYY-MM-DD). */
+  periodEnd?: string;
+  /** Test seam / explicit instant. */
+  at?: Date;
 }
 
 /** The version in force at `at`: highest version whose effectiveFrom has passed. */
@@ -150,53 +189,96 @@ export function activeVersionAt(history: RulesVersionRecord[], at: Date): RulesV
   return active;
 }
 
-export async function resolvePublished(scorecardId: ScorecardId, deps: ServiceDeps, at?: Date): Promise<PublishedRules> {
-  const history = await loadVerifiedHistory(scorecardId, deps);
-  const head = history[history.length - 1] ?? null;
-  const active = activeVersionAt(history, at ?? nowOf(deps));
-  if (!active) {
-    return { scorecardId, stamp: null, overrides: null, chainHead: head?.chainHash ?? null, headVersion: head?.version ?? 0 };
+export function endOfUtcDay(isoDate: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) throw new PublishRejectedError('periodEnd must be YYYY-MM-DD');
+  const d = new Date(`${isoDate}T23:59:59.999Z`);
+  if (Number.isNaN(d.getTime())) throw new PublishRejectedError('periodEnd is not a valid date');
+  return d;
+}
+
+const SHIPPED_EFFECTIVE_FROM = '1970-01-01T00:00:00.000Z';
+const EMPTY: RuleOverrides = { source: {}, calculator: {} };
+type Flags = { pinned: boolean; frozen: boolean };
+
+async function stampFor(
+  scorecardId: ScorecardId, record: RulesVersionRecord | null, deps: ServiceDeps, flags: Flags,
+): Promise<{ stamp: RulesetStamp; overrides: RuleOverrides }> {
+  const registryHash = await registryHashOf(scorecardId);
+  if (!record) {
+    return {
+      stamp: {
+        scorecardId, version: 0,
+        configHash: await hashEffectiveConfig(SCORECARD_SOURCES[scorecardId].shipped),
+        overridesHash: await hashOverrides(EMPTY),
+        effectiveFrom: SHIPPED_EFFECTIVE_FROM, registryHash, buildId: deps.buildId, ...flags,
+      },
+      overrides: EMPTY,
+    };
   }
-  // Recompute rather than trust: this is what catches a signed-but-stale version after the
-  // shipped baseline or the registry changed underneath it.
+  // Compatibility: the registry the version was published against must be the one this build runs.
+  if (record.registryHash !== registryHash) {
+    throw new RulesIncompatibleError(scorecardId, record.version, 'the rule registry changed after this version was published');
+  }
+  // Recompute rather than trust: catches a signed-but-stale version after the shipped baseline moved.
   let recomputed: string;
   try {
-    recomputed = await hashEffectiveConfig(buildEffectiveConfig(scorecardId, active.overrides));
+    recomputed = await hashEffectiveConfig(buildEffectiveConfig(scorecardId, record.overrides));
   } catch (e) {
-    throw new RulesIntegrityError(scorecardId, [{ version: active.version, code: 'config-hash-mismatch', detail: `stored overrides no longer build: ${(e as Error).message}` }]);
+    throw new RulesIntegrityError(scorecardId, [{ version: record.version, code: 'config-hash-mismatch', detail: `stored overrides no longer build: ${(e as Error).message}` }]);
   }
-  if (recomputed !== active.configHash) {
-    throw new RulesIntegrityError(scorecardId, [{ version: active.version, code: 'config-hash-mismatch', detail: 'effective config no longer matches the signed configHash (shipped baseline or registry changed)' }]);
+  if (recomputed !== record.configHash) {
+    throw new RulesIntegrityError(scorecardId, [{ version: record.version, code: 'config-hash-mismatch', detail: 'effective config no longer matches the signed configHash (shipped baseline changed)' }]);
   }
   return {
-    scorecardId,
     stamp: {
-      scorecardId,
-      version: active.version,
-      configHash: active.configHash,
-      overridesHash: active.overridesHash,
-      effectiveFrom: active.effectiveFrom,
+      scorecardId, version: record.version, configHash: record.configHash, overridesHash: record.overridesHash,
+      effectiveFrom: record.effectiveFrom, registryHash: record.registryHash, buildId: deps.buildId, ...flags,
     },
-    overrides: active.overrides,
-    chainHead: head?.chainHash ?? null,
-    headVersion: head?.version ?? 0,
+    overrides: record.overrides,
   };
+}
+
+export async function resolvePublished(scorecardId: ScorecardId, deps: ServiceDeps, opts: ResolveOptions = {}): Promise<PublishedRules> {
+  const history = await loadVerifiedHistory(scorecardId, deps);
+  const head = history[history.length - 1] ?? null;
+  const base = { scorecardId, chainHead: head?.chainHash ?? null, headVersion: head?.version ?? 0 };
+
+  // 1. An explicit pin always wins: pins are never moved by publishing, freezing or rollback.
+  if (opts.version !== undefined) {
+    if (opts.version === 0) return { ...base, ...(await stampFor(scorecardId, null, deps, { pinned: true, frozen: false })) };
+    const rec = history.find((r) => r.version === opts.version);
+    if (!rec) throw new RulesNotFoundError(scorecardId, opts.version);
+    return { ...base, ...(await stampFor(scorecardId, rec, deps, { pinned: true, frozen: false })) };
+  }
+
+  // 2. A freeze serves the selected last-known-good version to unpinned clients.
+  const freezeEvent = currentFreeze(await deps.store.getFreezeEvents(), scorecardId);
+  if (freezeEvent) {
+    const rec = freezeEvent.serveVersion === 0 ? null : history.find((r) => r.version === freezeEvent.serveVersion) ?? null;
+    if (freezeEvent.serveVersion !== 0 && !rec) throw new RulesNotFoundError(scorecardId, freezeEvent.serveVersion);
+    return { ...base, ...(await stampFor(scorecardId, rec, deps, { pinned: false, frozen: true })) };
+  }
+
+  // 3. The effective-date timeline (optionally as at the end of a measurement period).
+  const at = opts.at ?? (opts.periodEnd ? endOfUtcDay(opts.periodEnd) : nowOf(deps));
+  return { ...base, ...(await stampFor(scorecardId, activeVersionAt(history, at), deps, { pinned: false, frozen: false })) };
 }
 
 export interface HeadSummary {
   scorecardId: ScorecardId;
-  activeVersion: number | null;
+  activeVersion: number;
   headVersion: number;
   chainHead: string | null;
-  configHash: string | null;
+  configHash: string;
+  frozen: boolean;
 }
 
 /** One cheap call the clients poll: has anything changed for any scorecard? */
-export async function resolveHeads(deps: ServiceDeps, at?: Date): Promise<HeadSummary[]> {
+export async function resolveHeads(deps: ServiceDeps, opts: Pick<ResolveOptions, 'at'> = {}): Promise<HeadSummary[]> {
   const out: HeadSummary[] = [];
   for (const id of SCORECARD_IDS) {
-    const p = await resolvePublished(id, deps, at);
-    out.push({ scorecardId: id, activeVersion: p.stamp?.version ?? null, headVersion: p.headVersion, chainHead: p.chainHead, configHash: p.stamp?.configHash ?? null });
+    const p = await resolvePublished(id, deps, opts);
+    out.push({ scorecardId: id, activeVersion: p.stamp.version, headVersion: p.headVersion, chainHead: p.chainHead, configHash: p.stamp.configHash, frozen: p.stamp.frozen });
   }
   return out;
 }
@@ -205,11 +287,14 @@ export async function resolveHeads(deps: ServiceDeps, at?: Date): Promise<HeadSu
 
 export interface RestoreInput {
   scorecardId: string;
-  /** Version whose rules are re-instated, or 'shipped' for the unmodified shipped configuration. */
+  /** Version whose rules are re-instated, or 'shipped' / 0 for the unmodified shipped configuration. */
   fromVersion: number | 'shipped';
   actor: string;
   reason: string;
   changesetId?: string | null;
+  announcement?: string | null;
+  authors?: string[];
+  approvers?: string[];
 }
 
 async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps: ServiceDeps): Promise<RulesVersionRecord> {
@@ -219,22 +304,21 @@ async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps
   const history = await loadVerifiedHistory(input.scorecardId, deps);
   let overrides: RuleOverrides;
   let restoredFromVersion: number | null;
-  if (input.fromVersion === 'shipped') {
+  if (input.fromVersion === 'shipped' || input.fromVersion === 0) {
     overrides = { source: {}, calculator: {} };
     restoredFromVersion = null;
   } else {
     const target = history.find((r) => r.version === input.fromVersion);
     if (!target) throw new PublishRejectedError(`Version ${input.fromVersion} does not exist for ${input.scorecardId}`);
+    // Signature is already verified with the chain; also require build compatibility.
+    await stampFor(input.scorecardId, target, deps, { pinned: false, frozen: false });
     overrides = target.overrides;
     restoredFromVersion = target.version;
   }
   return publishVersion({
-    scorecardId: input.scorecardId,
-    overrides,
-    publishedBy: input.actor,
-    changesetId: input.changesetId ?? null,
-    kind,
-    restoredFromVersion,
+    scorecardId: input.scorecardId, overrides, publishedBy: input.actor, changesetId: input.changesetId ?? null,
+    kind, restoredFromVersion, announcement: input.announcement ?? input.reason,
+    authors: input.authors, approvers: input.approvers,
   }, deps);
 }
 
@@ -244,12 +328,54 @@ export const restoreVersion = (input: RestoreInput, deps: ServiceDeps) => reinst
 /** Emergency rollback: same operation, but allowed while frozen. Never skips verification or signing. */
 export const emergencyRollback = (input: RestoreInput, deps: ServiceDeps) => reinstate('rollback', input, deps);
 
-export async function setFreeze(deps: ServiceDeps, change: { frozen: boolean; reason: string; actor: string }): Promise<void> {
-  if (change.frozen && (!change.reason || change.reason.trim().length < 5)) throw new PublishRejectedError('A reason of at least 5 characters is required to freeze');
-  await deps.store.setFreezeState({
-    frozen: change.frozen,
-    reason: change.frozen ? change.reason : null,
-    by: change.actor,
-    at: nowOf(deps).toISOString(),
-  });
+export interface FreezeInput {
+  /** A scorecard id, or '*' for every scorecard. */
+  scope: string;
+  reason: string;
+  actor: string;
+  /** Version served to unpinned clients while frozen (default: the version in force now; 0 = shipped). */
+  serveVersion?: number;
+}
+
+function assertScope(scope: string): void {
+  if (scope !== '*' && !isScorecardId(scope)) throw new PublishRejectedError(`Unknown freeze scope "${scope}"`);
+}
+
+function assertReason(reason: string, what: string): void {
+  if (!reason || reason.trim().length < 5) throw new PublishRejectedError(`A reason of at least 5 characters is required to ${what}`);
+}
+
+/** Appends freeze events (one per scorecard; '*' fans out so each keeps its own last known good). */
+export async function freeze(deps: ServiceDeps, input: FreezeInput): Promise<FreezeEvent[]> {
+  assertScope(input.scope);
+  assertReason(input.reason, 'freeze');
+  if (input.scope === '*' && input.serveVersion !== undefined) {
+    throw new PublishRejectedError('A global freeze serves each scorecard its current version; freeze one scorecard to choose a version');
+  }
+  const ids = input.scope === '*' ? [...SCORECARD_IDS] : [input.scope as ScorecardId];
+  const at = nowOf(deps).toISOString();
+  const events: FreezeEvent[] = [];
+  for (const id of ids) {
+    const history = await loadVerifiedHistory(id, deps);
+    let serveVersion = input.serveVersion;
+    if (serveVersion === undefined) serveVersion = activeVersionAt(history, nowOf(deps))?.version ?? 0;
+    if (serveVersion !== 0 && !history.some((r) => r.version === serveVersion)) {
+      throw new PublishRejectedError(`Version ${serveVersion} does not exist for ${id}`);
+    }
+    events.push({ id: randomUUID(), scope: id, action: 'freeze', serveVersion, reason: input.reason, actor: input.actor, at });
+  }
+  for (const e of events) await deps.store.appendFreezeEvent(e);
+  return events;
+}
+
+export async function unfreeze(deps: ServiceDeps, input: { scope: string; reason: string; actor: string }): Promise<FreezeEvent[]> {
+  assertScope(input.scope);
+  assertReason(input.reason, 'unfreeze');
+  const scopes = input.scope === '*' ? [...SCORECARD_IDS] : [input.scope];
+  const at = nowOf(deps).toISOString();
+  const events: FreezeEvent[] = scopes.map((scope) => ({
+    id: randomUUID(), scope, action: 'unfreeze' as const, serveVersion: 0, reason: input.reason, actor: input.actor, at,
+  }));
+  for (const e of events) await deps.store.appendFreezeEvent(e);
+  return events;
 }

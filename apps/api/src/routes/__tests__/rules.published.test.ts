@@ -17,7 +17,7 @@ vi.mock('../../rules/runtime.js', () => ({ getServiceDeps: () => { throw new Err
 
 import { createPublishedRulesRouter } from '../rules.js';
 import { createSigner, createVerifier } from '../../rules/signing.js';
-import { publishVersion, type ServiceDeps } from '../../rules/rulesService.js';
+import { publishVersion, freeze, type ServiceDeps } from '../../rules/rulesService.js';
 import { StoreUnavailableError } from '../../rules/store.js';
 import { MemoryRulesStore } from '../../rules/__tests__/memoryStore.js';
 
@@ -44,7 +44,7 @@ afterAll(() => new Promise<void>((r) => server.close(() => r())));
 beforeEach(() => {
   launched = true;
   store = new MemoryRulesStore();
-  deps = { store, signer: createSigner('k1', priv), verifier: createVerifier({ k1: pub }) };
+  deps = { store, signer: createSigner('k1', priv), verifier: createVerifier({ k1: pub }), buildId: 'route-test-build' };
 });
 
 const get = async (path: string) => {
@@ -72,9 +72,38 @@ describe('published rules routes', () => {
     expect(r.body.overrides.source[G]).toBe(0.5);
   });
 
-  it('returns stamp:null for a scorecard with no published version', async () => {
+  it('serves a version-0 (shipped) stamp for a scorecard with no published version', async () => {
     const r = await get('/api/rules/published/fsc-banks');
-    expect(r.body).toMatchObject({ launched: true, stamp: null, overrides: null, headVersion: 0 });
+    expect(r.body).toMatchObject({ launched: true, headVersion: 0, overrides: { source: {}, calculator: {} } });
+    expect(r.body.stamp).toMatchObject({ version: 0, pinned: false, frozen: false, buildId: 'route-test-build' });
+  });
+
+  it('serves a pinned version, a period-end version and rejects bad query parameters', async () => {
+    await publishVersion({ scorecardId: 'rcogp-generic', overrides: { source: { [G]: 0.5 }, calculator: {} }, publishedBy: 't', effectiveFrom: new Date(Date.now() + 1000) }, deps);
+    expect((await get('/api/rules/published/rcogp-generic?version=1')).body.stamp).toMatchObject({ version: 1, pinned: true });
+    expect((await get('/api/rules/published/rcogp-generic?version=0')).body.stamp).toMatchObject({ version: 0, pinned: true });
+    expect((await get('/api/rules/published/rcogp-generic?periodEnd=2020-01-01')).body.stamp.version).toBe(0);
+    expect((await get('/api/rules/published/rcogp-generic?version=9')).status).toBe(404);
+    expect((await get('/api/rules/published/rcogp-generic?version=-1')).status).toBe(400);
+    expect((await get('/api/rules/published/rcogp-generic?version=abc')).status).toBe(400);
+    expect((await get('/api/rules/published/rcogp-generic?periodEnd=tomorrow')).status).toBe(400);
+  });
+
+  it('serves the frozen last-known-good version flagged frozen', async () => {
+    await publishVersion({ scorecardId: 'rcogp-generic', overrides: { source: { [G]: 0.5 }, calculator: {} }, publishedBy: 't' }, deps);
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'investigating', actor: 'a', serveVersion: 0 });
+    const r = await get('/api/rules/published/rcogp-generic');
+    expect(r.body.stamp).toMatchObject({ version: 0, frozen: true });
+    expect((await get('/api/rules/heads')).body.heads.find((h: any) => h.scorecardId === 'rcogp-generic')).toMatchObject({ frozen: true, activeVersion: 0, headVersion: 1 });
+  });
+
+  it('supports conditional requests with an ETag', async () => {
+    const first = await fetch(base + '/api/rules/published/rcogp-generic');
+    const etag = first.headers.get('etag')!;
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    const second = await fetch(base + '/api/rules/published/rcogp-generic', { headers: { 'If-None-Match': etag } });
+    expect(second.status).toBe(304);
+    expect(second.headers.get('cache-control')).toBe('no-store');
   });
 
   it('lists nine heads', async () => {

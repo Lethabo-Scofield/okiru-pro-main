@@ -14,7 +14,11 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
 import { isScorecardId } from '../../../web/Toolkit/src/lib/rules/scorecards';
-import { resolveHeads, resolvePublished, RulesIntegrityError, type ServiceDeps } from '../rules/rulesService.js';
+import {
+  resolveHeads, resolvePublished, RulesIntegrityError, RulesFrozenError, RulesIncompatibleError,
+  RulesNotFoundError, PublishRejectedError, type ServiceDeps,
+} from '../rules/rulesService.js';
+import { createHash } from 'crypto';
 import { StoreUnavailableError } from '../rules/store.js';
 import { getServiceDeps, rulesLaunched } from '../rules/runtime.js';
 
@@ -24,6 +28,23 @@ export function sendRulesError(res: Response, err: unknown, context: string): vo
   res.setHeader('Cache-Control', 'no-store');
   if (err instanceof StoreUnavailableError) {
     res.status(503).json({ code: err.code, message: 'Rules storage is unavailable' });
+    return;
+  }
+  if (err instanceof RulesFrozenError) {
+    res.status(423).json({ code: err.code, message: err.message });
+    return;
+  }
+  if (err instanceof RulesNotFoundError) {
+    res.status(404).json({ code: err.code, message: 'That rules version does not exist' });
+    return;
+  }
+  if (err instanceof PublishRejectedError) {
+    res.status(400).json({ code: err.code, message: err.message });
+    return;
+  }
+  if (err instanceof RulesIncompatibleError) {
+    logger.error('RULES INCOMPATIBLE', err, { context, scorecardId: err.scorecardId, version: err.version });
+    res.status(500).json({ code: err.code, message: 'Published rules are incompatible with this build', scorecardId: err.scorecardId });
     return;
   }
   if (err instanceof RulesIntegrityError) {
@@ -55,8 +76,21 @@ export function createPublishedRulesRouter(depsFactory: () => ServiceDeps = getS
     if (!isScorecardId(sid)) return void res.status(404).json({ code: 'UNKNOWN_SCORECARD', message: 'Unknown scorecard' });
     if (!launched()) return void res.json({ launched: false, scorecardId: sid, stamp: null, overrides: null });
     try {
-      const p = await resolvePublished(sid, depsFactory());
-      res.json({ launched: true, ...p });
+      const q = req.query as Record<string, string | undefined>;
+      let version: number | undefined;
+      if (q.version !== undefined) {
+        if (!/^\d{1,6}$/.test(q.version)) return void res.status(400).json({ code: 'BAD_VERSION', message: 'version must be a non-negative integer' });
+        version = Number(q.version);
+      }
+      if (q.periodEnd !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(q.periodEnd)) {
+        return void res.status(400).json({ code: 'BAD_PERIOD_END', message: 'periodEnd must be YYYY-MM-DD' });
+      }
+      const p = await resolvePublished(sid, depsFactory(), { version, periodEnd: q.periodEnd });
+      const body = JSON.stringify({ launched: true, ...p });
+      const etag = '"' + createHash('sha256').update(body).digest('hex').slice(0, 32) + '"';
+      res.setHeader('ETag', etag);
+      if (req.headers['if-none-match'] === etag) return void res.status(304).end();
+      res.type('application/json').send(body);
     } catch (err) {
       sendRulesError(res, err, `published:${sid}`);
     }

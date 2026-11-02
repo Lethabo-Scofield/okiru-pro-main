@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { generateKeyPairSync } from 'crypto';
 import { createSigner, createVerifier, SigningUnavailableError } from '../signing.js';
 import {
-  publishVersion, resolvePublished, resolveHeads, loadVerifiedHistory, restoreVersion, emergencyRollback, setFreeze,
+  publishVersion, resolvePublished, resolveHeads, loadVerifiedHistory, restoreVersion, emergencyRollback, freeze, unfreeze, RulesIncompatibleError, RulesNotFoundError,
   RulesIntegrityError, RulesFrozenError, PublishRejectedError, type ServiceDeps,
 } from '../rulesService.js';
 import { VersionConflictError } from '../store.js';
@@ -32,6 +32,7 @@ beforeEach(() => {
     store,
     signer: createSigner('k1', k1.priv),
     verifier: createVerifier({ k1: k1.pub }),
+    buildId: 'test-build',
     now: () => clock,
   };
 });
@@ -62,7 +63,7 @@ describe('rules ledger - publishing', () => {
     expect(v2.parentVersion).toBe(1);
     expect(v2.prevChainHash).toBe(v1.chainHash);
     const p = await resolvePublished('rcogp-generic', deps);
-    expect(p.stamp?.version).toBe(2);
+    expect(p.stamp.version).toBe(2);
     expect(p.overrides?.source[GUARANTEES]).toBe(0.04);
   });
 
@@ -95,13 +96,41 @@ describe('rules ledger - publishing', () => {
 });
 
 describe('rules ledger - freeze', () => {
-  it('blocks publishing when frozen in storage or by environment, but keeps serving', async () => {
+  it('blocks publishing (423) and keeps serving the frozen version, flagged in the stamp', async () => {
     await pub();
-    await store.setFreezeState({ frozen: true, reason: 'incident 42', by: 'admin', at: clock.toISOString() });
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'incident 42', actor: 'admin' });
     await expect(pub()).rejects.toThrow(RulesFrozenError);
-    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(1);
+    const p = await resolvePublished('rcogp-generic', deps);
+    expect(p.stamp).toMatchObject({ version: 1, frozen: true, pinned: false });
+  });
 
-    await store.setFreezeState({ frozen: false, reason: null, by: null, at: null });
+  it('serves the CHOSEN last known good version while frozen, even if newer versions exist', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    clock = new Date('2026-11-02T11:00:00Z');
+    await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'v2 looks wrong', actor: 'admin', serveVersion: 1 });
+    expect((await resolvePublished('rcogp-generic', deps)).stamp).toMatchObject({ version: 1, frozen: true });
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'back to shipped', actor: 'admin', serveVersion: 0 });
+    expect((await resolvePublished('rcogp-generic', deps)).stamp).toMatchObject({ version: 0, frozen: true });
+    await expect(freeze(deps, { scope: 'rcogp-generic', reason: 'nonexistent', actor: 'a', serveVersion: 9 })).rejects.toThrow(/does not exist/);
+  });
+
+  it('is scoped: freezing one scorecard does not freeze another', async () => {
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'only this one', actor: 'a' });
+    await expect(publishVersion({ scorecardId: 'rcogp-qse', overrides: { source: {}, calculator: {} }, publishedBy: 't' }, deps)).resolves.toMatchObject({ version: 1 });
+    expect((await resolvePublished('rcogp-qse', deps)).stamp.frozen).toBe(false);
+  });
+
+  it('freezing everything fans out one event per scorecard; the log is append-only history', async () => {
+    await freeze(deps, { scope: '*', reason: 'platform incident', actor: 'a' });
+    expect(store.freezeEvents).toHaveLength(9);
+    await unfreeze(deps, { scope: 'rcogp-generic', reason: 'cleared', actor: 'a' });
+    expect(store.freezeEvents).toHaveLength(10); // events are appended, never edited
+    await expect(pub()).resolves.toMatchObject({ version: 1 });
+    await expect(publishVersion({ scorecardId: 'ict-qse', overrides: { source: {}, calculator: {} }, publishedBy: 't' }, deps)).rejects.toThrow(RulesFrozenError);
+  });
+
+  it('RULES_FREEZE is an operator switch independent of the Studio', async () => {
     deps.envFrozen = true;
     await expect(pub()).rejects.toThrow(/RULES_FREEZE/);
   });
@@ -167,15 +196,16 @@ describe('rules ledger - effective dates and heads', () => {
     clock = new Date('2026-11-02T11:00:00Z');
     await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} }, { effectiveFrom: new Date('2026-11-10T00:00:00Z') });
 
-    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(1);
+    expect((await resolvePublished('rcogp-generic', deps)).stamp.version).toBe(1);
     expect((await resolvePublished('rcogp-generic', deps)).headVersion).toBe(2);
-    expect((await resolvePublished('rcogp-generic', deps, new Date('2026-11-10T00:00:01Z'))).stamp?.version).toBe(2);
+    expect((await resolvePublished('rcogp-generic', deps, { at: new Date('2026-11-10T00:00:01Z') })).stamp.version).toBe(2);
   });
 
-  it('reports no stamp for a scorecard that was never published (clients use shipped rules)', async () => {
+  it('serves a version-0 (shipped) stamp for a scorecard that was never published', async () => {
     const p = await resolvePublished('fsc-banks', deps);
-    expect(p.stamp).toBeNull();
-    expect(p.overrides).toBeNull();
+    expect(p.stamp).toMatchObject({ version: 0, pinned: false, frozen: false, buildId: 'test-build' });
+    expect(p.overrides).toEqual({ source: {}, calculator: {} });
+    expect(p.stamp.configHash).toBe(await hashEffectiveConfig(SCORECARD_SOURCES['fsc-banks'].shipped));
   });
 
   it('lists a head for each of the nine scorecards', async () => {
@@ -183,7 +213,7 @@ describe('rules ledger - effective dates and heads', () => {
     const heads = await resolveHeads(deps);
     expect(heads).toHaveLength(9);
     expect(heads.find((h) => h.scorecardId === 'rcogp-generic')?.activeVersion).toBe(1);
-    expect(heads.find((h) => h.scorecardId === 'ict-qse')?.activeVersion).toBeNull();
+    expect(heads.find((h) => h.scorecardId === 'ict-qse')?.activeVersion).toBe(0);
   });
 });
 
@@ -199,13 +229,13 @@ describe('rules ledger - restore, emergency rollback and freeze', () => {
     expect(v3.overridesHash).toBe(v1.overridesHash);
     expect(v3.configHash).toBe(v1.configHash);
     expect((await store.getVersions('rcogp-generic')).map((r) => r.version)).toEqual([1, 2, 3]);
-    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(3);
+    expect((await resolvePublished('rcogp-generic', deps)).stamp.version).toBe(3);
   });
 
   it('a normal restore is blocked by a freeze, an emergency rollback is not', async () => {
     await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
     later(1); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
-    await setFreeze(deps, { frozen: true, reason: 'incident 7', actor: 'admin' });
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'incident 7', actor: 'admin' });
     await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'undo it' }, deps)).rejects.toThrow(RulesFrozenError);
     later(1);
     const rb = await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'incident 7 rollback' }, deps);
@@ -229,9 +259,9 @@ describe('rules ledger - restore, emergency rollback and freeze', () => {
     await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} }, { effectiveFrom: new Date('2026-12-01T00:00:00Z') });
     later(1);
     await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'cancel scheduled change' }, deps);
-    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(3);
+    expect((await resolvePublished('rcogp-generic', deps)).stamp.version).toBe(3);
     // even after the scheduled date passes, the higher-numbered rollback stays in force
-    expect((await resolvePublished('rcogp-generic', deps, new Date('2027-01-01T00:00:00Z'))).stamp?.version).toBe(3);
+    expect((await resolvePublished('rcogp-generic', deps, { at: new Date('2027-01-01T00:00:00Z') })).stamp.version).toBe(3);
   });
 
   it('never weakens verification: rollback on a tampered chain is refused', async () => {
@@ -247,13 +277,65 @@ describe('rules ledger - restore, emergency rollback and freeze', () => {
     await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: '' }, deps)).rejects.toThrow(/reason/);
     await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 9, actor: 'a', reason: 'no such version' }, deps)).rejects.toThrow(/does not exist/);
     await expect(restoreVersion({ scorecardId: 'bogus', fromVersion: 1, actor: 'a', reason: 'unknown card' }, deps)).rejects.toThrow(PublishRejectedError);
-    await expect(setFreeze(deps, { frozen: true, reason: '', actor: 'a' })).rejects.toThrow(/reason/);
+    await expect(freeze(deps, { scope: 'rcogp-generic', reason: '', actor: 'a' })).rejects.toThrow(/reason/);
   });
 
   it('unfreezing re-enables publishing', async () => {
-    await setFreeze(deps, { frozen: true, reason: 'maintenance', actor: 'a' });
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'maintenance', actor: 'a' });
     await expect(pub()).rejects.toThrow(RulesFrozenError);
-    await setFreeze(deps, { frozen: false, reason: '', actor: 'a' });
+    await unfreeze(deps, { scope: 'rcogp-generic', reason: 'done maintaining', actor: 'a' });
     await expect(pub()).resolves.toMatchObject({ version: 1 });
+  });
+});
+
+describe('rules ledger - pins, periods and compatibility', () => {
+  const later = (h: number) => { clock = new Date(clock.getTime() + h * 3_600_000); };
+
+  it('an explicit version pin is served exactly, flagged pinned, and never moved by publish / freeze / rollback', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
+    const pin1 = await resolvePublished('rcogp-generic', deps, { version: 1 });
+    expect(pin1.stamp).toMatchObject({ version: 1, pinned: true, frozen: false });
+    expect(pin1.overrides.source[GUARANTEES]).toBe(0.5);
+
+    later(1);
+    await freeze(deps, { scope: 'rcogp-generic', reason: 'freeze on v2', actor: 'a' });
+    await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 'shipped', actor: 'a', reason: 'back to baseline' }, deps);
+    const again = await resolvePublished('rcogp-generic', deps, { version: 1 });
+    expect(again.stamp).toEqual(pin1.stamp);
+    expect(again.overrides).toEqual(pin1.overrides);
+  });
+
+  it('pin 0 serves the shipped rules; an unknown pinned version is not found, never substituted', async () => {
+    await pub();
+    expect((await resolvePublished('rcogp-generic', deps, { version: 0 })).stamp).toMatchObject({ version: 0, pinned: true });
+    await expect(resolvePublished('rcogp-generic', deps, { version: 7 })).rejects.toThrow(RulesNotFoundError);
+  });
+
+  it('periodEnd resolves the version in force at the end of that UTC day', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });                       // 2 Nov 10:00
+    later(24 * 5); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });       // 7 Nov 10:00
+    expect((await resolvePublished('rcogp-generic', deps, { periodEnd: '2026-11-01' })).stamp.version).toBe(0);
+    expect((await resolvePublished('rcogp-generic', deps, { periodEnd: '2026-11-02' })).stamp.version).toBe(1);
+    expect((await resolvePublished('rcogp-generic', deps, { periodEnd: '2026-11-06' })).stamp.version).toBe(1);
+    expect((await resolvePublished('rcogp-generic', deps, { periodEnd: '2026-11-07' })).stamp.version).toBe(2);
+    await expect(resolvePublished('rcogp-generic', deps, { periodEnd: 'yesterday' })).rejects.toThrow(/YYYY-MM-DD/);
+  });
+
+  it('refuses a version signed against a different rule registry (build incompatibility)', async () => {
+    await pub();
+    const { sealVersion } = await import('../ledger.js');
+    const rec = store.versions.get('rcogp-generic')![0];
+    const { payloadHash: _p, chainHash: _c, keyId: _k, signature: _s, ...payload } = rec;
+    store.versions.set('rcogp-generic', [sealVersion({ ...payload, registryHash: 'a'.repeat(64) }, deps.signer!)]);
+    await expect(resolvePublished('rcogp-generic', deps)).rejects.toThrow(RulesIncompatibleError);
+    await expect(resolvePublished('rcogp-generic', deps, { version: 1 })).rejects.toThrow(RulesIncompatibleError);
+    await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'restore it' }, deps)).rejects.toThrow(RulesIncompatibleError);
+  });
+
+  it('records authors, approvers, announcement and build on the signed version', async () => {
+    const v = await pub(undefined, { authors: ['u-author'], approvers: ['u-approver'], announcement: 'Guarantees now count at 50%.' });
+    expect(v).toMatchObject({ authors: ['u-author'], approvers: ['u-approver'], announcement: 'Guarantees now count at 50%.', buildId: 'test-build' });
+    expect(v.registryHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });

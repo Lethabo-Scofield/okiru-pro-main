@@ -25,6 +25,15 @@ export interface RulesVersionPayload {
   configHash: string;
   /** ISO instant the version takes effect. Never the calculation time. */
   effectiveFrom: string;
+  /** Fingerprint of the rule registry the version was published against. */
+  registryHash: string;
+  /** Build identifier of the publishing deployment. */
+  buildId: string;
+  /** Plain-language explanation of what changed and why. */
+  announcement: string | null;
+  /** User ids that authored / independently approved the change. */
+  authors: string[];
+  approvers: string[];
   publishedAt: string;
   publishedBy: string;
   changesetId: string | null;
@@ -70,6 +79,11 @@ export function payloadOf(r: RulesVersionPayload): RulesVersionPayload {
     overridesHash: r.overridesHash,
     configHash: r.configHash,
     effectiveFrom: r.effectiveFrom,
+    registryHash: r.registryHash,
+    buildId: r.buildId,
+    announcement: r.announcement ?? null,
+    authors: [...(r.authors ?? [])],
+    approvers: [...(r.approvers ?? [])],
     publishedAt: r.publishedAt,
     publishedBy: r.publishedBy,
     changesetId: r.changesetId ?? null,

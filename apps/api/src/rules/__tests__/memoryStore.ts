@@ -1,10 +1,10 @@
 /** TEST-ONLY store. Production code must never import this file. */
 import type { RulesVersionRecord } from '../ledger.js';
-import { VersionConflictError, type RulesStore, type FreezeState } from '../store.js';
+import { VersionConflictError, type RulesStore, type FreezeEvent } from '../store.js';
 
 export class MemoryRulesStore implements RulesStore {
   versions = new Map<string, RulesVersionRecord[]>();
-  freeze: FreezeState = { frozen: false, reason: null, by: null, at: null };
+  freezeEvents: FreezeEvent[] = [];
 
   async getVersions(scorecardId: string) {
     return structuredClone(this.versions.get(scorecardId) ?? []);
@@ -19,6 +19,6 @@ export class MemoryRulesStore implements RulesStore {
     this.versions.set(record.scorecardId, [...list, structuredClone(record)]);
   }
 
-  async getFreezeState() { return { ...this.freeze }; }
-  async setFreezeState(s: FreezeState) { this.freeze = { ...s }; }
+  async getFreezeEvents() { return structuredClone(this.freezeEvents); }
+  async appendFreezeEvent(e: FreezeEvent) { this.freezeEvents.push(structuredClone(e)); }
 }

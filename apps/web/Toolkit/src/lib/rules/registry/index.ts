@@ -113,6 +113,12 @@ export function getRules(scorecardId: ScorecardId): readonly RuleDef[] {
   return rules;
 }
 
+/** Stable fingerprint of what a scorecard's rule set IS (keys, bindings, bounds, units). */
+export async function registryHashOf(scorecardId: ScorecardId): Promise<string> {
+  const { hashOf } = await import('../canonical');
+  return hashOf(getRules(scorecardId).map((r) => [r.key, r.binding.layer, r.binding.path, r.unit, r.min, r.max, r.editability]));
+}
+
 export function getAllRules(): RuleDef[] {
   return SCORECARD_IDS.flatMap((id) => [...getRules(id)]);
 }

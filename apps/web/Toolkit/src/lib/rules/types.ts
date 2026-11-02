@@ -67,4 +67,12 @@ export interface RulesetStamp {
   overridesHash: string;
   /** ISO timestamp the version took effect (never the calculation time). */
   effectiveFrom: string;
+  /** SHA-256 over the rule registry the version was published against (compatibility). */
+  registryHash: string;
+  /** Build that published the version / is serving it. */
+  buildId: string;
+  /** True when the caller asked for this exact version (client pin) rather than "current". */
+  pinned: boolean;
+  /** True when a scorecard freeze, not the timeline, selected this version. */
+  frozen: boolean;
 }

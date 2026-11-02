@@ -15,6 +15,7 @@
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { buildEffectiveConfig, hashEffectiveConfig, hashOverrides, RuleValidationError } from './buildEffectiveConfig';
 import { isScorecardId, type ScorecardId } from './scorecards';
+import { registryHashOf } from './registry';
 import type { RuleOverrides, RulesetStamp } from './types';
 
 export class PublishedRulesUnavailableError extends Error {
@@ -47,7 +48,8 @@ function parseBody(scorecardId: ScorecardId, body: unknown): PublishedBody {
   }
   if (!b.launched || b.stamp == null) return { launched: b.launched, stamp: null, overrides: null };
   const s = b.stamp;
-  if (s.scorecardId !== scorecardId || !Number.isInteger(s.version) || !HASH_RE.test(s.configHash) || !HASH_RE.test(s.overridesHash) || !b.overrides) {
+  if (s.scorecardId !== scorecardId || !Number.isInteger(s.version) || s.version < 0 || !HASH_RE.test(s.configHash) || !HASH_RE.test(s.overridesHash)
+    || !HASH_RE.test(s.registryHash) || typeof s.buildId !== 'string' || typeof s.pinned !== 'boolean' || typeof s.frozen !== 'boolean' || !b.overrides) {
     throw new PublishedRulesUnavailableError(scorecardId, 'Published rules stamp was malformed');
   }
   return { launched: true, stamp: s, overrides: b.overrides };
@@ -69,10 +71,12 @@ export async function resolveRules(
   shipped: CalculatorConfig,
   fetchImpl: FetchLike = (globalThis.fetch as unknown) as FetchLike,
   failClosed: boolean = deploymentIsLaunched(),
+  /** A client pin: serve exactly this version (0 = shipped), regardless of what is current. */
+  pinVersion?: number,
 ): Promise<ResolvedRules> {
   let body: PublishedBody;
   try {
-    const res = await fetchImpl(`/api/rules/published/${encodeURIComponent(scorecardId)}`, { credentials: 'include', cache: 'no-store', headers: { Accept: 'application/json' } });
+    const res = await fetchImpl(`/api/rules/published/${encodeURIComponent(scorecardId)}${pinVersion === undefined ? '' : `?version=${pinVersion}`}`, { credentials: 'include', cache: 'no-store', headers: { Accept: 'application/json' } });
     if (!res.ok) throw new PublishedRulesUnavailableError(scorecardId, `Published rules request failed (${res.status})`);
     body = parseBody(scorecardId, await res.json());
   } catch (e) {
@@ -86,9 +90,17 @@ export async function resolveRules(
 
   if (!body.launched || !body.stamp || !body.overrides) return { config: shipped, stamp: null };
 
+  // Build compatibility: the version must have been published against the registry THIS build runs.
+  if (body.stamp.registryHash !== await registryHashOf(scorecardId)) {
+    throw new PublishedRulesUnavailableError(scorecardId, 'Published rules are not compatible with this version of the app; reload to update');
+  }
+
   let config: CalculatorConfig;
   try {
-    config = buildEffectiveConfig(scorecardId, body.overrides);
+    // Version 0 IS the shipped configuration: use it as-is (and still verify the hash below).
+    config = body.stamp.version === 0 && Object.keys(body.overrides.source ?? {}).length + Object.keys(body.overrides.calculator ?? {}).length === 0
+      ? shipped
+      : buildEffectiveConfig(scorecardId, body.overrides);
   } catch (e) {
     if (e instanceof RuleValidationError) throw new PublishedRulesUnavailableError(scorecardId, 'Published rules do not build into a valid configuration', e);
     throw e;

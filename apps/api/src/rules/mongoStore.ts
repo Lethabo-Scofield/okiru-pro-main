@@ -5,14 +5,14 @@
  *                 (scorecardId, version) is the optimistic lock: of two concurrent
  *                 publishes of the same next version exactly one insert succeeds.
  *                 Mongoose update / delete operations on this model throw.
- * rules_state     a single document holding the freeze / kill-switch state.
+ * rule_freezes    append-only freeze / unfreeze events (the kill-switch history).
  */
 import mongoose, { Schema } from 'mongoose';
 import { isMongoConnected } from '../../db.js';
 import type { RulesVersionRecord } from './ledger.js';
 import {
   StoreUnavailableError, VersionConflictError,
-  type RulesStore, type FreezeState,
+  type RulesStore, type FreezeEvent,
 } from './store.js';
 
 const versionSchema = new Schema({
@@ -23,6 +23,11 @@ const versionSchema = new Schema({
   overridesHash: { type: String, required: true },
   configHash: { type: String, required: true },
   effectiveFrom: { type: String, required: true },
+  registryHash: { type: String, required: true },
+  buildId: { type: String, required: true },
+  announcement: { type: String, default: null },
+  authors: { type: [String], default: [] },
+  approvers: { type: [String], default: [] },
   publishedAt: { type: String, required: true },
   publishedBy: { type: String, required: true },
   changesetId: { type: String, default: null },
@@ -51,16 +56,25 @@ versionSchema.pre('save', function () {
   if (!this.isNew) throw new Error('rules_versions is append-only; documents cannot be re-saved');
 });
 
-const stateSchema = new Schema({
-  _id: { type: String, required: true },
-  frozen: { type: Boolean, required: true },
-  reason: { type: String, default: null },
-  by: { type: String, default: null },
-  at: { type: String, default: null },
-}, { collection: 'rules_state', versionKey: false });
+const freezeSchema = new Schema({
+  id: { type: String, required: true },
+  scope: { type: String, required: true },
+  action: { type: String, enum: ['freeze', 'unfreeze'], required: true },
+  serveVersion: { type: Number, required: true },
+  reason: { type: String, required: true },
+  actor: { type: String, required: true },
+  at: { type: String, required: true },
+}, { collection: 'rule_freezes', versionKey: false });
+freezeSchema.index({ id: 1 }, { unique: true });
+for (const op of [
+  'updateOne', 'updateMany', 'findOneAndUpdate', 'findOneAndReplace', 'replaceOne',
+  'deleteOne', 'deleteMany', 'findOneAndDelete',
+] as const) {
+  freezeSchema.pre(op as never, forbid(op === 'updateOne' ? 'updateOne (freeze events)' : op));
+}
 
 export const RulesVersionModel = mongoose.models.RulesVersion || mongoose.model('RulesVersion', versionSchema);
-export const RulesStateModel = mongoose.models.RulesState || mongoose.model('RulesState', stateSchema);
+export const RuleFreezeModel = mongoose.models.RuleFreeze || mongoose.model('RuleFreeze', freezeSchema);
 
 function requireConnection(): void {
   if (!isMongoConnected()) throw new StoreUnavailableError();
@@ -86,17 +100,14 @@ export class MongoRulesStore implements RulesStore {
     }
   }
 
-  async getFreezeState(): Promise<FreezeState> {
+  async getFreezeEvents(): Promise<FreezeEvent[]> {
     requireConnection();
-    const doc = await RulesStateModel.findById('global').lean();
-    return doc
-      ? { frozen: !!doc.frozen, reason: doc.reason ?? null, by: doc.by ?? null, at: doc.at ?? null }
-      : { frozen: false, reason: null, by: null, at: null };
+    const docs = await RuleFreezeModel.find({}).sort({ at: 1, _id: 1 }).lean();
+    return docs.map(({ _id, ...rest }) => rest as unknown as FreezeEvent);
   }
 
-  async setFreezeState(state: FreezeState): Promise<void> {
+  async appendFreezeEvent(event: FreezeEvent): Promise<void> {
     requireConnection();
-    // rules_state is mutable by design (it is a switch, not history); every change is also audited.
-    await RulesStateModel.updateOne({ _id: 'global' }, { $set: state }, { upsert: true });
+    await RuleFreezeModel.create(event);
   }
 }

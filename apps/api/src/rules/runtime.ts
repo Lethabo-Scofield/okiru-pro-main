@@ -12,6 +12,15 @@ export function rulesLaunched(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.RULES_LAUNCHED === 'true';
 }
 
+/**
+ * Identifies the running build. Set BUILD_ID (e.g. the git SHA) in CI; "dev" is only ever
+ * a development default - a production deployment without it still serves, but its stamps
+ * say so plainly.
+ */
+export function buildIdFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  return env.BUILD_ID || env.GIT_SHA || env.SOURCE_VERSION || 'unversioned-build';
+}
+
 export function rulesFrozenByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.RULES_FREEZE === 'true';
 }
@@ -27,7 +36,7 @@ export function getServiceDeps(env: NodeJS.ProcessEnv = process.env): ServiceDep
     if (!(e instanceof SigningUnavailableError)) throw e;
     signer = undefined;
   }
-  const deps: ServiceDeps = { store: new MongoRulesStore(), verifier: verifierFromEnv(env), signer, envFrozen: rulesFrozenByEnv(env) };
+  const deps: ServiceDeps = { store: new MongoRulesStore(), verifier: verifierFromEnv(env), signer, buildId: buildIdFromEnv(env), envFrozen: rulesFrozenByEnv(env) };
   if (env === process.env) cached = deps;
   return deps;
 }
