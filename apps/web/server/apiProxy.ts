@@ -70,7 +70,7 @@ const PROXIED_TEMPLATE_PATTERNS = [
   // We deliberately exclude /api/clients/X/data, /bulk-import, and
   // /calculator-config — those belong to apps/web. The `(\/|$)` anchor stops
   // /api/clients/X/employees-something-else from matching by accident.
-  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs)(\/|$)/,
+  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs|ruleset-pins)(\/|$)/,
 ];
 
 function shouldProxy(path: string): boolean {

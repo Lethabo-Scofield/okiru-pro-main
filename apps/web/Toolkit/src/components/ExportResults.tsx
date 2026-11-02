@@ -90,6 +90,8 @@ export default function ExportResults({ className }: ExportResultsProps) {
           clientId: state.client.id,
           exportType: type,
           fileName,
+          // The ruleset this export was calculated under (null = shipped rules).
+          rulesetStamp: state.scorecard.rulesetStamp ?? null,
         });
       } catch (logErr) {
         // The file DID download — that half of the toast stays true. What was
@@ -137,6 +139,7 @@ export default function ExportResults({ className }: ExportResultsProps) {
           clientId: state.client.id,
           exportType: 'all',
           fileName: 'Multiple exports',
+          rulesetStamp: state.scorecard.rulesetStamp ?? null,
         });
       } catch (logErr) {
         // The file DID download — that half of the toast stays true. What was

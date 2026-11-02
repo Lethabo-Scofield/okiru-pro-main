@@ -657,6 +657,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         measurementPeriodEnd: data.client.measurementPeriodEnd || undefined,
         annualTurnover: data.client.annualTurnover || 0,
         numberOfEmployees: data.client.numberOfEmployees || 0,
+        rulesetPins: data.client.rulesetPins && typeof data.client.rulesetPins === 'object' ? data.client.rulesetPins : undefined,
         beeCertificateNumber: data.client.beeCertificateNumber || undefined,
         beeCertificateExpiry: data.client.beeCertificateExpiry || undefined,
         beeCertificateLevel: (data.client.beeCertificateLevel ?? undefined) as Client['beeCertificateLevel'],
@@ -1100,7 +1101,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const readyPublished = async (scorecardId: ScorecardId, shipped: CalculatorConfig) => {
       ensureRulesWatcher();
       try {
-        const resolved = await resolveRules(scorecardId, shipped);
+        // A client pinned to a version is scored under THAT version, whatever is current.
+        const pinned = get().client.rulesetPins?.[scorecardId]?.version;
+        const resolved = await resolveRules(scorecardId, shipped, undefined, undefined, pinned);
         ready(resolved.config, resolved.stamp);
       } catch (e) {
         const message = e instanceof PublishedRulesUnavailableError

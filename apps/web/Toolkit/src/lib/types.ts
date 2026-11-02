@@ -61,6 +61,8 @@ export interface Client {
   scorecardType?: 'EME' | 'QSE' | 'Generic' | 'Contractor' | 'BEP';
   annualTurnover: number;
   numberOfEmployees: number;
+  /** Rules Studio: scorecardId -> the rules version this client's scorecard is pinned to. Server-managed. */
+  rulesetPins?: Record<string, { version: number; pinnedAt: string; pinnedBy: string; reason: string | null }>;
   
   // EAP targeting
   eapProvince: 'National' | 'Western Cape' | 'Eastern Cape' | 'Northern Cape' | 'Free State' | 'KwaZulu-Natal' | 'KZN' | 'North West' | 'Gauteng' | 'Mpumalanga' | 'Limpopo';

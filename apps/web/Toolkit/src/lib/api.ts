@@ -135,6 +135,9 @@ export const api = {
     apiRequest(`/api/financial-years/${id}`, { method: "DELETE" }),
 
   // --- Export Logs ---
+  getRulesetPins: (clientId: string) => apiRequest(`/api/clients/${clientId}/ruleset-pins`),
+  pinRuleset: (clientId: string, data: { scorecardId: string; version: number; reason?: string }) => apiRequest(`/api/clients/${clientId}/ruleset-pins`, { method: "POST", body: JSON.stringify(data) }),
+  rescoreUnderCurrentRules: (clientId: string, data: { scorecardId: string; toVersion: number | 'current'; reason: string }) => apiRequest(`/api/clients/${clientId}/ruleset-pins/rescore`, { method: "POST", body: JSON.stringify(data) }),
   logExport: (data: any) => apiRequest("/api/export-log/log", { method: "POST", body: JSON.stringify(data) }),
   getExportLogs: (clientId: string) => apiRequest(`/api/clients/${clientId}/export-logs`),
 
