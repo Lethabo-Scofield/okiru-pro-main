@@ -6,6 +6,10 @@
 import { MongoRulesStore } from './mongoStore.js';
 import { signerFromEnv, verifierFromEnv, SigningUnavailableError } from './signing.js';
 import type { ServiceDeps } from './rulesService.js';
+import { MongoStudioStore } from './studio/mongoStudioStore.js';
+import { offsiteFromEnv, type OffsiteStore } from './studio/snapshots.js';
+import { notifyConfigFromEnv } from './studio/notify.js';
+import type { StudioCtx } from './studio/studioService.js';
 
 /** Production publishing stays off until every launch prerequisite is met. */
 export function rulesLaunched(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -41,7 +45,19 @@ export function getServiceDeps(env: NodeJS.ProcessEnv = process.env): ServiceDep
   return deps;
 }
 
+let offsiteCache: { value: OffsiteStore | null } | null = null;
+
+/** The Studio's full dependency set. Off-site is resolved once; null => protected publishing disabled. */
+export async function getStudioCtx(env: NodeJS.ProcessEnv = process.env): Promise<StudioCtx> {
+  if (!offsiteCache) offsiteCache = { value: await offsiteFromEnv(env) };
+  return {
+    studio: new MongoStudioStore(), rules: getServiceDeps(env), offsite: offsiteCache.value, notifyCfg: notifyConfigFromEnv(env),
+    env, now: () => new Date(), requiredApprovals: Math.max(1, Number(env.RULES_REQUIRED_APPROVALS ?? 1) || 1),
+  };
+}
+
 /** Test seam. */
 export function resetServiceDepsForTests(): void {
   cached = null;
+  offsiteCache = null;
 }

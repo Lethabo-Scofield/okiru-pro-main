@@ -658,3 +658,41 @@ export async function backupStatus(ctx: StudioCtx): Promise<BackupStatus> {
     lastVerifiedSnapshotAt: last, lastSnapshotAgeHours: age === null ? null : Math.round(age * 10) / 10, stale: age === null || age > 36,
   };
 }
+
+/* ------------------------------------------------------------------ step-up bindings */
+
+/**
+ * What a step-up token for `action` is bound to, derived on the server. Refuses to start a
+ * step-up for something that could not succeed (e.g. a publish whose checks fail), so the user is
+ * never asked for a code for an action that will be rejected.
+ */
+export async function stepUpBinding(ctx: StudioCtx, userId: string, action: string, params: Record<string, unknown>): Promise<string> {
+  const text = (v: unknown, max = 80) => (typeof v === 'string' ? v.slice(0, max) : '');
+  switch (action) {
+    case 'publish': {
+      const plan = await preparePublish(ctx, userId, text(params.changesetId), {
+        effectiveFrom: params.effectiveFrom ? text(params.effectiveFrom, 40) : null, announcement: params.announcement ? text(params.announcement, 2000) : null,
+      });
+      if (!plan.ready) throw new StudioError('checks_failed', 'This draft cannot be published yet', 422, { checks: plan.checks });
+      return plan.bindingHash;
+    }
+    case 'freeze': {
+      const scope = text(params.scope) || '*';
+      await authorize(ctx.studio, userId, 'freeze', scope === '*' ? undefined : scope, ctx.env);
+      return bindingHashOf('freeze', scope, typeof params.serveVersion === 'number' ? params.serveVersion : '');
+    }
+    case 'unfreeze': {
+      const scope = text(params.scope) || '*';
+      await authorize(ctx.studio, userId, 'freeze', scope === '*' ? undefined : scope, ctx.env);
+      return bindingHashOf('unfreeze', scope);
+    }
+    case 'emergency-rollback': {
+      const sid = text(params.scorecardId);
+      if (!isScorecardId(sid)) throw new StudioError('unknown_scorecard', 'Unknown scorecard', 404);
+      await authorize(ctx.studio, userId, 'rollback.emergency', sid, ctx.env);
+      return bindingHashOf('emergency-rollback', sid, params.toVersion === 'shipped' ? 'shipped' : Number(params.toVersion));
+    }
+    default:
+      throw new StudioError('unknown_action', 'Unknown step-up action', 400);
+  }
+}

@@ -45,6 +45,7 @@ import feedbackRouter from './feedback.js';
 import userActivityRouter from './userActivity.js';
 import supplierDirectoryRouter from './supplierDirectory.js';
 import publishedRulesRouter from './rules.js';
+import rulesStudioRouter, { stepUpRouter } from './rulesStudio.js';
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -226,6 +227,8 @@ export async function registerRoutes(
 
   // Rules Studio: published rules (live link). The Studio's own API mounts beside it.
   app.use('/api/rules', publishedRulesRouter);
+  app.use('/api/rules-studio', rulesStudioRouter);
+  app.use('/api/auth/step-up', stepUpRouter);
 
   // Admin: traffic analytics (GA4 + Search Console; admin / super_admin)
   app.use('/api/admin/analytics', adminAnalyticsRouter);
