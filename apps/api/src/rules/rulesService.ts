@@ -101,7 +101,13 @@ export async function loadVerifiedHistory(scorecardId: ScorecardId, deps: Servic
   return records;
 }
 
-export async function publishVersion(input: PublishInput, deps: ServiceDeps): Promise<RulesVersionRecord> {
+/**
+ * Runs between sealing (signing) the candidate and appending it. If it throws, NOTHING is
+ * appended - this is where the signed pre-publication snapshot is taken and verified.
+ */
+export type BeforeAppend = (candidate: RulesVersionRecord, history: RulesVersionRecord[]) => Promise<void>;
+
+export async function publishVersion(input: PublishInput, deps: ServiceDeps, beforeAppend?: BeforeAppend): Promise<RulesVersionRecord> {
   if (!isScorecardId(input.scorecardId)) throw new PublishRejectedError(`Unknown scorecard "${input.scorecardId}"`);
   const scorecardId = input.scorecardId;
   if (!deps.signer) {
@@ -157,6 +163,7 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
     prevChainHash: head?.chainHash ?? genesisHash(scorecardId),
   }, deps.signer);
 
+  if (beforeAppend) await beforeAppend(record, history);
   await deps.store.appendVersion(record, head?.version ?? 0);
   return record;
 }
@@ -297,7 +304,7 @@ export interface RestoreInput {
   approvers?: string[];
 }
 
-async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps: ServiceDeps): Promise<RulesVersionRecord> {
+async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps: ServiceDeps, beforeAppend?: BeforeAppend): Promise<RulesVersionRecord> {
   if (!isScorecardId(input.scorecardId)) throw new PublishRejectedError(`Unknown scorecard "${input.scorecardId}"`);
   if (!input.reason || input.reason.trim().length < 5) throw new PublishRejectedError('A reason of at least 5 characters is required');
   // Verify FIRST: a rollback target is only trusted if the whole history it sits in verifies.
@@ -319,14 +326,14 @@ async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps
     scorecardId: input.scorecardId, overrides, publishedBy: input.actor, changesetId: input.changesetId ?? null,
     kind, restoredFromVersion, announcement: input.announcement ?? input.reason,
     authors: input.authors, approvers: input.approvers,
-  }, deps);
+  }, deps, beforeAppend);
 }
 
 /** Normal restore: re-publishes an earlier version's rules as a NEW version. Blocked by freeze. */
-export const restoreVersion = (input: RestoreInput, deps: ServiceDeps) => reinstate('restore', input, deps);
+export const restoreVersion = (input: RestoreInput, deps: ServiceDeps, beforeAppend?: BeforeAppend) => reinstate('restore', input, deps, beforeAppend);
 
 /** Emergency rollback: same operation, but allowed while frozen. Never skips verification or signing. */
-export const emergencyRollback = (input: RestoreInput, deps: ServiceDeps) => reinstate('rollback', input, deps);
+export const emergencyRollback = (input: RestoreInput, deps: ServiceDeps, beforeAppend?: BeforeAppend) => reinstate('rollback', input, deps, beforeAppend);
 
 export interface FreezeInput {
   /** A scorecard id, or '*' for every scorecard. */

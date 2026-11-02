@@ -67,6 +67,7 @@ export function buildFixture(scorecardId: ScorecardId, profile: (typeof FIXTURE_
       votingRightsPercent: 1, economicInterestPercent: 1, isDesignatedGroup: false, blackNewEntrant: s >= 0.5,
     } as OwnershipData['shareholders'][number]],
     companyValue: 50_000_000, outstandingDebt: Math.round(20_000_000 * (1 - s)), yearsHeld: 5,
+    ownershipScorePoints: 0, ownershipScorePercent: 0, netValuePoints: 0, netValuePercent: 0,
   };
 
   const employees: Employee[] = [];
