@@ -138,6 +138,10 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     // so it doesn't prevent process exit.
     void import("./src/services/workbookBackSyncFanout.js").then((m) => m.startBackSyncDrainer());
 
+    // Rules Studio nightly signed backup + integrity sweep + external heartbeat.
+    // A no-op unless RULES_MONITOR=true or RULES_LAUNCHED=true.
+    void import("./src/rules/studio/monitor.js").then((m) => m.startRulesMonitor());
+
     setImmediate(async () => {
       // Two replicas, one walk. See jobLease.ts — without the lease both pods
       // download and bill every unextracted certificate, twice, at once.
