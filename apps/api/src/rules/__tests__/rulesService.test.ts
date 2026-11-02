@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { generateKeyPairSync } from 'crypto';
 import { createSigner, createVerifier, SigningUnavailableError } from '../signing.js';
 import {
-  publishVersion, resolvePublished, resolveHeads, loadVerifiedHistory,
+  publishVersion, resolvePublished, resolveHeads, loadVerifiedHistory, restoreVersion, emergencyRollback, setFreeze,
   RulesIntegrityError, RulesFrozenError, PublishRejectedError, type ServiceDeps,
 } from '../rulesService.js';
 import { VersionConflictError } from '../store.js';
 import { verifyChain, canonicalJson, sha256 } from '../ledger.js';
 import { MemoryRulesStore } from './memoryStore.js';
-import { buildEffectiveConfig } from '../../../../web/Toolkit/src/lib/rules/buildEffectiveConfig';
+import { buildEffectiveConfig, hashEffectiveConfig } from '../../../../web/Toolkit/src/lib/rules/buildEffectiveConfig';
 import { SCORECARD_SOURCES } from '../../../../web/Toolkit/src/lib/rules/scorecards';
 
 const GUARANTEES = 'benefitFactors[contributionType=guarantees].sdFactor';
@@ -184,5 +184,76 @@ describe('rules ledger - effective dates and heads', () => {
     expect(heads).toHaveLength(9);
     expect(heads.find((h) => h.scorecardId === 'rcogp-generic')?.activeVersion).toBe(1);
     expect(heads.find((h) => h.scorecardId === 'ict-qse')?.activeVersion).toBeNull();
+  });
+});
+
+describe('rules ledger - restore, emergency rollback and freeze', () => {
+  const later = (h: number) => { clock = new Date(clock.getTime() + h * 3_600_000); };
+
+  it('restore re-publishes an old version as a NEW version (history is never rewritten)', async () => {
+    const v1 = await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
+    later(1);
+    const v3 = await restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'admin', reason: 'bad change in v2' }, deps);
+    expect(v3).toMatchObject({ version: 3, kind: 'restore', restoredFromVersion: 1, parentVersion: 2 });
+    expect(v3.overridesHash).toBe(v1.overridesHash);
+    expect(v3.configHash).toBe(v1.configHash);
+    expect((await store.getVersions('rcogp-generic')).map((r) => r.version)).toEqual([1, 2, 3]);
+    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(3);
+  });
+
+  it('a normal restore is blocked by a freeze, an emergency rollback is not', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
+    await setFreeze(deps, { frozen: true, reason: 'incident 7', actor: 'admin' });
+    await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'undo it' }, deps)).rejects.toThrow(RulesFrozenError);
+    later(1);
+    const rb = await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'incident 7 rollback' }, deps);
+    expect(rb).toMatchObject({ kind: 'rollback', version: 3, restoredFromVersion: 1 });
+    // still frozen afterwards: ordinary publishing stays blocked
+    await expect(pub()).rejects.toThrow(RulesFrozenError);
+  });
+
+  it('can roll back to the shipped configuration', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1);
+    const rb = await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 'shipped', actor: 'a', reason: 'back to baseline' }, deps);
+    expect(rb.overrides).toEqual({ source: {}, calculator: {} });
+    expect(rb.configHash).toBe(await hashEffectiveConfig(buildEffectiveConfig('rcogp-generic', { source: {}, calculator: {} })));
+    expect(rb.configHash).toBe(await hashEffectiveConfig(SCORECARD_SOURCES['rcogp-generic'].shipped));
+  });
+
+  it('a rollback supersedes a still-scheduled version immediately', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1);
+    await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} }, { effectiveFrom: new Date('2026-12-01T00:00:00Z') });
+    later(1);
+    await emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'cancel scheduled change' }, deps);
+    expect((await resolvePublished('rcogp-generic', deps)).stamp?.version).toBe(3);
+    // even after the scheduled date passes, the higher-numbered rollback stays in force
+    expect((await resolvePublished('rcogp-generic', deps, new Date('2027-01-01T00:00:00Z'))).stamp?.version).toBe(3);
+  });
+
+  it('never weakens verification: rollback on a tampered chain is refused', async () => {
+    await pub({ source: { [GUARANTEES]: 0.5 }, calculator: {} });
+    later(1); await pub({ source: { [GUARANTEES]: 0.04 }, calculator: {} });
+    store.versions.get('rcogp-generic')![0].overrides.source[GUARANTEES] = 0.9;
+    await expect(emergencyRollback({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: 'try anyway' }, deps)).rejects.toThrow(RulesIntegrityError);
+    expect(await store.getVersions('rcogp-generic')).toHaveLength(2);
+  });
+
+  it('needs a reason, an existing version and a known scorecard', async () => {
+    await pub();
+    await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 1, actor: 'a', reason: '' }, deps)).rejects.toThrow(/reason/);
+    await expect(restoreVersion({ scorecardId: 'rcogp-generic', fromVersion: 9, actor: 'a', reason: 'no such version' }, deps)).rejects.toThrow(/does not exist/);
+    await expect(restoreVersion({ scorecardId: 'bogus', fromVersion: 1, actor: 'a', reason: 'unknown card' }, deps)).rejects.toThrow(PublishRejectedError);
+    await expect(setFreeze(deps, { frozen: true, reason: '', actor: 'a' })).rejects.toThrow(/reason/);
+  });
+
+  it('unfreezing re-enables publishing', async () => {
+    await setFreeze(deps, { frozen: true, reason: 'maintenance', actor: 'a' });
+    await expect(pub()).rejects.toThrow(RulesFrozenError);
+    await setFreeze(deps, { frozen: false, reason: '', actor: 'a' });
+    await expect(pub()).resolves.toMatchObject({ version: 1 });
   });
 });

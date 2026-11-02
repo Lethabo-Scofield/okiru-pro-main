@@ -83,17 +83,22 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
     const { SigningUnavailableError } = await import('./signing.js');
     throw new SigningUnavailableError();
   }
-  await assertNotFrozen(deps);
+  // Freeze stops ordinary publishing and restores. An emergency rollback is the recovery
+  // path FROM a bad state, so it is the one operation a freeze must not block.
+  if (input.kind !== 'rollback') await assertNotFrozen(deps);
 
   const history = await loadVerifiedHistory(scorecardId, deps);
   const head = history[history.length - 1];
   const now = nowOf(deps);
-  const effectiveFrom = input.effectiveFrom ?? now;
+  const kind = input.kind ?? 'publish';
+  // Restores and rollbacks always take effect immediately: a newer version number supersedes
+  // any still-scheduled version, which is what makes them able to cancel a pending change.
+  const effectiveFrom = kind === 'publish' ? (input.effectiveFrom ?? now) : now;
   if (effectiveFrom.getTime() < now.getTime() - 1000) {
     throw new PublishRejectedError('effectiveFrom may not be in the past; published history is never rewritten');
   }
   const latestEffective = history.reduce((m, r) => Math.max(m, Date.parse(r.effectiveFrom)), 0);
-  if (effectiveFrom.getTime() < latestEffective) {
+  if (kind === 'publish' && effectiveFrom.getTime() < latestEffective) {
     throw new PublishRejectedError('effectiveFrom must not precede an already-published version');
   }
 
@@ -109,7 +114,7 @@ export async function publishVersion(input: PublishInput, deps: ServiceDeps): Pr
   const record = sealVersion({
     scorecardId,
     version: (head?.version ?? 0) + 1,
-    kind: input.kind ?? 'publish',
+    kind,
     overrides,
     overridesHash: await hashOverrides(overrides),
     configHash,
@@ -194,4 +199,57 @@ export async function resolveHeads(deps: ServiceDeps, at?: Date): Promise<HeadSu
     out.push({ scorecardId: id, activeVersion: p.stamp?.version ?? null, headVersion: p.headVersion, chainHead: p.chainHead, configHash: p.stamp?.configHash ?? null });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ restore / rollback / freeze */
+
+export interface RestoreInput {
+  scorecardId: string;
+  /** Version whose rules are re-instated, or 'shipped' for the unmodified shipped configuration. */
+  fromVersion: number | 'shipped';
+  actor: string;
+  reason: string;
+  changesetId?: string | null;
+}
+
+async function reinstate(kind: 'restore' | 'rollback', input: RestoreInput, deps: ServiceDeps): Promise<RulesVersionRecord> {
+  if (!isScorecardId(input.scorecardId)) throw new PublishRejectedError(`Unknown scorecard "${input.scorecardId}"`);
+  if (!input.reason || input.reason.trim().length < 5) throw new PublishRejectedError('A reason of at least 5 characters is required');
+  // Verify FIRST: a rollback target is only trusted if the whole history it sits in verifies.
+  const history = await loadVerifiedHistory(input.scorecardId, deps);
+  let overrides: RuleOverrides;
+  let restoredFromVersion: number | null;
+  if (input.fromVersion === 'shipped') {
+    overrides = { source: {}, calculator: {} };
+    restoredFromVersion = null;
+  } else {
+    const target = history.find((r) => r.version === input.fromVersion);
+    if (!target) throw new PublishRejectedError(`Version ${input.fromVersion} does not exist for ${input.scorecardId}`);
+    overrides = target.overrides;
+    restoredFromVersion = target.version;
+  }
+  return publishVersion({
+    scorecardId: input.scorecardId,
+    overrides,
+    publishedBy: input.actor,
+    changesetId: input.changesetId ?? null,
+    kind,
+    restoredFromVersion,
+  }, deps);
+}
+
+/** Normal restore: re-publishes an earlier version's rules as a NEW version. Blocked by freeze. */
+export const restoreVersion = (input: RestoreInput, deps: ServiceDeps) => reinstate('restore', input, deps);
+
+/** Emergency rollback: same operation, but allowed while frozen. Never skips verification or signing. */
+export const emergencyRollback = (input: RestoreInput, deps: ServiceDeps) => reinstate('rollback', input, deps);
+
+export async function setFreeze(deps: ServiceDeps, change: { frozen: boolean; reason: string; actor: string }): Promise<void> {
+  if (change.frozen && (!change.reason || change.reason.trim().length < 5)) throw new PublishRejectedError('A reason of at least 5 characters is required to freeze');
+  await deps.store.setFreezeState({
+    frozen: change.frozen,
+    reason: change.frozen ? change.reason : null,
+    by: change.actor,
+    at: nowOf(deps).toISOString(),
+  });
 }
