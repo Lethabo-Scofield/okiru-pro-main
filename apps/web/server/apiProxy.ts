@@ -52,6 +52,8 @@ const PROXIED_PREFIXES = [
    *  SPA catch-all, so every "log this export" call wrote nothing — and the
    *  caller swallowed the result, so it looked like it had worked. */
   "/api/export-log",
+  /** Rules Studio: published rules (live link) and the Studio API itself. Both live on apps/api. */
+  "/api/rules",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [

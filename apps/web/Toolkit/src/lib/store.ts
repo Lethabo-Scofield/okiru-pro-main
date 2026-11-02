@@ -58,6 +58,9 @@ import { calculateEmpowermentFinancingScore } from './calculators/empowermentFin
 import { isTransportQseSector, isTransportLargeSector } from './calculators/transport';
 import { TRANSPORT_GENERIC_CALCULATOR_CONFIG } from './sectors/transport-generic';
 import { TRANSPORT_QSE_CALCULATOR_CONFIG } from './sectors/transport-qse';
+import { resolveRules, startRulesWatcher, PublishedRulesUnavailableError } from './rules/liveLink';
+import type { ScorecardId } from './rules/scorecards';
+import type { RulesetStamp } from './rules/types';
 import { deepClone, round2, SectorConfigError, normalizeRace, normalizeDesignationForScoring, supplierSumTmps } from './calculators/shared';
 import {
   calculateScorecard,
@@ -217,9 +220,20 @@ function buildEmptyScorecard(config?: CalculatorConfig | null): ScorecardResult 
 /** Legacy export for backward compatibility */
 const emptyScorecard = buildEmptyScorecard();
 
+let rulesWatcherStarted = false;
+/** Re-resolves the config when a rules version changes (60 s poll, focus, other tabs). */
+function ensureRulesWatcher() {
+  if (rulesWatcherStarted || typeof window === 'undefined') return;
+  rulesWatcherStarted = true;
+  startRulesWatcher(() => {
+    const { activeClientId, calculatorConfigStatus, loadCalculatorConfig } = useBbeeStore.getState();
+    if (activeClientId && calculatorConfigStatus !== 'loading') void loadCalculatorConfig(activeClientId);
+  });
+}
+
 export type CalculatorConfigStatus = 'idle' | 'loading' | 'ready' | 'error';
 export interface CalculatorConfigErrorInfo {
-  reason: 'network' | 'server' | 'invalid-config' | 'unknown-sector' | 'fsc-no-subsector' | 'recalc-before-load';
+  reason: 'network' | 'server' | 'invalid-config' | 'unknown-sector' | 'fsc-no-subsector' | 'recalc-before-load' | 'rules-unavailable';
   message: string;
   sectorCode: string;
   scorecardType: string;
@@ -231,6 +245,8 @@ export interface BbeeState extends PillarState {
   activeClientId: string | null;
   pipelineOverrides: PipelineOverrides | null;
   calculatorConfig: CalculatorConfig | null;
+  /** The published ruleset the current calculatorConfig came from; null = shipped rules. */
+  rulesetStamp: RulesetStamp | null;
   calculatorConfigStatus: CalculatorConfigStatus;
   calculatorConfigError: CalculatorConfigErrorInfo | null;
 
@@ -535,6 +551,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
+  rulesetStamp: null,
   calculatorConfigStatus: 'idle',
   calculatorConfigError: null,
 
@@ -946,6 +963,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
+  rulesetStamp: null,
   calculatorConfigStatus: 'idle',
   calculatorConfigError: null,
       isScenarioMode: false,
@@ -971,6 +989,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,
+  rulesetStamp: null,
   calculatorConfigStatus: 'idle',
   calculatorConfigError: null,
       isScenarioMode: false,
@@ -1069,29 +1088,47 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     // page mount sees 'loading' instead of stale 'ready'/'idle' (race fix).
     set({ calculatorConfigStatus: 'loading', calculatorConfigError: null });
 
-    const ready = (cfg: CalculatorConfig) => {
-      set({ calculatorConfig: cfg, calculatorConfigStatus: 'ready', calculatorConfigError: null });
+    const ready = (cfg: CalculatorConfig, stamp: RulesetStamp | null = null) => {
+      set({ calculatorConfig: cfg, rulesetStamp: stamp, calculatorConfigStatus: 'ready', calculatorConfigError: null });
       get()._recalculateAll();
     };
 
+    // The nine Rules Studio scorecards read their config through the live link:
+    // shipped rules until the Studio is launched, the verified published version after,
+    // and an explicit error (never a silent fallback) if a launched deployment cannot
+    // fetch or verify them.
+    const readyPublished = async (scorecardId: ScorecardId, shipped: CalculatorConfig) => {
+      ensureRulesWatcher();
+      try {
+        const resolved = await resolveRules(scorecardId, shipped);
+        ready(resolved.config, resolved.stamp);
+      } catch (e) {
+        const message = e instanceof PublishedRulesUnavailableError
+          ? `The published scoring rules for this scorecard could not be loaded or verified (${e.message}). Scoring is paused rather than using rules that may be out of date. Click Retry.`
+          : 'The published scoring rules could not be loaded. Click Retry.';
+        console.error('[store]', message, e);
+        set({ calculatorConfig: null, rulesetStamp: null, calculatorConfigStatus: 'error', calculatorConfigError: { reason: 'rules-unavailable', message, sectorCode, scorecardType } });
+      }
+    };
+
     if (isRcogpGenericSector(sectorCode, scorecardType)) {
-      ready(RCOGP_GENERIC_CALCULATOR_CONFIG);
+      await readyPublished('rcogp-generic', RCOGP_GENERIC_CALCULATOR_CONFIG);
       return;
     }
     if (isRcogpQseSector(sectorCode, scorecardType)) {
-      ready(RCOGP_QSE_CALCULATOR_CONFIG);
+      await readyPublished('rcogp-qse', RCOGP_QSE_CALCULATOR_CONFIG);
       return;
     }
     if (isIctGenericSector(sectorCode, scorecardType)) {
-      ready(ICT_GENERIC_CALCULATOR_CONFIG);
+      await readyPublished('ict-generic', ICT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
     if (isIctQseSector(sectorCode, scorecardType)) {
-      ready(ICT_QSE_CALCULATOR_CONFIG);
+      await readyPublished('ict-qse', ICT_QSE_CALCULATOR_CONFIG);
       return;
     }
     if (isAgriGenericSector(sectorCode, scorecardType)) {
-      ready(AGRI_GENERIC_CALCULATOR_CONFIG);
+      await readyPublished('agri-generic', AGRI_GENERIC_CALCULATOR_CONFIG);
       return;
     }
     // Transport Sector Code — bundled configs derived from the pipeline
@@ -1114,10 +1151,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // 105-pt Others scorecard: a wrong answer rather than a refusal.
       if (isFscQseSector(sectorCode, scorecardType)) { ready(FSC_QSE_CALCULATOR_CONFIG); return; }
       const fscSub = get().client.fscSubSector || 'Others';
-      if (isFscBanksSector(sectorCode, fscSub)) { ready(FSC_BANKS_CALCULATOR_CONFIG); return; }
-      if (isFscLtiSector(sectorCode, fscSub))   { ready(FSC_LTI_CALCULATOR_CONFIG);   return; }
-      if (isFscStiSector(sectorCode, fscSub))   { ready(FSC_STI_CALCULATOR_CONFIG);   return; }
-      if (isFscGenericSector(sectorCode, scorecardType)) { ready(FSC_GENERIC_CALCULATOR_CONFIG); return; }
+      if (isFscBanksSector(sectorCode, fscSub)) { await readyPublished('fsc-banks', FSC_BANKS_CALCULATOR_CONFIG); return; }
+      if (isFscLtiSector(sectorCode, fscSub))   { await readyPublished('fsc-lti', FSC_LTI_CALCULATOR_CONFIG);   return; }
+      if (isFscStiSector(sectorCode, fscSub))   { await readyPublished('fsc-sti', FSC_STI_CALCULATOR_CONFIG);   return; }
+      if (isFscGenericSector(sectorCode, scorecardType)) { await readyPublished('fsc-others', FSC_GENERIC_CALCULATOR_CONFIG); return; }
       // Sub-sector did not match any known variant — short-circuit with a
       // structured error rather than falling through to a remote fetch that
       // will never resolve FSC sub-sectors.
@@ -1195,7 +1232,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
 
     try {
       const result = calculateScorecard(state, state.pipelineOverrides);
-      set({ scorecard: result });
+      // Version stamping: a score calculated under a published ruleset carries the exact
+      // version + hashes so it can be reproduced and verified later. Shipped rules: no stamp.
+      set({ scorecard: state.rulesetStamp ? { ...result, rulesetStamp: state.rulesetStamp } : result });
     } catch (error) {
       if (import.meta.env?.DEV && error instanceof SectorConfigError) {
         throw error;

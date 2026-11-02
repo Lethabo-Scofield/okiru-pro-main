@@ -592,6 +592,12 @@ export interface PillarScore {
 
 export interface ScorecardResult {
   /**
+   * Present only when this result was calculated under a published Rules Studio version:
+   * the exact version and hashes, so the result can be reproduced and verified later.
+   * Absent = calculated with the shipped rules.
+   */
+  rulesetStamp?: import('./rules/types').RulesetStamp | null;
+  /**
    * Sub-minimum outcome for a priority element.
    *
    * `undefined` means THIS SECTOR HAS NO SUB-MINIMUM for the element — that is
