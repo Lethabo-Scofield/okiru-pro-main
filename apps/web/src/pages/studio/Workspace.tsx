@@ -20,6 +20,8 @@ export default function Workspace({ sid }: { sid: string }) {
   const [why, setWhy] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
 
   const editable = (drafts.data?.changesets ?? []).filter((c: any) => ['draft', 'changes_requested', 'submitted', 'approved'].includes(c.status));
   const draft = editable.find((c: any) => c.id === draftId) ?? editable[0];
@@ -48,10 +50,8 @@ export default function Workspace({ sid }: { sid: string }) {
     setBusy(false);
   };
   const newDraft = () => run(async () => {
-    const title = window.prompt('Name this draft (e.g. "Guarantees count at 50%")');
-    if (!title) return;
-    const cs = await studio<any>('POST', `/scorecards/${sid}/changesets`, { title });
-    setDraftId(cs.id);
+    const cs = await studio<any>('POST', `/scorecards/${sid}/changesets`, { title: newTitle });
+    setDraftId(cs.id); setCreating(false); setNewTitle('');
   });
   const saveItem = (rule: any) => run(async () => {
     await studio('POST', `/changesets/${draft.id}/items`, { ruleKey: rule.key, value: Number(value), justification: why, rev: draft.rev });
@@ -72,10 +72,21 @@ export default function Workspace({ sid }: { sid: string }) {
       subtitle={`Published version ${values.data?.publishedVersion ?? 0}${values.data?.publishedVersion === 0 ? ' (the shipped rules)' : ''}. Values below come from the calculator configuration the Toolkit actually scores with.`}
       actions={<>
         <Link href={`/studio/s/${sid}/describe`}><Button variant="outline">Describe a change</Button></Link>
-        <Button onClick={newDraft} disabled={busy}>New draft</Button>
+        <Button onClick={() => setCreating(true)} disabled={busy}>New draft</Button>
       </>}
     >
       <ErrorNote message={error || registry.error || values.error} />
+
+      {creating && (
+        <Panel title="New draft">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="sr-only" htmlFor="draft-title">Draft name</label>
+            <Input id="draft-title" className="max-w-md" autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder='Name it, e.g. "Guarantees count at 50%"' onKeyDown={(e) => { if (e.key === 'Enter' && newTitle.trim().length >= 3) void newDraft(); }} />
+            <Button onClick={newDraft} disabled={busy || newTitle.trim().length < 3}>Create draft</Button>
+            <Button variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Draft">
         {editable.length === 0 ? <p className="text-sm text-zinc-600">No open draft. Create one to change a rule.</p> : (

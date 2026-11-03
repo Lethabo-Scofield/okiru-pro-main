@@ -32,13 +32,13 @@ function classify(key: string): { unit: RuleUnit; min: number; max: number; edit
 }
 
 function humanize(key: string): string {
-  return key
+  const words = key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/\bBW\b/g, 'Black Women')
-    .replace(/\bEI\b/g, 'Economic Interest')
-    .replace(/\bMax Pts\b/i, 'maximum points')
-    .replace(/\bPts\b/, 'points')
-    .replace(/^./, (c) => c.toUpperCase());
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(' ')
+    .map((w) => (w === 'BW' ? 'Black Women' : w === 'EI' ? 'Economic Interest' : w === 'Pts' || w === 'pts' ? 'points' : w === 'Max' ? 'maximum' : w))
+    .join(' ');
+  return words.replace(/^./, (c) => c.toUpperCase()).replace(/maximum points/i, 'maximum points');
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);

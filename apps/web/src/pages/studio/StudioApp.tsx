@@ -23,7 +23,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           <ul className="space-y-1">
             {NAV.map(([href, label]) => (
               <li key={href}><Link href={href} aria-current={loc === href ? 'page' : undefined}
-                className={`block rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${loc === href ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'}`}>{label}</Link></li>
+                style={loc === href ? { backgroundColor: '#18181b', color: '#ffffff' } : undefined}
+                className={`block rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${loc === href ? '' : 'text-zinc-700 hover:bg-zinc-100'}`}>{label}</Link></li>
             ))}
           </ul>
           <Link href="/hub" className="mt-4 block text-xs text-zinc-500 underline">Back to Okiru</Link>

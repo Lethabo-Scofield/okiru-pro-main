@@ -233,10 +233,7 @@ function AppRouter() {
       {/* Settings — account, billing/tokens, team, company in one shell.
           The bare /settings lands on Account; /settings/:tab picks a pane. */}
       {/* Rules Studio: gated by a Studio grant on the server, not by any platform role. */}
-      <Route path="/studio/:rest*">
-        <ProtectedRoute><StudioApp /></ProtectedRoute>
-      </Route>
-      <Route path="/studio">
+      <Route path="/studio/*?">
         <ProtectedRoute><StudioApp /></ProtectedRoute>
       </Route>
       <Route path="/settings">
@@ -502,9 +499,12 @@ const isMarketingPath = (path: string) => {
   return p === "/" || p === "/products" || p.startsWith("/products/") || MARKETING_PATHS.includes(p);
 };
 
+/** The Rules Studio is a light-only surface (it is a document-style review tool). */
+const isStudioPath = (path: string) => path === "/studio" || path.startsWith("/studio/");
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={isMarketingPath}>
+    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={(p: string) => isMarketingPath(p) || isStudioPath(p)}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
