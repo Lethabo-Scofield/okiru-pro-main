@@ -19,6 +19,20 @@ API `tsc` clean. Branch `feature/rules-studio`.
 | Monitoring | **Partial** | In-app notifications, alarm webhook with retries and delivery records, email outbox inactive without SMTP | No real webhook tested; the email outbox does not actually send; alarm for "missing heartbeat" lives in the external monitor |
 | CI and tests | **Complete** for what exists | API `tsc` step added to `.github/workflows/ci.yml`; new tests run in existing web/API test steps | 3 unrelated API route test files (`onboarding`, `parserDocuments`, `scorecardAdvice`) failed in my runs; I did not modify anything they cover and did not investigate further |
 
+## Update: launch gate, rehearsal, restricted DB user
+
+* **Launch gate (implemented, tested):** `RULES_LAUNCHED=true` only takes effect when every blocker in `rules/readiness.ts` passes
+  (signing key, TOTP key, off-site store outside the primary account, build id, alarm webhook, heartbeat, restricted DB user, an editor and a
+  *different* approver, an enrolled authenticator). Otherwise the API logs why and keeps serving the shipped rules. Live view: `GET /api/rules-studio/readiness`
+  and the Overview panel; `POST /readiness/test-offsite` writes and reads back a probe object.
+* **Rehearsal mode (implemented, verified locally):** `node scripts/rules-studio-setup.mjs --rehearsal` writes a git-ignored `apps/api/.env.rehearsal`
+  with fresh keys and a local-directory backup store. It is refused in production and is **never** counted as production-ready.
+  Verified against a running API: keys load, probe write/read-back OK, readiness correctly reports `rehearsal=true, productionReady=false`.
+* **Database-level append-only (code complete, NOT executed):** `RULES_MONGO_URI` moves the rules/Studio collections to a separate restricted
+  user (no update/delete on history). Role, index script and proof steps: `mongo-roles.md`. Needs a DB admin to run; the readiness check stays red until then.
+* **Propagation notice (implemented):** unpinned scorecards show "Scoring rules updated to version N", the announcement and old → new score.
+* Found by the real-Mongo run and fixed: concurrent audit appends could exhaust their retries (now jittered, 30 attempts).
+
 ## Real vs simulated (read this before trusting a green test run)
 
 | Area | Connected to the real thing? | How it was validated |
