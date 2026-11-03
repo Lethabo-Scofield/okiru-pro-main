@@ -8,6 +8,7 @@
  * exercises the real change in the opposite direction, 0.03 -> 0.5. Everything else is as written.
  */
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
+import mongoose from 'mongoose';
 import { generateKeyPairSync, randomBytes } from 'crypto';
 import { createSigner, createVerifier } from '../../signing.js';
 import { MemoryRulesStore } from '../../__tests__/memoryStore.js';
@@ -29,6 +30,15 @@ import { resolveRules, PublishedRulesUnavailableError } from '../../../../../web
 import { calculateScorecard } from '../../../../../web/Toolkit/src/lib/scoring/calculateScorecard';
 import { buildFixture, FIXTURE_PROFILES } from '../../../../../web/Toolkit/src/lib/rules/impact/fixtures';
 
+/**
+ * Set RULES_TEST_MONGO_URI to run this whole suite against a REAL MongoDB (scratch database,
+ * collections emptied between tests, database dropped at the end) instead of the in-memory stores.
+ */
+const MONGO_URI = process.env.RULES_TEST_MONGO_URI;
+const SCRATCH = `rules_studio_test_${randomBytes(6).toString('hex')}`;
+vi.mock('../../../../db.js', () => ({ isMongoConnected: () => mongoose.connection.readyState === 1 }));
+
+if (MONGO_URI) vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 }); // Atlas round-trips are ~100 ms each
 const SID = 'rcogp-generic';
 const GUARANTEES_KEY = `${SID}:source:benefitFactors[contributionType=guarantees].sdFactor`;
 
@@ -61,6 +71,28 @@ let ctx: StudioCtx;
 let webhookCalls: any[];
 const secrets: Record<string, string> = {};
 
+/** Behind-the-application tampering: raw driver on Mongo, direct mutation in memory. */
+async function tamperGuarantees(value: number) {
+  const key = 'benefitFactors[contributionType=guarantees].sdFactor';
+  if (MONGO_URI) {
+    const doc = await mongoose.connection.db!.collection('rules_versions').findOne({ scorecardId: SID, version: 1 });
+    await mongoose.connection.db!.collection('rules_versions').updateOne({ _id: doc!._id }, { $set: { overrides: { ...doc!.overrides, source: { ...doc!.overrides.source, [key]: value } } } });
+  } else {
+    rulesStore.versions.get(SID)![0].overrides.source[key] = value;
+  }
+}
+async function resealVersion1(patch: Record<string, unknown>) {
+  const { sealVersion } = await import('../../ledger.js');
+  const [rec] = await rulesStore.getVersions(SID);
+  const { payloadHash: _p, chainHash: _c, keyId: _k, signature: _s, ...payload } = rec as any;
+  const sealed = sealVersion({ ...payload, ...patch }, ctx.rules.signer!);
+  if (MONGO_URI) {
+    const doc = await mongoose.connection.db!.collection('rules_versions').findOne({ scorecardId: SID, version: 1 });
+    await mongoose.connection.db!.collection('rules_versions').replaceOne({ _id: doc!._id }, sealed as any);
+  } else {
+    rulesStore.versions.set(SID, [sealed]);
+  }
+}
 const sleep = (s: number) => { clock = new Date(clock.getTime() + s * 1000); };
 
 /** Full step-up: start, wait for a fresh TOTP step, verify, return the single-use token. */
@@ -92,13 +124,32 @@ async function approvedDraft(value = 0.5): Promise<Changeset> {
   return decideChangeset(ctx, 'approver', cs.id, 'approve', 'Reviewed the impact lines.');
 }
 
+beforeAll(async () => {
+  if (!MONGO_URI) return;
+  await mongoose.connect(MONGO_URI, { dbName: SCRATCH, serverSelectionTimeoutMS: 15000 });
+  const { RulesVersionModel, RuleFreezeModel } = await import('../../mongoStore.js');
+  await RulesVersionModel.init(); await RuleFreezeModel.init();
+}, 60_000);
+afterAll(async () => {
+  if (MONGO_URI && mongoose.connection.readyState === 1 && mongoose.connection.db?.databaseName === SCRATCH) await mongoose.connection.dropDatabase();
+  if (MONGO_URI) await mongoose.disconnect();
+});
 beforeAll(() => { vi.spyOn(console, 'log').mockImplementation(() => {}); vi.spyOn(console, 'warn').mockImplementation(() => {}); vi.spyOn(console, 'error').mockImplementation(() => {}); });
 afterAll(() => vi.restoreAllMocks());
 
 beforeEach(async () => {
   clock = new Date('2026-11-02T08:00:00.000Z');
-  rulesStore = new MemoryRulesStore();
-  studio = new MemoryStudioStore();
+  if (MONGO_URI) {
+    // scratch database only: empty every collection through the raw driver (the app models are append-only)
+    for (const c of await mongoose.connection.db!.listCollections().toArray()) await mongoose.connection.db!.collection(c.name).deleteMany({});
+    const { MongoRulesStore } = await import('../../mongoStore.js');
+    const { MongoStudioStore } = await import('../mongoStudioStore.js');
+    rulesStore = new MongoRulesStore() as unknown as MemoryRulesStore;
+    studio = new MongoStudioStore() as unknown as MemoryStudioStore;
+  } else {
+    rulesStore = new MemoryRulesStore();
+    studio = new MemoryStudioStore();
+  }
   offsite = new FakeOffsite();
   webhookCalls = [];
   const notifyCfg: NotifyConfig = {
@@ -214,7 +265,7 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
 
     // 18. A tampered version is detected and raises the integrity alarm
     expect((await checkIntegrity(ctx, 'admin')).ok).toBe(true);
-    rulesStore.versions.get(SID)![0].overrides.source['benefitFactors[contributionType=guarantees].sdFactor'] = 0.99;
+    await tamperGuarantees(0.99);
     await expect(resolvePublished(SID, ctx.rules)).rejects.toThrow(RulesIntegrityError);
     const bad = await checkIntegrity(ctx, 'admin');
     expect(bad.ok).toBe(false);
@@ -231,7 +282,8 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
 
     // 20. Unrelated functionality: this scenario touches no other module (asserted by construction -
     //     the only writers are the rules collections, studio_* collections and the audit trail).
-    expect([...(studio as any).cols.keys()].every((n: string) => !/certificate|esg/i.test(n))).toBe(true);
+    const touched = MONGO_URI ? (await mongoose.connection.db!.listCollections().toArray()).map((c) => c.name) : [...(studio as any).cols.keys()];
+    expect(touched.every((n: string) => !/certificate|esg/i.test(n))).toBe(true);
   });
 });
 
@@ -375,10 +427,7 @@ describe('emergency rollback', () => {
   it('freezes to the last known good version when the target is incompatible with the running build', async () => {
     await publishV1();
     // Make version 1 incompatible: re-sign it against a different registry hash.
-    const { sealVersion } = await import('../../ledger.js');
-    const rec = rulesStore.versions.get(SID)![0];
-    const { payloadHash: _p, chainHash: _c, keyId: _k, signature: _s, ...payload } = rec;
-    rulesStore.versions.set(SID, [sealVersion({ ...payload, registryHash: 'f'.repeat(64) }, ctx.rules.signer!)]);
+    await resealVersion1({ registryHash: 'f'.repeat(64) });
     const token = await stepUp('admin', 'emergency-rollback', bindingHashOf('emergency-rollback', SID, 1));
     const out = await emergencyRollbackScorecard(ctx, 'admin', SID, { toVersion: 1, reason: 'Restore the earlier rules now', stepUpToken: token });
     expect(out).toEqual({ mode: 'frozen_last_known_good', serveVersion: 0 });

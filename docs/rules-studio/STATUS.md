@@ -19,8 +19,31 @@ API `tsc` clean. Branch `feature/rules-studio`.
 | Monitoring | **Partial** | In-app notifications, alarm webhook with retries and delivery records, email outbox inactive without SMTP | No real webhook tested; the email outbox does not actually send; alarm for "missing heartbeat" lives in the external monitor |
 | CI and tests | **Complete** for what exists | API `tsc` step added to `.github/workflows/ci.yml`; new tests run in existing web/API test steps | 3 unrelated API route test files (`onboarding`, `parserDocuments`, `scorecardAdvice`) failed in my runs; I did not modify anything they cover and did not investigate further |
 
-## Incident I caused (needs your decision)
+## Real vs simulated (read this before trusting a green test run)
 
-While checking whether those 3 API test failures were pre-existing, I ran `git stash` / `git checkout` / `git stash pop` carelessly; with nothing of mine to stash, `pop` applied **your older stash `stash@{0}` (payg-upload-quote-flow)** and left conflict markers in
-`apps/web/src/components/upload/UploadWizard.tsx` and `okiru-ai-parser/src/routes/parser.ts` (uncommitted, unstaged). My commits are intact and these two files were never committed.
-The stash entry is still in the list. These files must be restored to HEAD (or the stash resolved deliberately) before the web production build will pass.
+| Area | Connected to the real thing? | How it was validated |
+|---|---|---|
+| Scoring engine | **Real** | `calculateScorecard` is the production scorer; `scorerParity.test.ts` proves full ScorecardResult parity (shipped vs empty-override config) for 9 scorecards × 5 fixtures; the whole existing B-BBEE suite is unchanged |
+| MongoDB (ledger, freeze, studio collections, audit, step-up, grants, snapshots, client pins) | **Real, validated** | `mongo.integration.test.ts` (11 tests) and the full 20-step scenario + guards (`acceptance.test.ts`, 12 tests) pass against a real Atlas cluster in a scratch database. Findings: override keys containing dots/brackets round-trip correctly; the unique (scorecardId, version) index serialises concurrent publishes (no duplicate, no gap); Mongoose hooks block update/delete; a raw-driver edit behind the application is caught by signature verification. Run: `RULES_TEST_MONGO_URI=<uri> npx vitest run src/rules/__tests__/mongo.integration.test.ts src/rules/studio/__tests__/acceptance.test.ts` (uses a throwaway `rules_studio_test_*` database) |
+| Mongo role-level append-only | **Not done** | Needs a restricted DB user (no update/delete on `rules_*` collections) — infra |
+| Studio HTTP routes on real Mongo | **Not done** | Route tests use in-memory stores; the services they call were validated on Mongo above |
+| Off-site backup store | **Simulated** | In-memory fake in all tests. The Azure Blob adapter exists but has never touched a real account |
+| Signing keys | **Test keys only** | Generated per test run. No production key exists; custody undecided |
+| TOTP step-up | **Real algorithm, no real user** | RFC 6238 vectors pass; never exercised from a real authenticator app |
+| Authentication/session | **Simulated in route tests** | Header-based fake session; the real session store was not exercised against Studio routes |
+| Alarm webhook / heartbeat monitor / email | **Simulated** | Fake fetch; the email outbox only records "skipped" |
+| AI provider | **Simulated** | Injected provider; no real call made |
+| Browser UI | **Built; production `vite build` passes (incl. worker bundle); SSR smoke-tested** | No interactive browser walkthrough yet |
+
+### Blocked on the owner (cannot be done in code)
+1. Off-site storage account in a **different subscription** with an immutability policy, plus its connection string.
+2. A production Ed25519 signing key and a custody plan; `RULES_TOTP_ENC_KEY`.
+3. A restricted Mongo user for the rules collections (append-only at the database level).
+4. Alarm webhook destination and an external dead-man-switch monitor for `RULES_HEARTBEAT_URL`.
+5. Approvers, number of approvals, Studio host / Cloudflare Access, AI provider/budget, security-test provider.
+
+`RULES_LAUNCHED` stays `false` until the recovery drills in TEST-PLAN.md pass against the real backup store.
+
+## Incident (resolved)
+
+An accidental `git stash pop` applied the older stash `payg-upload-quote-flow` and left conflict markers in `UploadWizard.tsx` and `parser.ts`. With approval both files were restored to HEAD (verified first: none of the Rules Studio commits touch them); the stash entry is preserved. The web production build passes again.
