@@ -71,7 +71,7 @@ export function buildFixture(scorecardId: ScorecardId, profile: (typeof FIXTURE_
   };
 
   const employees: Employee[] = [];
-  for (const [d, designation] of DESIGNATIONS.entries()) {
+  for (const [d, designation] of Array.from(DESIGNATIONS.entries())) {
     for (let i = 0; i < 6; i++) {
       const black = i / 6 < s;
       employees.push({

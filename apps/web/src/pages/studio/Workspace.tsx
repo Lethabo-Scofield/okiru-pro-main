@@ -41,7 +41,7 @@ export default function Workspace({ sid }: { sid: string }) {
       if (filter && !`${r.label} ${r.element} ${r.key}`.toLowerCase().includes(filter.toLowerCase())) continue;
       g.set(r.element, [...(g.get(r.element) ?? []), r]);
     }
-    return [...g.entries()];
+    return Array.from(g.entries());
   }, [registry.data, filter]);
 
   const run = async (fn: () => Promise<unknown>) => {
