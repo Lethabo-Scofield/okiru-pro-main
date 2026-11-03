@@ -19,6 +19,8 @@ import type { RulesStore } from '../store.js';
 import type { Doc, StudioStore } from './studioStore.js';
 
 export interface OffsiteStore {
+  /** True for the local-directory REHEARSAL store: it proves the flow, not durability. Never production-ready. */
+  readonly rehearsal?: boolean;
   /** Human-readable target, for status pages ("azure-blob:account/container"). Never a secret. */
   describe(): string;
   /** Must fail (not overwrite) if the key exists - snapshots are immutable. */
@@ -179,7 +181,41 @@ export class AzureBlobOffsite implements OffsiteStore {
  *   RULES_OFFSITE_AZURE_CONNECTION_STRING   a connection string for a DIFFERENT subscription/account
  *   RULES_OFFSITE_CONTAINER                 container with an immutability (WORM) policy
  */
+/**
+ * REHEARSAL ONLY. Writes snapshots to a local directory so the whole publish flow (snapshot, read-back,
+ * verification) can be exercised without a cloud account. It is NOT off-site: it lives and dies with this
+ * machine. It refuses to exist in production, and readiness never counts it as production-ready.
+ */
+export class LocalDirOffsite implements OffsiteStore {
+  readonly rehearsal = true;
+  constructor(private readonly dir: string) {}
+  describe() { return `LOCAL-REHEARSAL:${this.dir}`; }
+  private pathFor(key: string) {
+    // keep only path-safe characters and never allow ".." to climb out of the directory
+    const safe = key.replace(/[^A-Za-z0-9._/-]/g, '_').replace(/\.{2,}/g, '_');
+    return `${this.dir.replace(/[\\/]+$/, '')}/${safe}`;
+  }
+  async put(key: string, data: string): Promise<void> {
+    const { mkdir, writeFile } = await import('fs/promises');
+    const { dirname } = await import('path');
+    const p = this.pathFor(key);
+    await mkdir(dirname(p), { recursive: true });
+    await writeFile(p, data, { encoding: 'utf8', flag: 'wx' }); // wx: never overwrite
+  }
+  async get(key: string): Promise<string | null> {
+    const { readFile } = await import('fs/promises');
+    try { return await readFile(this.pathFor(key), 'utf8'); } catch { return null; }
+  }
+}
+
 export async function offsiteFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<OffsiteStore | null> {
+  const localDir = env.RULES_OFFSITE_LOCAL_DIR;
+  if (localDir) {
+    if (env.NODE_ENV === 'production') {
+      throw new SnapshotFailedError('offsite-not-configured', 'RULES_OFFSITE_LOCAL_DIR is a rehearsal store and is refused in production');
+    }
+    return new LocalDirOffsite(localDir);
+  }
   const conn = env.RULES_OFFSITE_AZURE_CONNECTION_STRING;
   const containerName = env.RULES_OFFSITE_CONTAINER;
   if (!conn || !containerName) return null;

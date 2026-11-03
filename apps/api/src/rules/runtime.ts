@@ -10,10 +10,22 @@ import { MongoStudioStore } from './studio/mongoStudioStore.js';
 import { offsiteFromEnv, type OffsiteStore } from './studio/snapshots.js';
 import { notifyConfigFromEnv } from './studio/notify.js';
 import type { StudioCtx } from './studio/studioService.js';
+import { envReadiness } from './readiness.js';
 
-/** Production publishing stays off until every launch prerequisite is met. */
+let warnedNotReady = false;
+
+/**
+ * Production publishing stays off until every launch prerequisite is met: RULES_LAUNCHED=true only takes
+ * effect when envReadiness() has no failing blocker (signing key, TOTP key, off-site store, build id...).
+ */
 export function rulesLaunched(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.RULES_LAUNCHED === 'true';
+  if (env.RULES_LAUNCHED !== 'true') return false;
+  const r = envReadiness(env);
+  if (!r.canLaunch && !warnedNotReady) {
+    warnedNotReady = true;
+    console.error('[rules] RULES_LAUNCHED=true is IGNORED: launch blockers failing: ' + r.checks.filter((c) => c.severity === 'blocker' && !c.ok).map((c) => c.id).join(', '));
+  }
+  return r.canLaunch;
 }
 
 /**

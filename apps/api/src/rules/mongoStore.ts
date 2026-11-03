@@ -7,8 +7,8 @@
  *                 Mongoose update / delete operations on this model throw.
  * rule_freezes    append-only freeze / unfreeze events (the kill-switch history).
  */
-import mongoose, { Schema } from 'mongoose';
-import { isMongoConnected } from '../../db.js';
+import { Schema } from 'mongoose';
+import { lazyModel, rulesDbConnected } from './rulesConnection.js';
 import type { RulesVersionRecord } from './ledger.js';
 import {
   StoreUnavailableError, VersionConflictError,
@@ -73,11 +73,11 @@ for (const op of [
   freezeSchema.pre(op as never, forbid(op === 'updateOne' ? 'updateOne (freeze events)' : op));
 }
 
-export const RulesVersionModel = mongoose.models.RulesVersion || mongoose.model('RulesVersion', versionSchema);
-export const RuleFreezeModel = mongoose.models.RuleFreeze || mongoose.model('RuleFreeze', freezeSchema);
+export const RulesVersionModel = lazyModel('RulesVersion', versionSchema);
+export const RuleFreezeModel = lazyModel('RuleFreeze', freezeSchema);
 
 function requireConnection(): void {
-  if (!isMongoConnected()) throw new StoreUnavailableError();
+  if (!rulesDbConnected()) throw new StoreUnavailableError();
 }
 
 export class MongoRulesStore implements RulesStore {

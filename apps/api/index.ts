@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
+// Optional second env file (e.g. apps/api/.env.rehearsal for a local Rules Studio rehearsal). Never overrides real env.
+if (process.env.RULES_ENV_FILE) dotenv.config({ path: process.env.RULES_ENV_FILE, override: false });
 
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";

@@ -1100,11 +1100,22 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     // fetch or verify them.
     const readyPublished = async (scorecardId: ScorecardId, shipped: CalculatorConfig) => {
       ensureRulesWatcher();
+      const before = { version: get().rulesetStamp?.version ?? null, total: get().scorecard?.total?.score ?? null, hadConfig: !!get().calculatorConfig };
       try {
         // A client pinned to a version is scored under THAT version, whatever is current.
         const pinned = get().client.rulesetPins?.[scorecardId]?.version;
         const resolved = await resolveRules(scorecardId, shipped, undefined, undefined, pinned);
         ready(resolved.config, resolved.stamp);
+        // The rules changed while this scorecard was open: say what changed, why, and what it did to the score.
+        const now = resolved.stamp?.version ?? null;
+        if (before.hadConfig && before.version !== null && now !== null && now !== before.version && !resolved.stamp?.pinned) {
+          const after = get().scorecard?.total?.score ?? null;
+          const fmt = (n: number | null) => (n === null ? 'n/a' : (Math.round(n * 100) / 100).toString());
+          toast.info(`Scoring rules updated to version ${now}`, {
+            description: `${resolved.announcement ?? 'A new rules version was published.'} Score: ${fmt(before.total)} → ${fmt(after)}.`,
+            duration: 15000,
+          });
+        }
       } catch (e) {
         const message = e instanceof PublishedRulesUnavailableError
           ? `The published scoring rules for this scorecard could not be loaded or verified (${e.message}). Scoring is paused rather than using rules that may be out of date. Click Retry.`

@@ -36,7 +36,8 @@ export async function appendAudit(
 ): Promise<AuditEvent> {
   const col = store.collection<AuditEvent>('auditEvents');
   // A lost race on the sequence number surfaces as DuplicateIdError; retry on the new tail.
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, Math.random() * 25 * Math.min(attempt, 8))); // jittered backoff under contention
     const all = (await col.find()).sort((a, b) => a.seq - b.seq);
     const tail = all[all.length - 1];
     const seq = (tail?.seq ?? 0) + 1;

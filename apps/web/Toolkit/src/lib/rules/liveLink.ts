@@ -26,6 +26,8 @@ export class PublishedRulesUnavailableError extends Error {
 }
 
 export interface ResolvedRules {
+  /** Why the rules changed (the publisher's announcement), when a published version is in force. */
+  announcement?: string | null;
   config: CalculatorConfig;
   /** null => shipped rules (rules not launched, or nothing published yet). */
   stamp: RulesetStamp | null;
@@ -34,6 +36,7 @@ export interface ResolvedRules {
 export type FetchLike = (input: string, init?: { credentials?: 'include'; cache?: 'no-store'; headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
 interface PublishedBody {
+  announcement?: string | null;
   launched: boolean;
   stamp: RulesetStamp | null;
   overrides: RuleOverrides | null;
@@ -47,12 +50,13 @@ function parseBody(scorecardId: ScorecardId, body: unknown): PublishedBody {
     throw new PublishedRulesUnavailableError(scorecardId, 'Published rules response was malformed');
   }
   if (!b.launched || b.stamp == null) return { launched: b.launched, stamp: null, overrides: null };
+  const announcement = typeof b.announcement === 'string' ? b.announcement.slice(0, 500) : null;
   const s = b.stamp;
   if (s.scorecardId !== scorecardId || !Number.isInteger(s.version) || s.version < 0 || !HASH_RE.test(s.configHash) || !HASH_RE.test(s.overridesHash)
     || !HASH_RE.test(s.registryHash) || typeof s.buildId !== 'string' || typeof s.pinned !== 'boolean' || typeof s.frozen !== 'boolean' || !b.overrides) {
     throw new PublishedRulesUnavailableError(scorecardId, 'Published rules stamp was malformed');
   }
-  return { launched: true, stamp: s, overrides: b.overrides };
+  return { launched: true, stamp: s, overrides: b.overrides, announcement };
 }
 
 /**
@@ -109,7 +113,7 @@ export async function resolveRules(
   if (configHash !== body.stamp.configHash || overridesHash !== body.stamp.overridesHash) {
     throw new PublishedRulesUnavailableError(scorecardId, 'Published rules failed the integrity check on this device');
   }
-  return { config, stamp: body.stamp };
+  return { config, stamp: body.stamp, announcement: body.announcement ?? null };
 }
 
 /* ------------------------------------------------------------------ change watching */

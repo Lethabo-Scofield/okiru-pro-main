@@ -173,6 +173,8 @@ export interface PublishedRules {
   /** Always present: version 0 (shipped) when nothing is published or a freeze selects it. */
   stamp: RulesetStamp;
   overrides: RuleOverrides;
+  /** Plain-language "what changed and why" for the version served (null for shipped rules). */
+  announcement: string | null;
   /** Head of the chain, so clients can cheaply detect "something changed". */
   chainHead: string | null;
   headVersion: number;
@@ -209,7 +211,7 @@ type Flags = { pinned: boolean; frozen: boolean };
 
 async function stampFor(
   scorecardId: ScorecardId, record: RulesVersionRecord | null, deps: ServiceDeps, flags: Flags,
-): Promise<{ stamp: RulesetStamp; overrides: RuleOverrides }> {
+): Promise<{ stamp: RulesetStamp; overrides: RuleOverrides; announcement: string | null }> {
   const registryHash = await registryHashOf(scorecardId);
   if (!record) {
     return {
@@ -220,6 +222,7 @@ async function stampFor(
         effectiveFrom: SHIPPED_EFFECTIVE_FROM, registryHash, buildId: deps.buildId, ...flags,
       },
       overrides: EMPTY,
+      announcement: null,
     };
   }
   // Compatibility: the registry the version was published against must be the one this build runs.
@@ -242,6 +245,7 @@ async function stampFor(
       effectiveFrom: record.effectiveFrom, registryHash: record.registryHash, buildId: deps.buildId, ...flags,
     },
     overrides: record.overrides,
+    announcement: record.announcement ?? null,
   };
 }
 

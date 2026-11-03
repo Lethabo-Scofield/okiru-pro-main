@@ -8,6 +8,7 @@ export default function Overview() {
   const drafts = useStudio<any>('/changesets');
   const backups = useStudio<any>('/backups/status');
   const heads = useStudio<any>('/notifications');
+  const readiness = useStudio<any>('/readiness');
 
   if (access.loading || cards.loading) return <Loading />;
   const open = (drafts.data?.changesets ?? []).filter((c: any) => ['draft', 'submitted', 'approved', 'changes_requested'].includes(c.status));
@@ -33,6 +34,19 @@ export default function Overview() {
       {(heads.data?.deliveryProblems?.length ?? 0) > 0 && (
         <Panel tone="danger" title="Alarm delivery problems">
           <p className="text-sm">{heads.data.deliveryProblems.length} alarm(s) could not be delivered to the webhook. See <Link href="/studio/notifications" className="underline">Notifications</Link>.</p>
+        </Panel>
+      )}
+
+      {readiness.data && (
+        <Panel title={readiness.data.productionReady ? 'Launch readiness: ready for production' : readiness.data.rehearsal ? 'Launch readiness: REHEARSAL (not production)' : 'Launch readiness: not ready'} tone={readiness.data.productionReady ? 'ok' : 'warn'}>
+          <p className="mb-2 text-xs text-zinc-600">Published rules are only served to clients when every blocker is green and RULES_LAUNCHED is true. Today the API is serving: <strong>{readiness.data.effectiveLaunched ? 'published rules' : 'the shipped rules'}</strong>.</p>
+          <ul className="space-y-1 text-sm">
+            {readiness.data.checks.map((c: any) => (
+              <li key={c.id}><span aria-hidden>{c.ok ? '✓' : c.severity === 'blocker' ? '✗' : '!'}</span> <span className="sr-only">{c.ok ? 'ok' : c.severity}</span> <strong>{c.label}</strong>
+                {!c.ok && <span className="block text-xs text-zinc-600">{c.detail} — {c.fix}</span>}
+              </li>
+            ))}
+          </ul>
         </Panel>
       )}
 

@@ -302,6 +302,23 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     await authorize(ctx.studio, userId, 'backups.read', undefined, ctx.env);
     return { ...(await backupStatus(ctx)), deliveryProblems: await persistentDeliveryFailures(ctx.studio) };
   }));
+  router.get('/readiness', wrap(async (_req, _res, ctx, userId) => {
+    await authorize(ctx.studio, userId, 'backups.read', undefined, ctx.env);
+    const { fullReadiness } = await import('../rules/readiness.js');
+    return fullReadiness(ctx.studio, ctx.env);
+  }));
+  // Writes one small probe object to the configured off-site store and reads it back, to prove the account works.
+  router.post('/readiness/test-offsite', wrap(async (_req, _res, ctx, userId) => {
+    await authorize(ctx.studio, userId, 'backups.drill', undefined, ctx.env);
+    if (!ctx.offsite) throw new StudioError('offsite_missing', 'No off-site store is configured', 409);
+    const key = `readiness-probes/${ctx.now().toISOString().replace(/[:.]/g, '-')}-${newId()}.txt`;
+    const body = `okiru rules studio readiness probe ${ctx.now().toISOString()}`;
+    await ctx.offsite.put(key, body);
+    const back = await ctx.offsite.get(key);
+    const ok = back === body;
+    await appendAudit(ctx.studio, ctx.rules.signer, { actor: userId, action: 'readiness.test_offsite', target: key, details: { ok, target: ctx.offsite.describe() }, now: ctx.now() });
+    return { ok, target: ctx.offsite.describe(), rehearsal: !!ctx.offsite.rehearsal, key };
+  }, { status: 201 }));
   router.get('/backups/snapshots', wrap(async (_req, _res, ctx, userId) => {
     await authorize(ctx.studio, userId, 'backups.read', undefined, ctx.env);
     const snaps = await ctx.studio.collection<{ id: string; rev: number; kind: string; scorecardId: string | null; createdAt: string; contentHash: string; offsiteKey: string; offsiteTarget: string; verifiedAt: string; keyId: string }>('ruleSnapshots').find();

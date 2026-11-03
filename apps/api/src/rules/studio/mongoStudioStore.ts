@@ -2,8 +2,8 @@
  * MongoDB implementation of StudioStore. No in-memory fallback: when the database is
  * unreachable every call rejects with StoreUnavailableError (HTTP 503).
  */
-import mongoose, { Schema, type Model } from 'mongoose';
-import { isMongoConnected } from '../../../db.js';
+import { Schema, type Model } from 'mongoose';
+import { rulesConnection, rulesDbConnected } from '../rulesConnection.js';
 import {
   APPEND_ONLY, COLLECTION_NAMES, DuplicateIdError, StaleWriteError, StoreUnavailableError,
   type Collection, type CollectionName, type Doc, type StudioStore,
@@ -29,7 +29,7 @@ const MONGO_COLLECTION: Record<CollectionName, string> = {
 
 function modelFor(name: CollectionName): Model<any> {
   const modelName = `Studio_${name}`;
-  const existing = mongoose.models[modelName];
+  const existing = rulesConnection().models[modelName];
   if (existing) return existing;
 
   const schema = new Schema({ _id: { type: String, required: true } }, { strict: false, versionKey: false, minimize: false, collection: MONGO_COLLECTION[name] });
@@ -41,11 +41,11 @@ function modelFor(name: CollectionName): Model<any> {
       schema.pre(op as never, forbid(op));
     }
   }
-  return mongoose.model(modelName, schema);
+  return rulesConnection().model(modelName, schema);
 }
 
 function requireConnection(): void {
-  if (!isMongoConnected()) throw new StoreUnavailableError();
+  if (!rulesDbConnected()) throw new StoreUnavailableError();
 }
 
 const toDoc = <T extends Doc>(raw: any): T => {
