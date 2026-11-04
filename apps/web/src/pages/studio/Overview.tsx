@@ -42,13 +42,16 @@ export default function Overview() {
       {readiness.data && (
         <Panel title={readiness.data.productionReady ? 'Launch readiness: ready for production' : readiness.data.rehearsal ? 'Launch readiness: REHEARSAL (not production)' : 'Launch readiness: not ready'} tone={readiness.data.productionReady ? 'ok' : 'warn'}>
           <p className="mb-2 text-xs text-zinc-600">Clients only get published rules once every required item below is green and the launch is switched on. Clients are on: <strong>{readiness.data.effectiveLaunched ? 'published rules' : 'the current rules'}</strong>.</p>
-          <ul className="space-y-1 text-sm">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">{readiness.data.checks.filter((c: any) => c.ok).length} of {readiness.data.checks.length} items ready</summary>
+            <ul className="mt-2 space-y-1 text-sm">
             {readiness.data.checks.map((c: any) => (
               <li key={c.id}><span aria-hidden>{c.ok ? '✓' : c.severity === 'blocker' ? '✗' : '!'}</span> <span className="sr-only">{c.ok ? 'ok' : c.severity}</span> <strong>{c.label}</strong>
                 {!c.ok && <span className="block text-xs text-zinc-600">{c.detail} — {c.fix}</span>}
               </li>
             ))}
-          </ul>
+            </ul>
+          </details>
         </Panel>
       )}
 

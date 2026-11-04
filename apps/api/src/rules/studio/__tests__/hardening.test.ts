@@ -6,7 +6,8 @@ import { MemoryStudioStore } from './memoryStudioStore';
 import { createSigner, createVerifier } from '../../signing.js';
 import { freeze, verifiedFreezeEvents, RulesIntegrityError, type ServiceDeps } from '../../rulesService.js';
 import { rulesServedTo, previewUserIds } from '../../runtime.js';
-import { authorize, createGrant, hasAnyGrant, isAllowedUser, ForbiddenError } from '../permissions.js';
+import { authorize, createGrant, hasAnyGrant, isAllowedUser, revokeGrant, ForbiddenError } from '../permissions.js';
+import { ensureInitialGrants, parseInitialGrants } from '../initialGrants.js';
 import { S3Offsite } from '../snapshots.js';
 import { validateProposal } from '../aiProposals.js';
 import { reviewDraft } from '../impactReview.js';
@@ -141,6 +142,30 @@ describe('what the AI may answer', () => {
     const out = validateProposal(JSON.stringify({ changes: [{ ruleKey: editable.key, value: editable.max + 1, justification: 'x' }] }), SID);
     expect(out.items).toHaveLength(0);
     expect(out.rejected).toHaveLength(1);
+  });
+});
+
+describe('first grants from deployment settings', () => {
+  const env = { NODE_ENV: 'production', RULES_STUDIO_ALLOWED_USERS: 'alice,bob', RULES_STUDIO_INITIAL_GRANTS: 'alice:expert_editor, bob:expert_approver, bob:admin, mallory:admin, alice:not_a_role' } as NodeJS.ProcessEnv;
+  const ctxWith = (store: MemoryStudioStore, e: NodeJS.ProcessEnv) => ({ studio: store, rules: { signer: undefined }, env: e, now: () => new Date('2026-11-04T10:00:00Z') }) as never;
+
+  it('skips anyone not named and any unknown role', () => {
+    expect(parseInitialGrants('a:admin,b:nope,:admin,c')).toEqual([{ userId: 'a', role: 'admin' }]);
+  });
+
+  it('refuses an account that is not on the named list', async () => {
+    await expect(ensureInitialGrants(ctxWith(new MemoryStudioStore(), env))).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('creates each once, and a revoked grant stays revoked', async () => {
+    const store = new MemoryStudioStore();
+    const named = { ...env, RULES_STUDIO_INITIAL_GRANTS: 'alice:expert_editor,bob:expert_approver' } as NodeJS.ProcessEnv;
+    expect(await ensureInitialGrants(ctxWith(store, named))).toBe(2);
+    expect(await ensureInitialGrants(ctxWith(store, named))).toBe(0);
+    const grants = await store.collection<any>('studioGrants').find();
+    await revokeGrant(store, grants[0].id, new Date());
+    expect(await ensureInitialGrants(ctxWith(store, named))).toBe(0);
+    await expect(authorize(store, 'alice', 'draft.write', 'rcogp-generic', named)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
 

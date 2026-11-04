@@ -141,13 +141,14 @@ export default function Workspace({ sid }: { sid: string }) {
       <div>
         <label className="sr-only" htmlFor="rule-filter">Filter rules</label>
         <Input id="rule-filter" placeholder="Filter rules..." value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-sm" />
+        <p className="mt-2 text-xs text-zinc-500">Rules marked With developers cannot be edited here: they change how the scorecard is built, or the scorer does not use them yet. Hover for the reason, and use Request to send one to the developers.</p>
       </div>
 
       {groups.map(([element, rules]) => (
         <Panel key={element} title={element}>
           <table className="w-full text-left text-sm">
             <caption className="sr-only">{element} rules</caption>
-            <thead><tr className="text-xs uppercase text-zinc-500"><th scope="col" className="py-1">Rule</th><th scope="col">Unit</th><th scope="col">Shipped</th><th scope="col">Published</th><th scope="col">Draft</th><th scope="col"><span className="sr-only">Edit</span></th></tr></thead>
+            <thead><tr className="text-xs uppercase text-zinc-500"><th scope="col" className="py-1">Rule</th><th scope="col">Unit</th><th scope="col">Default</th><th scope="col">Published</th><th scope="col">Draft</th><th scope="col"><span className="sr-only">Edit</span></th></tr></thead>
             <tbody>
               {rules.map((r: any) => {
                 const pv = published[r.key];
@@ -155,7 +156,7 @@ export default function Workspace({ sid }: { sid: string }) {
                 const isEditing = editing === r.key;
                 return (
                   <tr key={r.key} className="border-t border-zinc-100 align-top">
-                    <td className="py-2 pr-2">{r.label}{r.editability === 'developer' && <span className="ml-1 rounded bg-zinc-100 px-1 text-xs text-zinc-600" title={r.lockedReason}>With developers</span>}{r.lockedReason && <span className="block text-xs text-zinc-500">{r.lockedReason}</span>}</td>
+                    <td className="py-2 pr-2">{r.label}{r.editability === 'developer' && <span className="ml-1 rounded bg-zinc-100 px-1 text-xs text-zinc-600" title={r.lockedReason}>With developers</span>}</td>
                     <td className="pr-2 text-xs text-zinc-500">{UNIT_LABEL[r.unit] ?? r.unit}</td>
                     <td className="pr-2">{formatValue(pv?.shipped, r.unit)}</td>
                     <td className="pr-2">{formatValue(pv?.published, r.unit)}</td>

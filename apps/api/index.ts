@@ -143,6 +143,10 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     // Rules Studio nightly signed backup + integrity sweep + external heartbeat.
     // A no-op unless RULES_MONITOR=true or RULES_LAUNCHED=true.
     void import("./src/rules/studio/monitor.js").then((m) => m.startRulesMonitor());
+    // First Studio grants from deployment settings (created once, audited).
+    void Promise.all([import("./src/rules/runtime.js"), import("./src/rules/studio/initialGrants.js")])
+      .then(async ([runtime, grants]) => grants.ensureInitialGrants(await runtime.getStudioCtx()))
+      .catch((err) => console.error("[rules] initial grants failed:", err));
 
     setImmediate(async () => {
       // Two replicas, one walk. See jobLease.ts — without the lease both pods
