@@ -491,10 +491,11 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   // does not carry (0 max points) has nothing to fail — the old `max > 0 &&`
   // marked it FAILING, which discounted whole legacy scorecards.
   // (Audit 2026-07-26 item 15.)
-  const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent
+  const legacyEsd = (config?.pillarConfigs as { esd?: { sdSubMinimumPercent?: number; edSubMinimumPercent?: number } } | undefined)?.esd;
+  const sdSubMinPct = legacyEsd?.sdSubMinimumPercent
     ?? config?.pillarConfigs?.supplierDevelopment?.subMinimumPercent
     ?? 0;
-  const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent
+  const edSubMinPct = legacyEsd?.edSubMinimumPercent
     ?? config?.pillarConfigs?.enterpriseDevelopment?.subMinimumPercent
     ?? 0;
   // Both sub-minimums are measured on the BASE line, bonuses excluded — the

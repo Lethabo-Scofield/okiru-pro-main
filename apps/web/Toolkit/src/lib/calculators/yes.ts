@@ -71,8 +71,9 @@ function calculateHeadcountTarget(
   averageNpat3yr: number,
   config?: CalculatorConfig
 ): { applied: number; headcountBased: number; npatBased: number; revenueBased: number } {
-  const pct = config?.yes?.headcountPercent ?? 0.015;
-  const stipend = config?.yes?.annualStipend ?? 55_000;
+  const legacyYes = config?.yes as { headcountPercent?: number; annualStipend?: number } | undefined;
+  const pct = legacyYes?.headcountPercent ?? 0.015;
+  const stipend = legacyYes?.annualStipend ?? 55_000;
 
   const headcountBased = Math.max(Math.ceil(totalEmployees * pct), 1);
   const npatBased = stipend > 0

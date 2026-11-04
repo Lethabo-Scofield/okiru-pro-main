@@ -57,6 +57,10 @@ const PROXIED_PREFIXES = [
    *  SPA catch-all, so every "log this export" call wrote nothing — and the
    *  caller swallowed the result, so it looked like it had worked. */
   "/api/export-log",
+  /** Rules Studio: published rules (live link) and the Studio API itself. Both live on apps/api. */
+  "/api/rules",
+  /** Step-up (TOTP) for Rules Studio actions; the sibling /api/auth routes stay on the web server. */
+  "/api/auth/step-up",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -71,7 +75,7 @@ const PROXIED_TEMPLATE_PATTERNS = [
   // We deliberately exclude /api/clients/X/data, /bulk-import, and
   // /calculator-config — those belong to apps/web. The `(\/|$)` anchor stops
   // /api/clients/X/employees-something-else from matching by accident.
-  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs)(\/|$)/,
+  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs|ruleset-pins)(\/|$)/,
 ];
 
 function shouldProxy(path: string): boolean {

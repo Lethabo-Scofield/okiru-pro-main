@@ -61,6 +61,8 @@ export interface Client {
   scorecardType?: 'EME' | 'QSE' | 'Generic' | 'Contractor' | 'BEP';
   annualTurnover: number;
   numberOfEmployees: number;
+  /** Rules Studio: scorecardId -> the rules version this client's scorecard is pinned to. Server-managed. */
+  rulesetPins?: Record<string, { version: number; pinnedAt: string; pinnedBy: string; reason: string | null }>;
   
   // EAP targeting
   eapProvince: 'National' | 'Western Cape' | 'Eastern Cape' | 'Northern Cape' | 'Free State' | 'KwaZulu-Natal' | 'KZN' | 'North West' | 'Gauteng' | 'Mpumalanga' | 'Limpopo';
@@ -764,6 +766,12 @@ export interface PillarScore {
 }
 
 export interface ScorecardResult {
+  /**
+   * Present only when this result was calculated under a published Rules Studio version:
+   * the exact version and hashes, so the result can be reproduced and verified later.
+   * Absent = calculated with the shipped rules.
+   */
+  rulesetStamp?: import('./rules/types').RulesetStamp | null;
   /**
    * Sub-minimum outcome for a priority element.
    *

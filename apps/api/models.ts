@@ -56,6 +56,9 @@ const clientSchema = new Schema({
   companySize: { type: String, default: 'Generic' },
   logo: { type: String, default: null },
   pipelineOverrides: { type: Schema.Types.Mixed, default: null },
+  // Rules Studio: scorecardId -> { version, pinnedAt, pinnedBy, reason }. Written ONLY by the
+  // ruleset-pin endpoints (never by PATCH /api/clients/:id); publishing never moves a pin.
+  rulesetPins: { type: Schema.Types.Mixed, default: () => ({}) },
   // Persisted via PATCH /api/clients/:id but previously dropped by the strict
   // schema: FSC sub-sector, ESD graduation/jobs bonuses, and AFS (FSC) data.
   fscSubSector: { type: String, default: null },
@@ -324,6 +327,8 @@ const exportLogSchema = new Schema({
   userId: { type: String, required: true },
   exportType: { type: String, required: true },
   fileName: { type: String, default: null },
+  // The ruleset the exported scorecard was calculated under (version + hashes), or null for shipped rules.
+  rulesetStamp: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "exportLogs" });
 

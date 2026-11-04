@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
+// Optional second env file (e.g. apps/api/.env.rehearsal for a local Rules Studio rehearsal). Never overrides real env.
+if (process.env.RULES_ENV_FILE) dotenv.config({ path: process.env.RULES_ENV_FILE, override: false });
 
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
@@ -137,6 +139,10 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     // drainer is a setInterval — its handle is .unref()'d inside startBackSyncDrainer
     // so it doesn't prevent process exit.
     void import("./src/services/workbookBackSyncFanout.js").then((m) => m.startBackSyncDrainer());
+
+    // Rules Studio nightly signed backup + integrity sweep + external heartbeat.
+    // A no-op unless RULES_MONITOR=true or RULES_LAUNCHED=true.
+    void import("./src/rules/studio/monitor.js").then((m) => m.startRulesMonitor());
 
     setImmediate(async () => {
       // Two replicas, one walk. See jobLease.ts — without the lease both pods

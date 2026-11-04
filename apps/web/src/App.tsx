@@ -59,6 +59,7 @@ import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 const CalculationReview = lazy(() => import("@/pages/CalculationReview"));
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+const StudioApp = lazy(() => import("@/pages/studio/StudioApp"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
 /** Legacy upload/build flows — super-admin only in production go-live. */
@@ -223,6 +224,10 @@ function AppRouter() {
       </Route>
       {/* Settings — account, billing/tokens, team, company in one shell.
           The bare /settings lands on Account; /settings/:tab picks a pane. */}
+      {/* Rules Studio: gated by a Studio grant on the server, not by any platform role. */}
+      <Route path="/studio/*?">
+        <ProtectedRoute><StudioApp /></ProtectedRoute>
+      </Route>
       <Route path="/settings">
         <ProtectedRoute><Settings /></ProtectedRoute>
       </Route>
@@ -468,9 +473,12 @@ function GlobalScorecardAdvisor() {
   );
 }
 
+/** The Rules Studio is a white, document-style tool. The rest of the signed-in app stays dark. */
+const isStudioPath = (path: string) => path === "/studio" || path.startsWith("/studio/");
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={isStudioPath}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react"
+import { useLocation } from "wouter"
 
 type Theme = "dark" | "light" | "system"
 
@@ -6,6 +7,8 @@ type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
   storageKey?: string
+  /** Paths that render light whatever the saved theme is. The saved theme is left alone. */
+  lightOnlyPaths?: (path: string) => boolean
 }
 
 type ThemeProviderState = {
@@ -66,8 +69,11 @@ export function ThemeProvider({
   children,
   defaultTheme = "dark",
   storageKey = "vite-ui-theme",
+  lightOnlyPaths,
   ...props
 }: ThemeProviderProps) {
+  const [location] = useLocation()
+  const forceLight = !!lightOnlyPaths && lightOnlyPaths(location)
   // Light was offered in Settings but never actually built: there is no .light
   // rule anywhere in this app’s CSS and the chrome around it is hardcoded dark,
   // so choosing it produced a half-converted page. The option is gone, but a
@@ -97,13 +103,15 @@ export function ThemeProvider({
         : "light"
     }
 
+    if (forceLight) resolvedTheme = "light"
+
     root.classList.add(resolvedTheme)
 
     const vars = resolvedTheme === "dark" ? darkCssVars : lightCssVars
     Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value)
     })
-  }, [theme])
+  }, [theme, forceLight])
 
   const value = {
     theme,
