@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { explainError, studio } from '@/lib/studioApi';
+import { explainError, formatValue, studio } from '@/lib/studioApi';
 import { Panel, Page, useStudio, Loading, ErrorNote, VerdictBadge } from './kit';
 
 /** 14.3 Describe a change: optional AI help. Without a provider this says so and points at manual editing. */
@@ -19,7 +19,7 @@ export function Describe({ sid }: { sid: string }) {
 
   if (avail.loading) return <Loading />;
   return (
-    <Page title="Describe a change" subtitle="Say what should change in plain language. The assistant proposes concrete rule edits; nothing is applied until you accept, and every edit is re-checked against the rule registry.">
+    <Page title="Describe a change" subtitle="Say what should change in plain language. The assistant proposes exact edits, or asks if it is not sure. Nothing changes until you add it to your draft.">
       <ErrorNote message={error || avail.error} />
       {!avail.data?.available ? (
         <Panel tone="warn" title="AI assistance is not available">
@@ -37,16 +37,35 @@ export function Describe({ sid }: { sid: string }) {
             <Button className="mt-2" disabled={busy || prompt.trim().length < 10} onClick={() => act(async () => setProposal(await studio('POST', `/changesets/${draft.id}/propose`, { prompt })))}>Propose rule edits</Button>
           </Panel>
           {proposal && (
-            <Panel title="Proposal (not applied)">
-              {proposal.items.length === 0 ? <p className="text-sm">The assistant found no matching rule.</p> : (
-                <ul className="space-y-1 text-sm">{proposal.items.map((i: any) => <li key={i.ruleKey}><code className="text-xs">{i.ruleKey}</code> → <strong>{i.value}</strong><span className="block text-xs text-zinc-500">{i.justification}</span></li>)}</ul>
+            <Panel title={proposal.question ? 'The assistant has a question' : 'Proposal (not applied)'}>
+              {proposal.understanding && <p className="mb-2 text-sm">{proposal.understanding}</p>}
+              {proposal.question && <p className="mb-2 text-sm font-medium">{proposal.question} <span className="block text-xs font-normal text-zinc-500">Add the answer to your description above and propose again.</span></p>}
+              {proposal.items.length > 0 && (
+                <ul className="space-y-2 text-sm">{proposal.items.map((i: any) => (
+                  <li key={i.ruleKey}>
+                    <strong>{i.label ?? i.ruleKey}</strong>: {formatValue(i.current, i.unit)} → <strong>{formatValue(i.value, i.unit)}</strong>
+                    <span className="block text-xs text-zinc-500">{i.justification}</span>
+                  </li>
+                ))}</ul>
               )}
-              {proposal.rejectedByValidation.length > 0 && <p className="mt-2 text-xs text-amber-800">{proposal.rejectedByValidation.length} suggestion(s) were dropped by validation (unknown, developer-only or out-of-range rules).</p>}
+              {proposal.preview && (
+                <p className="mt-3 border-t border-zinc-100 pt-2 text-sm">
+                  On the test companies: {proposal.preview.companiesChanged} of {proposal.preview.companiesTested} would change, {proposal.preview.levelsChanged} would change level, largest movement {proposal.preview.largestMovement} points.
+                </p>
+              )}
+              {proposal.needsDeveloper?.length > 0 && (
+                <div className="mt-3 border-t border-zinc-100 pt-2 text-sm">
+                  <p className="font-medium">For the developers</p>
+                  <ul className="mt-1 space-y-1">{proposal.needsDeveloper.map((d: any, n: number) => <li key={n}>{d.what}<span className="block text-xs text-zinc-500">{d.why}</span></li>)}</ul>
+                  <Link className="mt-1 inline-block text-xs underline" href="/studio/change-requests">Raise a change request</Link>
+                </div>
+              )}
+              {proposal.rejectedByValidation.length > 0 && <p className="mt-2 text-xs text-amber-800">{proposal.rejectedByValidation.length} suggestion(s) were dropped because they are not allowed on this scorecard.</p>}
               <div className="mt-3 flex gap-2">
-                <Button disabled={busy || proposal.items.length === 0} onClick={() => act(async () => { await studio('POST', `/proposals/${proposal.id}/accept`); setProposal(null); })}>Accept into draft</Button>
-                <Button variant="outline" disabled={busy} onClick={() => act(async () => { await studio('POST', `/proposals/${proposal.id}/reject`); setProposal(null); })}>Reject</Button>
+                <Button disabled={busy || proposal.items.length === 0} onClick={() => act(async () => { await studio('POST', `/proposals/${proposal.id}/accept`); setProposal(null); await drafts.reload(); })}>Add to draft</Button>
+                <Button variant="outline" disabled={busy} onClick={() => act(async () => { await studio('POST', `/proposals/${proposal.id}/reject`); setProposal(null); })}>Dismiss</Button>
               </div>
-              <p className="mt-2 text-xs text-zinc-500">Accepting makes you an author of this change, so you will not be able to approve it.</p>
+              <p className="mt-2 text-xs text-zinc-500">Adding this makes you an author of the change, so you will not be able to approve it.</p>
             </Panel>
           )}
         </>

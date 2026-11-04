@@ -4,7 +4,7 @@ import { getRules } from '../../../../../web/Toolkit/src/lib/rules/registry';
 import type { RuleOverrides } from '../../../../../web/Toolkit/src/lib/rules/types';
 
 const none: RuleOverrides = { source: {}, calculator: {} };
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 beforeAll(() => { vi.spyOn(console, 'log').mockImplementation(() => {}); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
 afterAll(() => vi.restoreAllMocks());
 
@@ -19,7 +19,7 @@ describe('impact review', () => {
   it('attributes a guarantees change to the ESD pillars as deliberate lines needing acknowledgement', () => {
     const r = reviewDraft('rcogp-generic', none, { source: { [G]: 0.5 }, calculator: {} });
     expect(r.changed.map((c) => c.path)).toEqual([G]);
-    expect(r.changed[0]).toMatchObject({ from: 0.03, to: 0.5 });
+    expect(r.changed[0]).toMatchObject({ from: 0.7, to: 0.5 });
     expect(r.counts.deliberate).toBeGreaterThan(0);
     expect(r.counts.unexplained).toBe(0);
     expect(r.requiresAcknowledgement).toEqual(['rcogp-generic:source:' + G]);
@@ -75,6 +75,6 @@ describe('invariants', () => {
 
   it('changedRules compares against the shipped value when a path is absent', () => {
     expect(changedRules('rcogp-generic', none, none)).toEqual([]);
-    expect(changedRules('rcogp-generic', none, { source: { [G]: 0.03 }, calculator: {} })).toEqual([]); // equal to shipped
+    expect(changedRules('rcogp-generic', none, { source: { [G]: 0.7 }, calculator: {} })).toEqual([]); // equal to shipped
   });
 });

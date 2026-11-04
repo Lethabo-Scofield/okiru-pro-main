@@ -28,6 +28,24 @@ export function rulesLaunched(env: NodeJS.ProcessEnv = process.env): boolean {
   return r.canLaunch;
 }
 
+/** Accounts that see published rules before launch (RULES_PREVIEW_USER_IDS, comma-separated user ids). */
+export function previewUserIds(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.RULES_PREVIEW_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Whether THIS user is scored under published rules. After launch that is everyone. Before launch it is only the
+ * named preview accounts, so experts can see a published change move a real score while clients stay on the shipped
+ * rules. Preview needs the same signed rules as a launch (a signing key and a build id); the operational blockers
+ * (webhook, heartbeat, ...) are what a launch to clients needs.
+ */
+export function rulesServedTo(userId: string | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (rulesLaunched(env)) return true;
+  if (!userId || !previewUserIds(env).includes(userId)) return false;
+  const required = new Set(['signing-key', 'build-id', 'not-rehearsal-in-prod']);
+  return envReadiness(env).checks.filter((c) => required.has(c.id)).every((c) => c.ok);
+}
+
 /**
  * Identifies the running build. Set BUILD_ID (e.g. the git SHA) in CI; "dev" is only ever
  * a development default - a production deployment without it still serves, but its stamps

@@ -306,7 +306,7 @@ export function sectorConfigToIctQseCalculatorConfig(sc: SectorConfig): Calculat
  *   - a QSE is discounted when any priority sub-minimum fails (net value,
  *     Skills, PP, SD, ED), as the toolkit tests them all.
  */
-function withEmpowerIctQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+export function withEmpowerIctQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
   const pc = cfg.pillarConfigs ?? {};
   return {
     ...cfg,

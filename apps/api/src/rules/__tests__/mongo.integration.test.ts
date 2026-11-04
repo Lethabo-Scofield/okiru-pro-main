@@ -17,7 +17,7 @@ const SCRATCH = `rules_studio_test_${randomBytes(6).toString('hex')}`;
 vi.mock('../../../db.js', () => ({ isMongoConnected: () => mongoose.connection.readyState === 1 }));
 vi.mock('../../logger.js', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }) }));
 
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 
 describe.skipIf(!URI)('rules ledger on a real MongoDB', () => {

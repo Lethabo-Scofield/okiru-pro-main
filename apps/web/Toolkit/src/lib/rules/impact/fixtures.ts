@@ -107,6 +107,7 @@ export function buildFixture(scorecardId: ScorecardId, profile: (typeof FIXTURE_
       contribution('sd1', 'supplier_development', NPAT * 0.02 * s),
       contribution('ed1', 'enterprise_development', NPAT * 0.01 * s),
       contribution('g1', 'supplier_development', NPAT * 0.01 * s, 'guarantees'),
+      contribution('l1', 'supplier_development', NPAT * 0.01 * s, 'interest_free_loan'),
     ],
   };
   const sed: SEDData = { id: clientId, clientId, contributions: [contribution('sed1', 'socio_economic', NPAT * 0.01 * s)] };

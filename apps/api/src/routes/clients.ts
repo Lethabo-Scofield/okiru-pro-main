@@ -27,6 +27,15 @@ async function pinDeps() {
   return { rules: ctx.rules, studio: ctx.studio, pins: await createMongoClientPinStore(), now: ctx.now };
 }
 
+/** Which rules a client is scored under is a Rules Studio decision, not a company user's. */
+async function assertCanManagePins(req: Request) {
+  const { getStudioCtx } = await import('../rules/runtime.js');
+  const { authorize } = await import('../rules/studio/permissions.js');
+  const ctx = await getStudioCtx();
+  const userId = (req.session as { userId?: string } | undefined)?.userId;
+  await authorize(ctx.studio, userId, 'pins.manage', String(req.body?.scorecardId ?? ''), ctx.env);
+}
+
 async function pinError(res: Response, err: unknown) {
   const { mapError } = await import('./rulesStudio.js');
   const e = err as { code?: string; message?: string };
@@ -50,6 +59,7 @@ router.post('/:id/ruleset-pins', requireAuth, requirePermission(PERMISSIONS.CLIE
   if (!(await verifyClientAccess(req, res))) return;
   if (!(await verifyFullScorecardAccess(req, res))) return;
   try {
+    await assertCanManagePins(req);
     const { pinRuleset } = await import('../rules/pins.js');
     const b = req.body ?? {};
     const pins = await pinRuleset(await pinDeps(), { clientId: String(req.params.id), scorecardId: String(b.scorecardId ?? ''), version: Number(b.version), actor: String(req.session.userId), reason: typeof b.reason === 'string' ? b.reason : null });
@@ -63,6 +73,7 @@ router.post('/:id/ruleset-pins/rescore', requireAuth, requirePermission(PERMISSI
   if (!(await verifyClientAccess(req, res))) return;
   if (!(await verifyFullScorecardAccess(req, res))) return;
   try {
+    await assertCanManagePins(req);
     const { rescoreUnderRules } = await import('../rules/pins.js');
     const b = req.body ?? {};
     const toVersion = b.toVersion === 'current' ? 'current' : Number(b.toVersion);

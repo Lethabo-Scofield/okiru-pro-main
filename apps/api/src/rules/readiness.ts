@@ -61,6 +61,7 @@ export function envReadiness(env: NodeJS.ProcessEnv = process.env): Readiness {
   const rehearsal = env.RULES_REHEARSAL === 'true' && !isProd;
   const local = has(env.RULES_OFFSITE_LOCAL_DIR);
   const azure = has(env.RULES_OFFSITE_AZURE_CONNECTION_STRING) && has(env.RULES_OFFSITE_CONTAINER);
+  const s3 = has(env.RULES_OFFSITE_S3_BUCKET) && has(env.RULES_OFFSITE_S3_REGION);
   const primary = env.AZURE_CERT_STORAGE_CONNECTION_STRING || env.AZURE_STORAGE_CONNECTION_STRING;
   const sk = signingKeyValid(env);
   const tk = totpKeyValid(env);
@@ -70,10 +71,12 @@ export function envReadiness(env: NodeJS.ProcessEnv = process.env): Readiness {
   add({ id: 'signing-key', label: 'Dedicated Ed25519 signing key', ok: sk.ok, severity: 'blocker', detail: sk.detail, fix: 'Run `node scripts/rules-studio-setup.mjs` and set RULES_SIGNING_KEY_ID and RULES_SIGNING_PRIVATE_KEY (secret store, not git).' });
   add({ id: 'totp-key', label: 'TOTP secret encryption key', ok: tk.ok, severity: 'blocker', detail: tk.detail, fix: 'Run `node scripts/rules-studio-setup.mjs` and set RULES_TOTP_ENC_KEY.' });
 
-  const offsiteOk = azure ? !(primary && primary === env.RULES_OFFSITE_AZURE_CONNECTION_STRING) : local && rehearsal;
+  const offsiteOk = s3 || (azure ? !(primary && primary === env.RULES_OFFSITE_AZURE_CONNECTION_STRING) : local && rehearsal);
   add({
     id: 'offsite-backup', label: 'Off-site backup store (outside the primary subscription)', ok: offsiteOk, severity: 'blocker',
-    detail: azure
+    detail: s3
+      ? `S3 bucket ${env.RULES_OFFSITE_S3_BUCKET} in ${env.RULES_OFFSITE_S3_REGION}`
+      : azure
       ? (offsiteOk ? 'Azure Blob container configured, different from the primary storage account' : 'the off-site connection string is the PRIMARY storage account')
       : local ? (rehearsal ? 'local directory (REHEARSAL only - not off-site)' : 'RULES_OFFSITE_LOCAL_DIR is set but RULES_REHEARSAL is not true') : 'no off-site store configured',
     fix: 'Create a storage account in a DIFFERENT subscription with an immutability policy; set RULES_OFFSITE_AZURE_CONNECTION_STRING and RULES_OFFSITE_CONTAINER.',
@@ -84,6 +87,7 @@ export function envReadiness(env: NodeJS.ProcessEnv = process.env): Readiness {
   add({ id: 'alarm-webhook', label: 'Alarm webhook for critical alerts', ok: has(env.RULES_ALARM_WEBHOOK_URL), severity: rehearsal ? 'warning' : 'blocker', detail: has(env.RULES_ALARM_WEBHOOK_URL) ? 'configured' : 'RULES_ALARM_WEBHOOK_URL is not set; critical alarms would be in-app only', fix: 'Point RULES_ALARM_WEBHOOK_URL at the team channel.' });
   add({ id: 'heartbeat', label: 'External heartbeat monitor', ok: has(env.RULES_HEARTBEAT_URL), severity: rehearsal ? 'warning' : 'blocker', detail: has(env.RULES_HEARTBEAT_URL) ? 'configured' : 'RULES_HEARTBEAT_URL is not set; a dead scheduler or failed backup would go unnoticed', fix: 'Create a dead-man-switch check outside Okiru and set RULES_HEARTBEAT_URL.' });
   add({ id: 'restricted-db-user', label: 'Rules collections on a restricted database user', ok: has(env.RULES_MONGO_URI), severity: rehearsal ? 'warning' : 'blocker', detail: has(env.RULES_MONGO_URI) ? 'RULES_MONGO_URI set' : 'the rules ledger shares the application database user, so append-only is enforced by the app only', fix: 'Create the role from docs/rules-studio/mongo-roles.md and set RULES_MONGO_URI.' });
+  add({ id: 'named-users', label: 'Studio limited to named people', ok: has(env.RULES_STUDIO_ALLOWED_USERS), severity: rehearsal ? 'warning' : 'blocker', detail: has(env.RULES_STUDIO_ALLOWED_USERS) ? 'RULES_STUDIO_ALLOWED_USERS is set' : 'RULES_STUDIO_ALLOWED_USERS is not set, so nobody can use the Studio in production', fix: 'List the user ids of the named people.' });
   add({ id: 'approvals', label: 'Independent approvals required', ok: Number(env.RULES_REQUIRED_APPROVALS ?? 1) >= 1, severity: 'warning', detail: `RULES_REQUIRED_APPROVALS=${env.RULES_REQUIRED_APPROVALS ?? '1 (default)'}`, fix: 'Confirm the number of approvals with the owner.' });
   add({ id: 'smtp', label: 'Email delivery (optional)', ok: has(env.SMTP_HOST) && has(env.SMTP_USER), severity: 'warning', detail: has(env.SMTP_HOST) ? 'configured' : 'SMTP not configured; email stays inactive (webhook and in-app still work)', fix: 'Optional.' });
   add({ id: 'ai', label: 'AI assistance (optional)', ok: has(env.RULES_AI_API_KEY), severity: 'warning', detail: has(env.RULES_AI_API_KEY) ? 'configured' : 'disabled; experts edit rules by hand', fix: 'Optional.' });

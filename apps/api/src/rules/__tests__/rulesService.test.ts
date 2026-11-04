@@ -11,7 +11,7 @@ import { MemoryRulesStore } from './memoryStore.js';
 import { buildEffectiveConfig, hashEffectiveConfig } from '../../../../web/Toolkit/src/lib/rules/buildEffectiveConfig';
 import { SCORECARD_SOURCES } from '../../../../web/Toolkit/src/lib/rules/scorecards';
 
-const GUARANTEES = 'benefitFactors[contributionType=guarantees].sdFactor';
+const GUARANTEES = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 const keypair = () => {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   return {
@@ -47,12 +47,12 @@ describe('rules ledger - publishing', () => {
     expect(verifyChain('rcogp-generic', [v1], deps.verifier)).toEqual({ ok: true, failures: [] });
   });
 
-  it('hashes the config it will actually serve (guarantees 0.03 -> 0.5 changes it)', async () => {
+  it('hashes the config it will actually serve (a benefit factor change changes it)', async () => {
     const v1 = await pub();
     const shippedHash = sha256(canonicalJson(SCORECARD_SOURCES['rcogp-generic'].shipped));
     expect(v1.configHash).not.toBe(shippedHash);
     const cfg = buildEffectiveConfig('rcogp-generic', v1.overrides);
-    const guarantee = (cfg as unknown as { benefitFactors: { type: string; factor: number }[] }).benefitFactors.find((b) => b.type === 'guarantees');
+    const guarantee = (cfg as unknown as { benefitFactors: { type: string; factor: number }[] }).benefitFactors.find((b) => b.type === 'interest_free_loan');
     expect(guarantee?.factor).toBe(0.5);
   });
 

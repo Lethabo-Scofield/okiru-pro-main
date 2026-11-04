@@ -64,6 +64,8 @@ const freezeSchema = new Schema({
   reason: { type: String, required: true },
   actor: { type: String, required: true },
   at: { type: String, required: true },
+  keyId: { type: String },
+  signature: { type: String },
 }, { collection: 'rule_freezes', versionKey: false });
 freezeSchema.index({ id: 1 }, { unique: true });
 for (const op of [

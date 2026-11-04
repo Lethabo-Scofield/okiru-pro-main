@@ -36,6 +36,8 @@ export interface RuleDef {
   rulings: string[];
   /** Invariants a change to this rule must not break (checked pre-publish). */
   invariants: string[];
+  /** Why an expert cannot edit this rule: shown instead of an Edit button. Locked rules go to the developers. */
+  lockedReason?: string;
   /** True when the shipped value is not yet reachable through a pure data override. */
   needsHook?: boolean;
 }

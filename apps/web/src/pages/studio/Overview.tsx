@@ -17,13 +17,15 @@ export default function Overview() {
     <Page title="Overview" subtitle="Controlled changes to the scoring rules. Nothing here changes live scoring until it is reviewed, approved, backed up and published.">
       <ErrorNote message={access.error || cards.error} />
       {access.data && !access.data.launched && (
-        <Panel tone="warn" title="Publishing is not launched">
-          <p className="text-sm">The Studio is running in rehearsal: published rules are not served to clients yet (<code>RULES_LAUNCHED=false</code>). Drafts, impact runs and reviews all work.</p>
+        <Panel tone="warn" title={access.data.preview ? 'Preview: only named accounts see published rules' : 'Clients stay on the current rules'}>
+          <p className="text-sm">{access.data.preview
+            ? `A published change moves scores for the ${access.data.previewCount} preview accounts, including yours. Every other account keeps the current rules until the Studio is launched.`
+            : 'Published changes do not reach clients yet. Drafts, impact runs and reviews all work.'}</p>
         </Panel>
       )}
       {access.data && !access.data.protectedPublishing && (
         <Panel tone="danger" title="Protected publishing is unavailable">
-          <p className="text-sm">A signing key and an off-site backup store are both required before anything can be published. Nothing can go live until they are configured.</p>
+          <p className="text-sm">A signing key and an off-site backup are both required before anything can be published.</p>
         </Panel>
       )}
       {backups.data?.stale && (
@@ -39,7 +41,7 @@ export default function Overview() {
 
       {readiness.data && (
         <Panel title={readiness.data.productionReady ? 'Launch readiness: ready for production' : readiness.data.rehearsal ? 'Launch readiness: REHEARSAL (not production)' : 'Launch readiness: not ready'} tone={readiness.data.productionReady ? 'ok' : 'warn'}>
-          <p className="mb-2 text-xs text-zinc-600">Published rules are only served to clients when every blocker is green and RULES_LAUNCHED is true. Today the API is serving: <strong>{readiness.data.effectiveLaunched ? 'published rules' : 'the shipped rules'}</strong>.</p>
+          <p className="mb-2 text-xs text-zinc-600">Clients only get published rules once every required item below is green and the launch is switched on. Clients are on: <strong>{readiness.data.effectiveLaunched ? 'published rules' : 'the current rules'}</strong>.</p>
           <ul className="space-y-1 text-sm">
             {readiness.data.checks.map((c: any) => (
               <li key={c.id}><span aria-hidden>{c.ok ? '✓' : c.severity === 'blocker' ? '✗' : '!'}</span> <span className="sr-only">{c.ok ? 'ok' : c.severity}</span> <strong>{c.label}</strong>
@@ -56,7 +58,7 @@ export default function Overview() {
             <li key={s.id}>
               <Link href={`/studio/s/${s.id}`} className="block rounded border border-zinc-200 p-3 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900">
                 <span className="font-medium text-zinc-900">{s.label}</span>
-                <span className="block text-xs text-zinc-500">{s.id} · {s.rules} editable rules</span>
+                <span className="block text-xs text-zinc-500">{s.rules > 0 ? `${s.rules} rules you can edit` : 'Locked'}{s.locked > 0 ? ` · ${s.locked} with developers` : ''}</span>
               </Link>
             </li>
           ))}

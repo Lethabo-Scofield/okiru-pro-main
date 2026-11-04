@@ -190,8 +190,10 @@ export function reviewDraft(scorecardId: ScorecardId, base: RuleOverrides, propo
   const counts: Record<Verdict, number> = { match: 0, deliberate: 0, unexplained: 0, missing: 0 };
   for (const l of lines) counts[l.verdict]++;
 
+  // Both kinds need a human reason: a rule that moved a line, and a rule no test company reached,
+  // because "nothing moved" must never pass review silently.
   const requiresAcknowledgement = changed
-    .filter((c) => lines.some((l) => l.verdict === 'deliberate' && l.attributedTo.includes(c.ruleKey)))
+    .filter((c) => lines.some((l) => l.verdict === 'deliberate' && l.attributedTo.includes(c.ruleKey)) || !lines.some((l) => l.attributedTo.includes(c.ruleKey)))
     .map((c) => c.ruleKey);
   const invariants = checkInvariants(scorecardId, proposed);
   const level1 = level1Check(report);

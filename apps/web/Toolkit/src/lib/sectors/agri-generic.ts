@@ -306,7 +306,7 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
  *     every row at its benefit factor.
  *   - SED: a row answered as not an agri-specific initiative counts nothing.
  */
-function withEmpowerAgriToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+export function withEmpowerAgriToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
   const pc = cfg.pillarConfigs ?? {};
   return {
     ...cfg,

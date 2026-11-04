@@ -8,9 +8,12 @@ import { Panel, Page, useStudio, Loading, ErrorNote, StatusBadge } from './kit';
 import { useImpactPreview } from './useImpactPreview';
 
 /** 14.2 Scorecard workspace: the real rules, their shipped/published/draft values, and a live preview. */
+const cardLabel = (data: any, sid: string): string => (data?.scorecards ?? []).find((s: any) => s.id === sid)?.label ?? 'Scorecard';
+
 export default function Workspace({ sid }: { sid: string }) {
   const [, navigate] = useLocation();
   const registry = useStudio<any>(`/scorecards/${sid}/registry`, [sid]);
+  const cards = useStudio<any>('/scorecards');
   const values = useStudio<any>(`/scorecards/${sid}/values`, [sid]);
   const drafts = useStudio<any>(`/changesets?scorecardId=${sid}`, [sid]);
   const [draftId, setDraftId] = useState<string>('');
@@ -65,17 +68,25 @@ export default function Workspace({ sid }: { sid: string }) {
 
   if (registry.loading) return <Loading what="Loading rules" />;
   const draftValue = (key: string) => draft?.items?.find((i: any) => i.ruleKey === key)?.value;
+  const ruleLabel = (key: string) => (registry.data?.rules ?? []).find((r: any) => r.key === key)?.label ?? 'Rule';
+  const editableCount = (registry.data?.rules ?? []).filter((r: any) => r.editability === 'expert').length;
 
   return (
     <Page
-      title={values.data ? `${sid}` : 'Scorecard'}
-      subtitle={`Published version ${values.data?.publishedVersion ?? 0}${values.data?.publishedVersion === 0 ? ' (the shipped rules)' : ''}. Values below come from the calculator configuration the Toolkit actually scores with.`}
+      title={cardLabel(cards.data, sid)}
+      subtitle={`Published version ${values.data?.publishedVersion ?? 0}${values.data?.publishedVersion === 0 ? ' (the shipped rules)' : ''}. These are the numbers the scorecard scores with.`}
       actions={<>
         <Link href={`/studio/s/${sid}/describe`}><Button variant="outline">Describe a change</Button></Link>
         <Button onClick={() => setCreating(true)} disabled={busy}>New draft</Button>
       </>}
     >
       <ErrorNote message={error || registry.error || values.error} />
+
+      {!registry.loading && editableCount === 0 && (
+        <Panel tone="warn" title="This scorecard is locked">
+          <p className="text-sm">This scorecard follows fixed values in its toolkit scorer, so editing the numbers below would change nothing. Send changes to the developers with Request.</p>
+        </Panel>
+      )}
 
       {creating && (
         <Panel title="New draft">
@@ -105,8 +116,8 @@ export default function Workspace({ sid }: { sid: string }) {
           <ul className="mt-3 divide-y divide-zinc-100 text-sm">
             {draft.items.map((it: any) => (
               <li key={it.id} className="flex items-start justify-between gap-2 py-2">
-                <span><code className="text-xs">{it.path}</code> → <strong>{it.value}</strong><span className="block text-xs text-zinc-500">{it.justification}{it.source === 'ai' ? ' · AI-assisted' : ''}</span></span>
-                <Button variant="ghost" size="sm" onClick={() => removeItem(it.id)} disabled={busy} aria-label={`Remove change to ${it.path}`}>Remove</Button>
+                <span>{ruleLabel(it.ruleKey)} → <strong>{it.value}</strong><span className="block text-xs text-zinc-500">{it.justification}{it.source === 'ai' ? ' · AI-assisted' : ''}</span></span>
+                <Button variant="ghost" size="sm" onClick={() => removeItem(it.id)} disabled={busy} aria-label={`Remove change to ${ruleLabel(it.ruleKey)}`}>Remove</Button>
               </li>
             ))}
           </ul>
@@ -144,7 +155,7 @@ export default function Workspace({ sid }: { sid: string }) {
                 const isEditing = editing === r.key;
                 return (
                   <tr key={r.key} className="border-t border-zinc-100 align-top">
-                    <td className="py-2 pr-2">{r.label}{r.editability === 'developer' && <span className="ml-1 rounded bg-zinc-100 px-1 text-xs text-zinc-600" title="Changes the structure of the scorecard - raise a developer change request">developer</span>}</td>
+                    <td className="py-2 pr-2">{r.label}{r.editability === 'developer' && <span className="ml-1 rounded bg-zinc-100 px-1 text-xs text-zinc-600" title={r.lockedReason}>With developers</span>}{r.lockedReason && <span className="block text-xs text-zinc-500">{r.lockedReason}</span>}</td>
                     <td className="pr-2 text-xs text-zinc-500">{UNIT_LABEL[r.unit] ?? r.unit}</td>
                     <td className="pr-2">{formatValue(pv?.shipped, r.unit)}</td>
                     <td className="pr-2">{formatValue(pv?.published, r.unit)}</td>

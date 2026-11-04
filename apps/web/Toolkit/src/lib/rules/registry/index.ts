@@ -12,6 +12,8 @@
  */
 import { SCORECARD_IDS, SCORECARD_SOURCES, type ScorecardId } from '../scorecards';
 import { UNWIRED_SOURCE_PATHS } from './unwired';
+import { NO_SCORE_EFFECT } from './noScoreEffect';
+import { getAtPath } from '../paths';
 import type { RuleDef, RuleUnit, Editability } from '../types';
 
 const ELEMENT_BY_GROUP: Record<string, { element: string; lines: string }> = {
@@ -61,7 +63,7 @@ function makeRule(
     binding: { layer: 'source', path },
     editability: c.editability,
     affectedLines: [`${element}: ${label}`],
-    rulings: [`Shipped value in apps/api/pipeline/sectorConfig.ts (${SCORECARD_SOURCES[scorecardId].label})`],
+    rulings: [`Default for ${SCORECARD_SOURCES[scorecardId].label}`],
     invariants: [
       'value-within-bounds',
       ...(c.unit === 'points' ? ['pillar-points-do-not-exceed-pillar-maximum'] : []),
@@ -83,7 +85,7 @@ function build(scorecardId: ScorecardId): RuleDef[] {
       const path = `targets.${group}.${key}`;
       if (unwired.includes(path)) continue;
       rules.push(makeRule(scorecardId, path, meta.element, group, humanize(key),
-        `Shipped value ${value}. Stored as ${classify(key).unit}.`, classify(key)));
+        `Default value ${value}.`, classify(key)));
     }
   }
 
@@ -92,15 +94,32 @@ function build(scorecardId: ScorecardId): RuleDef[] {
       const value = bf[field];
       const path = `benefitFactors[contributionType=${bf.contributionType}].${field}`;
       if (!isNum(value) || unwired.includes(path)) continue;
-      rules.push(makeRule(scorecardId, path, 'Enterprise & Supplier Development', 'benefitFactors',
-        `${humanize(bf.contributionType.replace(/_/g, ' '))} - benefit factor`,
-        `Share of the contribution that counts toward the ESD target (one factor serves both supplier and enterprise development). Shipped value ${value}.`,
+      const label = `${humanize(bf.contributionType.replace(/_/g, ' '))} - benefit factor`;
+      const help = 'Share of the contribution that counts toward the ESD target (one factor serves both supplier and enterprise development).';
+      // A sector following an Empower toolkit replaces some factors after conversion (guarantees: 50%, not the
+      // Codes' 3%). The number that scores is the replaced one, so that is the rule to show and to edit.
+      const calcPath = `benefitFactors[type=${bf.contributionType}].factor`;
+      const effective = getAtPath(SCORECARD_SOURCES[scorecardId].shipped, calcPath);
+      if (isNum(effective) && effective !== value) {
+        const rule = makeRule(scorecardId, calcPath, 'Enterprise & Supplier Development', 'benefitFactors', label, `${help} Default value ${effective}.`,
+          { unit: 'factor', min: 0, max: 1, editability: 'expert' });
+        rules.push({ ...rule, key: `${scorecardId}:calculator:${calcPath}`, binding: { layer: 'calculator', path: calcPath } });
+        continue;
+      }
+      rules.push(makeRule(scorecardId, path, 'Enterprise & Supplier Development', 'benefitFactors', label, `${help} Default value ${value}.`,
         { unit: 'factor', min: 0, max: 1, editability: 'expert' }));
     }
   }
 
-  return rules;
+  // Only rules proven to move a score are offered to experts (see noScoreEffect.ts and ruleMovesScore.test.ts).
+  const dead = new Set(NO_SCORE_EFFECT[scorecardId] ?? []);
+  return rules.map((r) => (dead.has(r.binding.path)
+    ? { ...r, editability: 'developer' as const, lockedReason: LOCKED_REASON }
+    : r.editability === 'developer' ? { ...r, lockedReason: DEVELOPER_REASON } : r));
 }
+
+const LOCKED_REASON = 'The scorer does not use this number today, so changing it would change nothing. Send it to the developers to connect.';
+const DEVELOPER_REASON = 'This changes how the scorecard is built, so it goes to the developers.';
 
 const cache = new Map<ScorecardId, readonly RuleDef[]>();
 
@@ -132,7 +151,7 @@ export function enumerateCandidateSourcePaths(scorecardId: ScorecardId): string[
   const saved = UNWIRED_SOURCE_PATHS[scorecardId];
   try {
     UNWIRED_SOURCE_PATHS[scorecardId] = [];
-    return build(scorecardId).map((r) => r.binding.path);
+    return build(scorecardId).filter((r) => r.binding.layer === 'source').map((r) => r.binding.path);
   } finally {
     if (saved) UNWIRED_SOURCE_PATHS[scorecardId] = saved;
     else delete UNWIRED_SOURCE_PATHS[scorecardId];

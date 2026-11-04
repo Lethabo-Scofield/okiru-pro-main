@@ -51,7 +51,7 @@ describe.each(SCORECARD_IDS)('rules registry - %s', (id: ScorecardId) => {
     for (const r of rules) {
       expect(r.scorecardId).toBe(id);
       expect(r.min).toBeLessThan(r.max);
-      const shipped = getAtPath(entry.source, r.binding.path);
+      const shipped = getAtPath(r.binding.layer === 'source' ? entry.source : entry.shipped, r.binding.path);
       expect(typeof shipped, r.key).toBe('number');
       expect(shipped as number, r.key).toBeGreaterThanOrEqual(r.min);
       expect(shipped as number, r.key).toBeLessThanOrEqual(r.max);
@@ -60,10 +60,12 @@ describe.each(SCORECARD_IDS)('rules registry - %s', (id: ScorecardId) => {
 
   it('every registered rule actually changes the effective config (no phantom controls)', () => {
     const phantom: string[] = [];
-    for (const r of getRules(id)) {
-      const cur = getAtPath(entry.source, r.binding.path) as number;
-      const cfg = buildEffectiveConfig(id, { source: { [r.binding.path]: perturb(r, cur) }, calculator: {} });
-      if (canonicalize(cfg) === canonicalize(entry.shipped)) phantom.push(r.binding.path);
+    for (const r of getRules(id).filter((x) => x.editability === 'expert')) {
+      const { layer, path } = r.binding;
+      const cur = getAtPath(layer === 'source' ? entry.source : entry.shipped, path) as number;
+      const next = { [path]: perturb(r, cur) };
+      const cfg = buildEffectiveConfig(id, { source: layer === 'source' ? next : {}, calculator: layer === 'calculator' ? next : {} });
+      if (canonicalize(cfg) === canonicalize(entry.shipped)) phantom.push(path);
     }
     expect(phantom).toEqual([]);
   });

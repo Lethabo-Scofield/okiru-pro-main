@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, ChevronDown, LogOut, Scale, Settings, Users } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Scale, SlidersHorizontal, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TokenBalancePill } from "@/components/TokenBalancePill";
 
@@ -59,10 +59,31 @@ function useCalculationReviewAccess(): boolean {
   return allowed;
 }
 
+/** Whether the signed-in user is one of the named Rules Studio people. Same shape as the review check above. */
+function useRulesStudioAccess(): boolean {
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    apiRequest("GET", "/api/rules-studio/access")
+      .then((res) => res.json())
+      .then((body: { hasAccess?: boolean }) => {
+        if (live) setAllowed(body?.hasAccess === true);
+      })
+      .catch(() => {
+        if (live) setAllowed(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return allowed;
+}
+
 export function UserAccountMenu({ variant = "hub", className, trigger, showTokens = true }: UserAccountMenuProps) {
   const [pathname, navigate] = useLocation();
   const { user, logout } = useAuth();
   const canReview = useCalculationReviewAccess();
+  const canUseStudio = useRulesStudioAccess();
   const returnPath = pathname || "/hub";
   const profileUrl = companyProfilePath(returnPath);
 
@@ -135,6 +156,17 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
           >
             <Scale />
             Calculation review
+          </DropdownMenuItem>
+        )}
+        {canUseStudio && (
+          <DropdownMenuItem
+            onSelect={() => {
+              navigate("/studio");
+            }}
+            data-testid="menu-rules-studio"
+          >
+            <SlidersHorizontal />
+            Rules Studio
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

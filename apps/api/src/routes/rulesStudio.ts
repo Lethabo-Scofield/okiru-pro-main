@@ -19,7 +19,7 @@ import { RulesFrozenError, PublishRejectedError, RulesIntegrityError, RulesNotFo
 import { StoreUnavailableError, VersionConflictError } from '../rules/store.js';
 import { SigningUnavailableError } from '../rules/signing.js';
 import { canonicalJson } from '../rules/ledger.js';
-import { getStudioCtx, rulesLaunched } from '../rules/runtime.js';
+import { getStudioCtx, rulesLaunched, rulesServedTo, previewUserIds } from '../rules/runtime.js';
 import { DuplicateIdError, StaleWriteError, type Doc } from '../rules/studio/studioStore.js';
 import { ForbiddenError, authorize, hasAnyGrant, createGrant, revokeGrant, STUDIO_ROLES, type Grant } from '../rules/studio/permissions.js';
 import { StepUpDeniedError, StepUpUnavailableError, enrollTotp, confirmTotp, resetTotp, startStepUp, verifyStepUp, bindingHashOf } from '../rules/studio/stepUp.js';
@@ -114,13 +114,17 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
   const read = (req: Request, ctx: StudioCtx, userId: string, sid?: string) => authorize(ctx.studio, userId, 'read', sid, ctx.env);
 
   /* ---- access, registry, values ---- */
-  router.get('/access', wrap(async (_req, _res, ctx, userId) => ({
-    hasAccess: await hasAnyGrant(ctx.studio, userId, ctx.env), launched: rulesLaunched(), protectedPublishing: (await backupStatus(ctx)).protectedPublishingAvailable,
-  })));
+  router.get('/access', wrap(async (_req, _res, ctx, userId) => {
+    const hasAccess = await hasAnyGrant(ctx.studio, userId, ctx.env);
+    // Someone with no Studio access learns only that, nothing about how the Studio is set up.
+    if (!hasAccess) return { hasAccess: false };
+    const preview = !rulesLaunched(ctx.env) && previewUserIds(ctx.env).includes(userId) && rulesServedTo(userId, ctx.env);
+    return { hasAccess, launched: rulesLaunched(ctx.env), preview, previewCount: previewUserIds(ctx.env).length, protectedPublishing: (await backupStatus(ctx)).protectedPublishingAvailable };
+  }));
 
   router.get('/scorecards', wrap(async (req, _res, ctx, userId) => {
     await authorize(ctx.studio, userId, 'read', undefined, ctx.env).catch(() => authorize(ctx.studio, userId, 'read', 'rcogp-generic', ctx.env));
-    return { scorecards: SCORECARD_IDS.map((id) => ({ id, label: SCORECARD_SOURCES[id].label, rules: getRules(id).length })) };
+    return { scorecards: SCORECARD_IDS.map((id) => ({ id, label: SCORECARD_SOURCES[id].label, rules: getRules(id).filter((r) => r.editability === 'expert').length, locked: getRules(id).filter((r) => r.editability !== 'expert').length })) };
   }));
 
   router.get('/scorecards/:sid/registry', wrap(async (req, _res, ctx, userId) => {
@@ -190,7 +194,13 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     const { aiAvailability } = await import('../rules/studio/aiProposals.js');
     return aiAvailability(ctx.env);
   }));
-  router.post('/changesets/:cid/propose', wrap(async (req, _res, ctx, userId) => {
+  // A model call costs money and takes a while, so it has its own, much lower limit.
+  const aiLimiter = rateLimit({
+    windowMs: 60_000, limit: Number(process.env.RULES_AI_RATE_LIMIT ?? 10), standardHeaders: 'draft-7', legacyHeaders: false,
+    keyGenerator: (req) => String((req.session as { userId?: string } | undefined)?.userId ?? ipKeyGenerator(req.ip ?? '')),
+    message: { code: 'rate_limited', message: 'Too many AI requests; wait a minute' },
+  });
+  router.post('/changesets/:cid/propose', aiLimiter, wrap(async (req, _res, ctx, userId) => {
     const { proposeChange } = await import('../rules/studio/aiProposals.js');
     return proposeChange(ctx, userId, param(req, 'cid'), str(body(req).prompt, 1500));
   }, { status: 201 }));
@@ -364,7 +374,7 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     const role = str(b.role, 40);
     if (!(STUDIO_ROLES as readonly string[]).includes(role)) throw new StudioError('invalid_input', 'Unknown role', 400);
     const scorecards = Array.isArray(b.scorecards) ? b.scorecards.filter((s): s is string => typeof s === 'string' && (s === '*' || isScorecardId(s))) : [];
-    const grant = await createGrant(ctx.studio, { userId: str(b.userId, 120), role: role as Grant['role'], scorecards, createdBy: userId, now: ctx.now() });
+    const grant = await createGrant(ctx.studio, { userId: str(b.userId, 120), role: role as Grant['role'], scorecards, createdBy: userId, now: ctx.now() }, ctx.env);
     await appendAudit(ctx.studio, ctx.rules.signer, { actor: userId, action: 'grant.create', target: grant.id, details: { role, scorecards, userId: grant.userId }, now: ctx.now() });
     const { notify } = await import('../rules/studio/notify.js');
     await notify(ctx.studio, ctx.notifyCfg, ctx.now(), { type: 'permissions.changed', severity: 'warning', message: `A ${role} grant was created.`, entity: grant.id });
@@ -386,6 +396,7 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     return { notifications: all.map((n) => ({ ...n, read: n.readBy.includes(userId) })), deliveryProblems: await persistentDeliveryFailures(ctx.studio) };
   }));
   router.post('/notifications/:id/read', wrap(async (req, _res, ctx, userId) => {
+    if (!(await hasAnyGrant(ctx.studio, userId, ctx.env))) throw new ForbiddenError();
     const col = ctx.studio.collection<Notification>('notifications');
     const n = await col.get(param(req, 'id'));
     if (!n) throw new StudioError('not_found', 'Notification not found', 404);
@@ -411,9 +422,10 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     return cr;
   }, { status: 201 }));
   router.patch('/change-requests/:id', wrap(async (req, _res, ctx, userId) => {
-    await authorize(ctx.studio, userId, 'changeRequest.manage', undefined, ctx.env).catch(() => authorize(ctx.studio, userId, 'changeRequest.manage', sidFromBody(req), ctx.env));
     const col = ctx.studio.collection<ChangeRequest>('ruleChangeRequests');
     const cr = await col.get(param(req, 'id'));
+    // Authorised on the record's own scorecard, never on one named in the request body.
+    await authorize(ctx.studio, userId, 'changeRequest.manage', cr?.scorecardId, ctx.env);
     if (!cr) throw new StudioError('not_found', 'Change request not found', 404);
     const status = str(body(req).status, 20);
     if (!['open', 'in_progress', 'done', 'declined'].includes(status)) throw new StudioError('invalid_input', 'Unknown status', 400);
@@ -422,7 +434,6 @@ export function createStudioRouter(ctxFactory: () => Promise<StudioCtx> = getStu
     await appendAudit(ctx.studio, ctx.rules.signer, { actor: userId, action: 'change_request.update', target: cr.id, details: { status }, now: ctx.now() });
     return saved;
   }));
-  const sidFromBody = (req: Request) => (typeof body(req).scorecardId === 'string' ? (body(req).scorecardId as string) : undefined);
 
   interface Note { id: string; rev: number; scorecardId: string | null; text: string; createdBy: string; createdAt: string }
   router.get('/notes', wrap(async (_req, _res, ctx, userId) => {
@@ -494,8 +505,12 @@ export function createStepUpRouter(ctxFactory: () => Promise<StudioCtx> = getStu
   router.post('/reset', run(async (req, ctx, userId) => {
     await authorize(ctx.studio, userId, 'grants.manage', undefined, ctx.env);
     const target = str(body(req).userId, 120);
+    // A stolen admin session must not be able to swap in its own authenticator: another admin does it.
+    if (target === userId) throw new ForbiddenError('Another administrator has to reset your authenticator');
     await resetTotp(ctx.studio, target);
     await appendAudit(ctx.studio, ctx.rules.signer, { actor: userId, action: 'stepup.reset', target, now: ctx.now() });
+    const { notify } = await import('../rules/studio/notify.js');
+    await notify(ctx.studio, ctx.notifyCfg, ctx.now(), { type: 'permissions.changed', severity: 'critical', message: 'An authenticator was reset. If you did not expect this, freeze the rules and investigate.', entity: target });
     return { ok: true };
   }));
   router.post('/start', run(async (req, ctx, userId) => {

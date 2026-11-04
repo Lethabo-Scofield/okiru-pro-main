@@ -208,6 +208,33 @@ export class LocalDirOffsite implements OffsiteStore {
   }
 }
 
+/**
+ * Amazon S3 off-site store. The bucket should have Object Lock on and the credentials should only be able to write and
+ * read, so nothing that runs on the application server can change or delete a snapshot once written.
+ */
+export class S3Offsite implements OffsiteStore {
+  constructor(private readonly client: { send(command: unknown): Promise<any> }, private readonly bucket: string, private readonly label: string,
+    private readonly commands: { Put: new (input: any) => unknown; Get: new (input: any) => unknown }) {}
+  describe() { return this.label; }
+
+  async put(key: string, data: string): Promise<void> {
+    // IfNoneMatch '*': S3 refuses the write if the key exists, so a snapshot is never overwritten. The
+    // checksum makes Object Lock buckets accept the write and has S3 reject corrupted bytes.
+    await this.client.send(new this.commands.Put({ Bucket: this.bucket, Key: key, Body: data, ContentType: 'application/json', IfNoneMatch: '*', ChecksumAlgorithm: 'SHA256' }));
+  }
+
+  async get(key: string): Promise<string | null> {
+    try {
+      const out = await this.client.send(new this.commands.Get({ Bucket: this.bucket, Key: key }));
+      return await out.Body.transformToString('utf-8');
+    } catch (e) {
+      const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) return null;
+      throw e;
+    }
+  }
+}
+
 export async function offsiteFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<OffsiteStore | null> {
   const localDir = env.RULES_OFFSITE_LOCAL_DIR;
   if (localDir) {
@@ -215,6 +242,16 @@ export async function offsiteFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
       throw new SnapshotFailedError('offsite-not-configured', 'RULES_OFFSITE_LOCAL_DIR is a rehearsal store and is refused in production');
     }
     return new LocalDirOffsite(localDir);
+  }
+  if (env.RULES_OFFSITE_S3_BUCKET) {
+    if (!env.RULES_OFFSITE_S3_REGION) throw new SnapshotFailedError('offsite-not-configured', 'RULES_OFFSITE_S3_REGION is required with RULES_OFFSITE_S3_BUCKET');
+    const { S3Client, PutObjectCommand, GetObjectCommand } = await import('@aws-sdk/client-s3');
+    // Dedicated keys when given, so the Studio never leans on whatever else the host can do.
+    const credentials = env.RULES_OFFSITE_S3_ACCESS_KEY_ID && env.RULES_OFFSITE_S3_SECRET_ACCESS_KEY
+      ? { accessKeyId: env.RULES_OFFSITE_S3_ACCESS_KEY_ID, secretAccessKey: env.RULES_OFFSITE_S3_SECRET_ACCESS_KEY }
+      : undefined;
+    const client = new S3Client({ region: env.RULES_OFFSITE_S3_REGION, ...(credentials ? { credentials } : {}) });
+    return new S3Offsite(client, env.RULES_OFFSITE_S3_BUCKET, `s3:${env.RULES_OFFSITE_S3_BUCKET}`, { Put: PutObjectCommand, Get: GetObjectCommand });
   }
   const conn = env.RULES_OFFSITE_AZURE_CONNECTION_STRING;
   const containerName = env.RULES_OFFSITE_CONTAINER;

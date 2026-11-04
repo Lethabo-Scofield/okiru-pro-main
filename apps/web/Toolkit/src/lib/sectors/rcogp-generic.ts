@@ -281,7 +281,7 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
  * removed) tests ED on base + bonuses, and would fail entities the toolkit
  * passes.
  */
-function withEmpowerToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+export function withEmpowerToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
   const pc = cfg.pillarConfigs ?? {};
   return {
     ...cfg,

@@ -13,7 +13,8 @@ import type { RuleOverrides, RulesetStamp } from '../../../web/Toolkit/src/lib/r
 import {
   genesisHash, sealVersion, verifyChain, type RulesVersionRecord, type VersionKind, type VerifyFailure,
 } from './ledger.js';
-import type { Signer, Verifier } from './signing.js';
+import { canonicalJson } from './ledger.js';
+import { SigningUnavailableError, type Signer, type Verifier } from './signing.js';
 import { currentFreeze, type RulesStore, type FreezeEvent } from './store.js';
 import { randomUUID } from 'crypto';
 
@@ -89,7 +90,7 @@ export interface PublishInput {
 /** Throws RulesFrozenError (HTTP 423) when publishing to `scorecardId` is frozen. */
 export async function assertNotFrozen(deps: ServiceDeps, scorecardId: string): Promise<void> {
   if (deps.envFrozen) throw new RulesFrozenError('RULES_FREEZE is set on this deployment');
-  const f = currentFreeze(await deps.store.getFreezeEvents(), scorecardId);
+  const f = currentFreeze(await verifiedFreezeEvents(deps), scorecardId);
   if (f) throw new RulesFrozenError(f.reason);
 }
 
@@ -263,7 +264,7 @@ export async function resolvePublished(scorecardId: ScorecardId, deps: ServiceDe
   }
 
   // 2. A freeze serves the selected last-known-good version to unpinned clients.
-  const freezeEvent = currentFreeze(await deps.store.getFreezeEvents(), scorecardId);
+  const freezeEvent = currentFreeze(await verifiedFreezeEvents(deps), scorecardId);
   if (freezeEvent) {
     const rec = freezeEvent.serveVersion === 0 ? null : history.find((r) => r.version === freezeEvent.serveVersion) ?? null;
     if (freezeEvent.serveVersion !== 0 && !rec) throw new RulesNotFoundError(scorecardId, freezeEvent.serveVersion);
@@ -352,6 +353,26 @@ function assertScope(scope: string): void {
   if (scope !== '*' && !isScorecardId(scope)) throw new PublishRejectedError(`Unknown freeze scope "${scope}"`);
 }
 
+function freezePayload(e: FreezeEvent): string {
+  return canonicalJson({ id: e.id, scope: e.scope, action: e.action, serveVersion: e.serveVersion, reason: e.reason, actor: e.actor, at: e.at });
+}
+
+function signFreeze(deps: ServiceDeps, e: FreezeEvent): FreezeEvent {
+  if (!deps.signer) throw new SigningUnavailableError('A signing key is required to freeze or unfreeze rules');
+  return { ...e, keyId: deps.signer.keyId, signature: deps.signer.sign(freezePayload(e)) };
+}
+
+/** A freeze decides which rules are served, so one row inserted behind the application must not count. */
+export async function verifiedFreezeEvents(deps: ServiceDeps): Promise<FreezeEvent[]> {
+  const events = await deps.store.getFreezeEvents();
+  for (const e of events) {
+    let ok = false;
+    try { ok = !!e.signature && !!e.keyId && deps.verifier.verify(freezePayload(e), e.signature, e.keyId); } catch { ok = false; }
+    if (!ok) throw new RulesIntegrityError(e.scope, [], `A freeze event for ${e.scope} failed signature verification`);
+  }
+  return events;
+}
+
 function assertReason(reason: string, what: string): void {
   if (!reason || reason.trim().length < 5) throw new PublishRejectedError(`A reason of at least 5 characters is required to ${what}`);
 }
@@ -375,8 +396,9 @@ export async function freeze(deps: ServiceDeps, input: FreezeInput): Promise<Fre
     }
     events.push({ id: randomUUID(), scope: id, action: 'freeze', serveVersion, reason: input.reason, actor: input.actor, at });
   }
-  for (const e of events) await deps.store.appendFreezeEvent(e);
-  return events;
+  const signed = events.map((e) => signFreeze(deps, e));
+  for (const e of signed) await deps.store.appendFreezeEvent(e);
+  return signed;
 }
 
 export async function unfreeze(deps: ServiceDeps, input: { scope: string; reason: string; actor: string }): Promise<FreezeEvent[]> {
@@ -387,6 +409,7 @@ export async function unfreeze(deps: ServiceDeps, input: { scope: string; reason
   const events: FreezeEvent[] = scopes.map((scope) => ({
     id: randomUUID(), scope, action: 'unfreeze' as const, serveVersion: 0, reason: input.reason, actor: input.actor, at,
   }));
-  for (const e of events) await deps.store.appendFreezeEvent(e);
-  return events;
+  const signed = events.map((e) => signFreeze(deps, e));
+  for (const e of signed) await deps.store.appendFreezeEvent(e);
+  return signed;
 }

@@ -12,11 +12,14 @@ import type { ScorecardId } from '../scorecards';
  *    per-band black / black-female targets are not read from config today.
  *  - QSE procurement qse/eme/bwo30 rows are fixed by the QSE converter.
  *  - fsc esd.edJobsBonus is not carried by the FSC converters.
+ *  - the Empower toolkit methods overwrite skills.absorptionTargetPercent (RCOGP and Agri
+ *    Generic) and the ESD percentages (ICT QSE) after conversion.
  *  - benefitFactors[].edFactor: the calculator carries ONE factor (the sdFactor) for
  *    both supplier and enterprise development, so edFactor is never offered.
  */
 export const UNWIRED_SOURCE_PATHS: Partial<Record<ScorecardId, string[]>> = {
   'rcogp-generic': [
+    'targets.skills.absorptionTargetPercent',
     'targets.managementControl.seniorBlackTarget',
     'targets.managementControl.seniorBWTarget',
     'targets.managementControl.middleBlackTarget',
@@ -44,6 +47,8 @@ export const UNWIRED_SOURCE_PATHS: Partial<Record<ScorecardId, string[]>> = {
     'targets.employmentEquity.juniorMaxPts',
   ],
   'ict-qse': [
+    'targets.esd.sdPercent',
+    'targets.esd.edPercent',
     'targets.employmentEquity.seniorMaxPts',
     'targets.employmentEquity.middleMaxPts',
     'targets.employmentEquity.juniorMaxPts',
@@ -55,6 +60,7 @@ export const UNWIRED_SOURCE_PATHS: Partial<Record<ScorecardId, string[]>> = {
     'targets.procurement.bwo30MaxPts',
   ],
   'agri-generic': [
+    'targets.skills.absorptionTargetPercent',
     'targets.employmentEquity.seniorMaxPts',
     'targets.employmentEquity.middleMaxPts',
     'targets.employmentEquity.juniorMaxPts',

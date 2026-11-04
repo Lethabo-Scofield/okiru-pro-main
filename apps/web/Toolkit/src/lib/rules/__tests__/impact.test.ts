@@ -7,7 +7,7 @@ import { getAtPath } from '../paths';
 import type { RuleOverrides } from '../types';
 
 const none: RuleOverrides = { source: {}, calculator: {} };
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 
 beforeAll(() => { vi.spyOn(console, 'log').mockImplementation(() => {}); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
 afterAll(() => vi.restoreAllMocks());
@@ -59,8 +59,8 @@ describe('impact engine - what a change moves', () => {
     for (const f of r.fixtures) for (const p of f.pillars) expect(p.delta).toBeLessThanOrEqual(1e-9);
   });
 
-  it('guarantees benefit factor 0.03 -> 0.5 reaches the ESD pillars via the shared scorer', () => {
-    const r = runImpact('rcogp-generic', none, { source: { [G]: 0.5 }, calculator: {} });
+  it('raising a benefit factor reaches the ESD pillars via the shared scorer', () => {
+    const r = runImpact('rcogp-generic', none, { source: { [G]: 0.9 }, calculator: {} });
     const moved = r.summary.affectedPillars;
     expect(moved.some((p) => p === 'supplierDevelopment' || p === 'enterpriseDevelopment')).toBe(true);
     for (const f of r.fixtures) for (const p of f.pillars) expect(p.delta).toBeGreaterThanOrEqual(-1e-9);

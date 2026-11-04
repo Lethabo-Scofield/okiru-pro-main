@@ -8,7 +8,7 @@ import { MemoryStudioStore } from '../studio/__tests__/memoryStudioStore.js';
 import { verifyAudit } from '../studio/audit.js';
 
 const SID = 'rcogp-generic';
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 let clock: Date; let rules: ServiceDeps; let studio: MemoryStudioStore; let clients: Map<string, PinMap>; let pins: ClientPinStore;
 const later = (h: number) => { clock = new Date(clock.getTime() + h * 3_600_000); };

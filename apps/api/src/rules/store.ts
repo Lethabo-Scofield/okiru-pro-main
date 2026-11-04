@@ -37,6 +37,9 @@ export interface FreezeEvent {
   reason: string;
   actor: string;
   at: string;
+  /** Ed25519 over the canonical event. An unsigned or altered event fails verification on read. */
+  keyId?: string;
+  signature?: string;
 }
 
 export interface RulesStore {

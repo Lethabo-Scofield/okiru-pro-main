@@ -24,7 +24,7 @@ import { MemoryRulesStore } from '../../rules/__tests__/memoryStore.js';
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const priv = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
 const pub = publicKey.export({ type: 'spki', format: 'pem' }) as string;
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 
 let store: MemoryRulesStore;
 let deps: ServiceDeps;

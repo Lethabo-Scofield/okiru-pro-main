@@ -11,7 +11,7 @@ export type StudioRole = (typeof STUDIO_ROLES)[number];
 
 export const STUDIO_ACTIONS = [
   'read', 'draft.write', 'draft.submit', 'review.decide', 'publish', 'freeze', 'rollback.emergency',
-  'grants.manage', 'audit.read', 'changeRequest.create', 'changeRequest.manage', 'backups.read', 'backups.drill',
+  'grants.manage', 'audit.read', 'changeRequest.create', 'changeRequest.manage', 'backups.read', 'backups.drill', 'pins.manage',
 ] as const;
 export type StudioAction = (typeof STUDIO_ACTIONS)[number];
 
@@ -32,6 +32,7 @@ export const PERMISSION_MATRIX: Readonly<Record<StudioAction, readonly StudioRol
   'changeRequest.manage': ['developer'],
   'backups.read': ['admin', 'expert_approver'],
   'backups.drill': ['admin'],
+  'pins.manage': ['expert_approver', 'admin'],
 };
 
 export interface Grant extends Doc {
@@ -51,6 +52,21 @@ export class ForbiddenError extends Error {
     super(message);
     this.name = 'ForbiddenError';
   }
+}
+
+/**
+ * The named people allowed in the Studio at all (RULES_STUDIO_ALLOWED_USERS, comma-separated user ids).
+ * Signup is open, so a grant alone does not prove a person: without this, one person holding two Okiru
+ * accounts could be both editor and approver. In production an empty list means nobody.
+ */
+export function allowedUsers(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.RULES_STUDIO_ALLOWED_USERS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+export function isAllowedUser(userId: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const list = allowedUsers(env);
+  if (list.length) return list.includes(userId);
+  return env.NODE_ENV !== 'production';
 }
 
 export function bootstrapAdmins(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -75,6 +91,7 @@ export async function authorize(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<Grant> {
   if (!userId) throw new ForbiddenError('Not authenticated');
+  if (!isAllowedUser(userId, env)) throw new ForbiddenError();
   const allowed = PERMISSION_MATRIX[action];
   const grants = await activeGrants(store, userId);
   if (bootstrapAdmins(env).includes(userId)) {
@@ -88,11 +105,12 @@ export async function authorize(
 
 /** Whether the user holds ANY active grant (used to decide if the Studio is visible at all). */
 export async function hasAnyGrant(store: StudioStore, userId: string | undefined, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  if (!userId) return false;
+  if (!userId || !isAllowedUser(userId, env)) return false;
   return bootstrapAdmins(env).includes(userId) || (await activeGrants(store, userId)).length > 0;
 }
 
-export async function createGrant(store: StudioStore, input: { userId: string; role: StudioRole; scorecards: string[]; createdBy: string; now: Date }): Promise<Grant> {
+export async function createGrant(store: StudioStore, input: { userId: string; role: StudioRole; scorecards: string[]; createdBy: string; now: Date }, env: NodeJS.ProcessEnv = process.env): Promise<Grant> {
+  if (!isAllowedUser(input.userId, env)) throw new ForbiddenError('That account is not on the list of named Studio users');
   if (!STUDIO_ROLES.includes(input.role)) throw new ForbiddenError(`Unknown role ${input.role}`);
   if (!input.userId || !input.scorecards.length) throw new ForbiddenError('A grant needs a user and at least one scorecard (or *)');
   const grant: Grant = {

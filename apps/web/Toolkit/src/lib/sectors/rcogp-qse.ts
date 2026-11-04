@@ -293,7 +293,7 @@ export function sectorConfigToQseCalculatorConfig(sc: SectorConfig): CalculatorC
  * Enterprise and Supplier Development); the toolkit's own discount formula
  * applies the large-enterprise rule, which is flagged, not ported.
  */
-function withEmpowerQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+export function withEmpowerQseToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
   const pc = cfg.pillarConfigs ?? {};
   return {
     ...cfg,

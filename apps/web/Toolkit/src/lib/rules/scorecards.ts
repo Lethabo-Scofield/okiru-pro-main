@@ -13,11 +13,11 @@ import {
   type SectorConfig,
 } from '../../../../../api/pipeline/sectorConfig';
 import type { CalculatorConfig } from '../../../../shared/schema';
-import { sectorConfigToCalculatorConfig, RCOGP_GENERIC_CALCULATOR_CONFIG } from '../sectors/rcogp-generic';
-import { sectorConfigToQseCalculatorConfig, RCOGP_QSE_CALCULATOR_CONFIG } from '../sectors/rcogp-qse';
-import { ictSectorConfigToCalculatorConfig, ICT_GENERIC_CALCULATOR_CONFIG } from '../sectors/ict-generic';
-import { sectorConfigToIctQseCalculatorConfig, ICT_QSE_CALCULATOR_CONFIG } from '../sectors/ict-qse';
-import { sectorConfigToAgriGenericCalculatorConfig, AGRI_GENERIC_CALCULATOR_CONFIG } from '../sectors/agri-generic';
+import { sectorConfigToCalculatorConfig, withEmpowerToolkitMethod, RCOGP_GENERIC_CALCULATOR_CONFIG } from '../sectors/rcogp-generic';
+import { sectorConfigToQseCalculatorConfig, withEmpowerQseToolkitMethod, RCOGP_QSE_CALCULATOR_CONFIG } from '../sectors/rcogp-qse';
+import { ictSectorConfigToCalculatorConfig, withEmpowerIctToolkitMethod, ICT_GENERIC_CALCULATOR_CONFIG } from '../sectors/ict-generic';
+import { sectorConfigToIctQseCalculatorConfig, withEmpowerIctQseToolkitMethod, ICT_QSE_CALCULATOR_CONFIG } from '../sectors/ict-qse';
+import { sectorConfigToAgriGenericCalculatorConfig, withEmpowerAgriToolkitMethod, AGRI_GENERIC_CALCULATOR_CONFIG } from '../sectors/agri-generic';
 import { sectorConfigToFscCalculatorConfig, FSC_GENERIC_CALCULATOR_CONFIG } from '../sectors/fsc-generic';
 import { sectorConfigToFscBanksCalculatorConfig, FSC_BANKS_CALCULATOR_CONFIG } from '../sectors/fsc-banks';
 import { sectorConfigToFscLtiCalculatorConfig, FSC_LTI_CALCULATOR_CONFIG } from '../sectors/fsc-lti';
@@ -40,15 +40,15 @@ export interface ScorecardSource {
 }
 
 export const SCORECARD_SOURCES: Readonly<Record<ScorecardId, ScorecardSource>> = {
-  'rcogp-generic': { id: 'rcogp-generic', label: 'RCOGP Generic', source: RCOGP_GENERIC, convert: sectorConfigToCalculatorConfig, shipped: RCOGP_GENERIC_CALCULATOR_CONFIG },
-  'rcogp-qse': { id: 'rcogp-qse', label: 'RCOGP QSE', source: RCOGP_QSE, convert: sectorConfigToQseCalculatorConfig, shipped: RCOGP_QSE_CALCULATOR_CONFIG },
-  'ict-generic': { id: 'ict-generic', label: 'ICT Generic', source: ICT_GENERIC, convert: ictSectorConfigToCalculatorConfig, shipped: ICT_GENERIC_CALCULATOR_CONFIG },
-  'ict-qse': { id: 'ict-qse', label: 'ICT QSE', source: ICT_QSE, convert: sectorConfigToIctQseCalculatorConfig, shipped: ICT_QSE_CALCULATOR_CONFIG },
-  'agri-generic': { id: 'agri-generic', label: 'Agri Generic', source: AGRI_GENERIC, convert: sectorConfigToAgriGenericCalculatorConfig, shipped: AGRI_GENERIC_CALCULATOR_CONFIG },
-  'fsc-others': { id: 'fsc-others', label: 'FSC Others (Generic)', source: FSC_GENERIC, convert: sectorConfigToFscCalculatorConfig, shipped: FSC_GENERIC_CALCULATOR_CONFIG },
-  'fsc-banks': { id: 'fsc-banks', label: 'FSC Banks', source: FSC_BANKS, convert: sectorConfigToFscBanksCalculatorConfig, shipped: FSC_BANKS_CALCULATOR_CONFIG },
-  'fsc-lti': { id: 'fsc-lti', label: 'FSC Long-term Insurers', source: FSC_LTI, convert: sectorConfigToFscLtiCalculatorConfig, shipped: FSC_LTI_CALCULATOR_CONFIG },
-  'fsc-sti': { id: 'fsc-sti', label: 'FSC Short-term Insurers', source: FSC_STI, convert: sectorConfigToFscStiCalculatorConfig, shipped: FSC_STI_CALCULATOR_CONFIG },
+  'rcogp-generic': { id: 'rcogp-generic', label: 'RCOGP Generic', source: RCOGP_GENERIC, convert: (sc) => withEmpowerToolkitMethod(sectorConfigToCalculatorConfig(sc)), shipped: RCOGP_GENERIC_CALCULATOR_CONFIG },
+  'rcogp-qse': { id: 'rcogp-qse', label: 'RCOGP QSE', source: RCOGP_QSE, convert: (sc) => withEmpowerQseToolkitMethod(sectorConfigToQseCalculatorConfig(sc)), shipped: RCOGP_QSE_CALCULATOR_CONFIG },
+  'ict-generic': { id: 'ict-generic', label: 'ICT Generic', source: ICT_GENERIC, convert: (sc) => withEmpowerIctToolkitMethod(ictSectorConfigToCalculatorConfig(sc)), shipped: ICT_GENERIC_CALCULATOR_CONFIG },
+  'ict-qse': { id: 'ict-qse', label: 'ICT QSE', source: ICT_QSE, convert: (sc) => withEmpowerIctQseToolkitMethod(sectorConfigToIctQseCalculatorConfig(sc)), shipped: ICT_QSE_CALCULATOR_CONFIG },
+  'agri-generic': { id: 'agri-generic', label: 'Agri Generic', source: AGRI_GENERIC, convert: (sc) => withEmpowerAgriToolkitMethod(sectorConfigToAgriGenericCalculatorConfig(sc)), shipped: AGRI_GENERIC_CALCULATOR_CONFIG },
+  'fsc-others': { id: 'fsc-others', label: 'FSC Others (Generic)', source: FSC_GENERIC, convert: (sc) => ({ ...sectorConfigToFscCalculatorConfig(sc), fscToolkit: { subSector: 'Others' } }), shipped: FSC_GENERIC_CALCULATOR_CONFIG },
+  'fsc-banks': { id: 'fsc-banks', label: 'FSC Banks', source: FSC_BANKS, convert: (sc) => ({ ...sectorConfigToFscBanksCalculatorConfig(sc), fscToolkit: { subSector: 'Banks' } }), shipped: FSC_BANKS_CALCULATOR_CONFIG },
+  'fsc-lti': { id: 'fsc-lti', label: 'FSC Long-term Insurers', source: FSC_LTI, convert: (sc) => ({ ...sectorConfigToFscLtiCalculatorConfig(sc), fscToolkit: { subSector: 'LTI' } }), shipped: FSC_LTI_CALCULATOR_CONFIG },
+  'fsc-sti': { id: 'fsc-sti', label: 'FSC Short-term Insurers', source: FSC_STI, convert: (sc) => ({ ...sectorConfigToFscStiCalculatorConfig(sc), fscToolkit: { subSector: 'STI' } }), shipped: FSC_STI_CALCULATOR_CONFIG },
 };
 
 export function isScorecardId(v: unknown): v is ScorecardId {

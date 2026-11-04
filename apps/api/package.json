@@ -18,6 +18,8 @@
     "ingest:certificates": "tsx scripts/ingestCertificates.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@aws-sdk/client-s3": "^3.1161.0",
     "@azure/ai-form-recognizer": "^5.0.0",
     "@azure/identity": "^4.13.0",
     "@azure/storage-blob": "^12.31.0",

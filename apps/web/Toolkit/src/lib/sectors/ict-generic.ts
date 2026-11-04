@@ -326,7 +326,7 @@ export function ictSectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorC
  * template computes "Qualify?" but every branch of its Recognised Amount
  * returns Amount × Benefit Factor.
  */
-function withEmpowerIctToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
+export function withEmpowerIctToolkitMethod(cfg: CalculatorConfig): CalculatorConfig {
   const pc = cfg.pillarConfigs ?? {};
   return {
     ...cfg,

@@ -415,7 +415,7 @@ export function calculateScorecard(
     })) || [];
 
   const yesData = {
-    id: state.yes?.id || '',
+    id: (state as { yes?: { id?: string } }).yes?.id || '',
     clientId: state.client?.id || '',
     totalEmployees: state.management.employees?.length || 0,
     yesHeadcountTarget: Math.max(Math.ceil((state.management.employees?.length || 0) * 0.025), 1),
@@ -435,7 +435,7 @@ export function calculateScorecard(
     const recent = npatValues.slice(-3);
     return recent.reduce((a, b) => a + b, 0) / recent.length;
   })();
-  const yesScore = calculateYESScore(yesData, cfg, state.client.revenue || 0, avgNpat3yr);
+  const yesScore = calculateYESScore(yesData as unknown as Parameters<typeof calculateYESScore>[0], cfg, state.client.revenue || 0, avgNpat3yr);
 
   if (overrides && overrides.totalPoints !== undefined && overrides.totalPoints > 0) {
     const ov = overrides;

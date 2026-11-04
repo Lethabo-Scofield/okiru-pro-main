@@ -20,7 +20,7 @@ import {
 } from '../rules/rulesService.js';
 import { createHash } from 'crypto';
 import { StoreUnavailableError } from '../rules/store.js';
-import { getServiceDeps, rulesLaunched } from '../rules/runtime.js';
+import { getServiceDeps, rulesServedTo } from '../rules/runtime.js';
 
 const logger = createLogger('RulesPublished');
 
@@ -57,12 +57,14 @@ export function sendRulesError(res: Response, err: unknown, context: string): vo
   res.status(500).json({ code: 'RULES_ERROR', message: 'Rules could not be resolved' });
 }
 
-export function createPublishedRulesRouter(depsFactory: () => ServiceDeps = getServiceDeps, launched: () => boolean = rulesLaunched): Router {
+export function createPublishedRulesRouter(depsFactory: () => ServiceDeps = getServiceDeps, launched: (userId?: string) => boolean = (userId) => rulesServedTo(userId)): Router {
   const router = Router();
 
-  router.get('/heads', requireAuth, async (_req: Request, res: Response) => {
+  const userOf = (req: Request) => (req.session as { userId?: string } | undefined)?.userId;
+
+  router.get('/heads', requireAuth, async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (!launched()) return void res.json({ launched: false, heads: [] });
+    if (!launched(userOf(req))) return void res.json({ launched: false, heads: [] });
     try {
       res.json({ launched: true, heads: await resolveHeads(depsFactory()) });
     } catch (err) {
@@ -74,7 +76,7 @@ export function createPublishedRulesRouter(depsFactory: () => ServiceDeps = getS
     res.setHeader('Cache-Control', 'no-store');
     const sid = req.params.sid;
     if (!isScorecardId(sid)) return void res.status(404).json({ code: 'UNKNOWN_SCORECARD', message: 'Unknown scorecard' });
-    if (!launched()) return void res.json({ launched: false, scorecardId: sid, stamp: null, overrides: null });
+    if (!launched(userOf(req))) return void res.json({ launched: false, scorecardId: sid, stamp: null, overrides: null });
     try {
       const q = req.query as Record<string, string | undefined>;
       let version: number | undefined;

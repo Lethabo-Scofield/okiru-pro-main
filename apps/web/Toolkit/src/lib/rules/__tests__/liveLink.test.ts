@@ -5,7 +5,7 @@ import { SCORECARD_SOURCES } from '../scorecards';
 import { registryHashOf } from '../registry';
 import type { RuleOverrides } from '../types';
 
-const G = 'benefitFactors[contributionType=guarantees].sdFactor';
+const G = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
 const shipped = SCORECARD_SOURCES['rcogp-generic'].shipped;
 const reply = (status: number, body: unknown): FetchLike => async () => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
@@ -42,7 +42,7 @@ describe('resolveRules (fail-closed live link)', () => {
     const ov: RuleOverrides = { source: { [G]: 0.5 }, calculator: {} };
     const r = await resolveRules('rcogp-generic', shipped, reply(200, await publishedBody(ov)));
     expect(r.stamp?.version).toBe(3);
-    const g = (r.config as any).benefitFactors.find((b: any) => b.type === 'guarantees');
+    const g = (r.config as any).benefitFactors.find((b: any) => b.type === 'interest_free_loan');
     expect(g.factor).toBe(0.5);
     expect(r.config).not.toBe(shipped);
   });

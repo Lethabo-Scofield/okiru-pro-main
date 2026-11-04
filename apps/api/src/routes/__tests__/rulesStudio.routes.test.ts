@@ -27,7 +27,7 @@ import { addItem, createChangeset, type StudioCtx } from '../../rules/studio/stu
 import type { OffsiteStore } from '../../rules/studio/snapshots.js';
 
 const SID = 'rcogp-generic';
-const KEY = `${SID}:source:benefitFactors[contributionType=guarantees].sdFactor`;
+const KEY = `${SID}:source:benefitFactors[contributionType=interest_free_loan].sdFactor`;
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const env = { RULES_TOTP_ENC_KEY: randomBytes(32).toString('base64') } as NodeJS.ProcessEnv;
 
@@ -206,10 +206,10 @@ describe('draft -> impact -> approval -> step-up -> publish over HTTP', () => {
     const versions = await call('GET', `/api/rules-studio/scorecards/${SID}/versions`, 'viewer');
     expect(versions.json.versions).toHaveLength(1);
     const detail = await call('GET', `/api/rules-studio/scorecards/${SID}/versions/1`, 'viewer');
-    expect(detail.json.overrides.source['benefitFactors[contributionType=guarantees].sdFactor']).toBe(0.5);
+    expect(detail.json.overrides.source['benefitFactors[contributionType=interest_free_loan].sdFactor']).toBe(0.5);
     const values = await call('GET', `/api/rules-studio/scorecards/${SID}/values`, 'viewer');
     const g = values.json.values.find((v: any) => v.key === KEY);
-    expect(g).toMatchObject({ shipped: 0.03, published: 0.5 });
+    expect(g).toMatchObject({ shipped: 0.7, published: 0.5 });
     expect((await call('GET', `/api/rules-studio/scorecards/${SID}/compare?from=0&to=1`, 'viewer')).json.changes).toHaveLength(1);
     expect((await call('GET', '/api/rules-studio/audit/integrity', 'admin')).json.audit.ok).toBe(true);
   });

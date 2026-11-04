@@ -15,7 +15,7 @@ const totp = randomBytes(32).toString('base64');
 const base = { RULES_SIGNING_KEY_ID: 'k1', RULES_SIGNING_PRIVATE_KEY: priv, RULES_TOTP_ENC_KEY: totp, BUILD_ID: 'abc123' } as NodeJS.ProcessEnv;
 const prodReady = {
   ...base, NODE_ENV: 'production', RULES_OFFSITE_AZURE_CONNECTION_STRING: 'conn-OFFSITE', RULES_OFFSITE_CONTAINER: 'snaps',
-  RULES_ALARM_WEBHOOK_URL: 'https://hook', RULES_HEARTBEAT_URL: 'https://hb', RULES_MONGO_URI: 'mongodb://restricted',
+  RULES_ALARM_WEBHOOK_URL: 'https://hook', RULES_HEARTBEAT_URL: 'https://hb', RULES_MONGO_URI: 'mongodb://restricted', RULES_STUDIO_ALLOWED_USERS: 'u1,u2',
 } as NodeJS.ProcessEnv;
 const blockers = (e: NodeJS.ProcessEnv) => envReadiness(e).checks.filter((c) => c.severity === 'blocker' && !c.ok).map((c) => c.id);
 

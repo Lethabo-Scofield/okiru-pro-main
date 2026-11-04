@@ -40,7 +40,7 @@ vi.mock('../../../../db.js', () => ({ isMongoConnected: () => mongoose.connectio
 
 if (MONGO_URI) vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 }); // Atlas round-trips are ~100 ms each
 const SID = 'rcogp-generic';
-const GUARANTEES_KEY = `${SID}:source:benefitFactors[contributionType=guarantees].sdFactor`;
+const GUARANTEES_KEY = `${SID}:source:benefitFactors[contributionType=interest_free_loan].sdFactor`;
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const priv = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
@@ -73,7 +73,7 @@ const secrets: Record<string, string> = {};
 
 /** Behind-the-application tampering: raw driver on Mongo, direct mutation in memory. */
 async function tamperGuarantees(value: number) {
-  const key = 'benefitFactors[contributionType=guarantees].sdFactor';
+  const key = 'benefitFactors[contributionType=interest_free_loan].sdFactor';
   if (MONGO_URI) {
     const doc = await mongoose.connection.db!.collection('rules_versions').findOne({ scorecardId: SID, version: 1 });
     await mongoose.connection.db!.collection('rules_versions').updateOne({ _id: doc!._id }, { $set: { overrides: { ...doc!.overrides, source: { ...doc!.overrides.source, [key]: value } } } });
@@ -173,15 +173,15 @@ beforeEach(async () => {
 describe('20-step acceptance scenario (RCOGP Generic)', () => {
   it('runs end to end', async () => {
     // 1. Original scores for Client A (unpinned) and Client B (submitted, pinned to version 0)
-    const aBefore = await score('strong');
-    const bBefore = await score('strong', { pin: 0 });
+    const aBefore = await score('mid');
+    const bBefore = await score('mid', { pin: 0 });
     expect(aBefore.stamp).toMatchObject({ version: 0, pinned: false });
     expect(bBefore.stamp).toMatchObject({ version: 0, pinned: true });
     expect(aBefore.total).toBe(bBefore.total);
 
-    // 2. Draft: guarantees factor 0.03 -> 0.5
+    // 2. Draft: interest-free loan factor 0.7 -> 0.9
     let cs = await createChangeset(ctx, 'editor', { scorecardId: SID, title: 'Guarantees count at 50%' });
-    cs = await addItem(ctx, 'editor', cs.id, { ruleKey: GUARANTEES_KEY, value: 0.5, justification: 'Align with the revised sector ruling on guarantees.' });
+    cs = await addItem(ctx, 'editor', cs.id, { ruleKey: GUARANTEES_KEY, value: 0.9, justification: 'Align with the revised sector ruling on guarantees.' });
 
     // 3. Authoritative impact: only SD/ED lines move, all attributable
     const run = await runAuthoritativeImpact(ctx, 'editor', cs.id);
@@ -210,13 +210,13 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
     expect((await backupStatus(ctx)).lastVerifiedSnapshotAt).not.toBeNull();
 
     // 8. Client A changes and is stamped version 1
-    const aV1 = await score('strong');
+    const aV1 = await score('mid');
     expect(aV1.stamp).toMatchObject({ version: 1, pinned: false, frozen: false });
     expect(aV1.esd).toBeGreaterThan(aBefore.esd);
     expect(aV1.total).toBeGreaterThan(aBefore.total);
 
     // 9. Client B stays on version 0
-    const bAfter = await score('strong', { pin: 0 });
+    const bAfter = await score('mid', { pin: 0 });
     expect(bAfter).toEqual(bBefore);
 
     // 10. Freeze to the last known good (version 0)
@@ -224,7 +224,7 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
     await freezeScope(ctx, 'admin', { scope: SID, reason: 'Investigating the guarantees ruling', serveVersion: 0, stepUpToken: frToken });
 
     // 11. Unpinned scoring returns to the original result, flagged frozen
-    const aFrozen = await score('strong');
+    const aFrozen = await score('mid');
     expect(aFrozen.total).toBe(aBefore.total);
     expect(aFrozen.stamp).toMatchObject({ version: 0, frozen: true });
     await expect(preparePublish(ctx, 'approver', cs.id, { announcement: 'x'.repeat(20) }).then((p) => publishChangeset(ctx, 'approver', cs.id, { stepUpToken: 'nope' }).catch((e) => { throw e; }))).rejects.toThrow();
@@ -232,7 +232,7 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
     // 12. Unfreeze
     const unToken = await stepUp('admin', 'unfreeze', bindingHashOf('unfreeze', SID));
     await unfreezeScope(ctx, 'admin', { scope: SID, reason: 'Ruling confirmed correct', stepUpToken: unToken });
-    expect((await score('strong')).stamp).toMatchObject({ version: 1, frozen: false });
+    expect((await score('mid')).stamp).toMatchObject({ version: 1, frozen: false });
 
     // 13. Restore version 0 as a NEW version 2 (draft -> impact -> approval -> publish)
     let restore = await createRestoreDraft(ctx, 'editor', SID, 0, 'Reverting the guarantees change after review');
@@ -248,13 +248,13 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
     expect(v2).toMatchObject({ version: 2, kind: 'restore', restoredFromVersion: null });
 
     // 14 + 15. Client A returns to the original score; Client B is unchanged
-    const aV2 = await score('strong');
+    const aV2 = await score('mid');
     expect(aV2.total).toBe(aBefore.total);
     expect(aV2.stamp).toMatchObject({ version: 2 });
-    expect(await score('strong', { pin: 0 })).toEqual(bBefore);
+    expect(await score('mid', { pin: 0 })).toEqual(bBefore);
 
     // 16. Version 1 loaded explicitly reproduces its exact result
-    const aPinV1 = await score('strong', { pin: 1 });
+    const aPinV1 = await score('mid', { pin: 1 });
     expect(aPinV1.total).toBe(aV1.total);
     expect(aPinV1.esd).toBe(aV1.esd);
     expect(aPinV1.stamp).toMatchObject({ version: 1, pinned: true, configHash: aV1.stamp!.configHash });
@@ -402,7 +402,7 @@ describe('emergency rollback', () => {
     const tasks = (await studio.collection<any>('notifications').find()).filter((n) => n.type === 'review.task');
     expect(tasks).toHaveLength(1);
     expect(Date.parse(tasks[0].dueAt)).toBeGreaterThan(clock.getTime() + 1.9 * 86_400_000);
-    expect((await score('strong')).total).toBe((await score('strong', { pin: 0 })).total);
+    expect((await score('mid')).total).toBe((await score('mid', { pin: 0 })).total);
   });
 
   it('works while frozen, but is refused without step-up or the right role', async () => {
