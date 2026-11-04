@@ -36,6 +36,26 @@ export interface ParserResult {
     missing_fields: string[];
   };
   audit_trail: Record<string, unknown>;
+  /**
+   * A full paid read's signed run record (rule layer + model and agent values),
+   * verified by the caller before it is stored. Null when the parser cannot
+   * sign; absent from a rule-only read.
+   */
+  run_attestation?: { filename: string; payload: string; signature: string } | null;
+  ai_value_count?: number;
+}
+
+/**
+ * How long a single-file read may take. A full read (rules, model, agent) of a
+ * scanned pack runs for minutes; this stays under the 600s idle limit of the
+ * ingress and the web proxy in front of /reread, so the api answers before
+ * either drops the browser's connection. PARSER_FILE_TIMEOUT_MS overrides it.
+ */
+export const DEFAULT_FILE_TIMEOUT_MS = 540_000;
+
+function fileTimeoutMs(): number {
+  const configured = Number(process.env.PARSER_FILE_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_FILE_TIMEOUT_MS;
 }
 
 export function parserServiceUrl(): string {
@@ -118,7 +138,7 @@ export async function resolveFileWithParser(
   const url = `${parserServiceUrl()}/api/parser/resolve-file`;
   // Re-extraction can involve OCR on a scanned pack, so this is deliberately
   // far more generous than the text path's 30s.
-  const timeoutMs = options.timeoutMs ?? (Number(process.env.PARSER_FILE_TIMEOUT_MS) || 180_000);
+  const timeoutMs = options.timeoutMs ?? fileTimeoutMs();
   try {
     const form = new FormData();
     form.append(
@@ -143,6 +163,95 @@ export async function resolveFileWithParser(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn('Parser file resolve failed', { url, error: message });
+    return { ok: false, error: message };
+  }
+}
+
+function parserError(parsed: unknown): { code?: string; message?: string } {
+  const error = parsed && typeof parsed === 'object' ? (parsed as { error?: { code?: unknown; message?: unknown } }).error : undefined;
+  return { code: error?.code ? String(error.code) : undefined, message: error?.message ? String(error.message) : undefined };
+}
+
+function fileForm(file: { buffer: Buffer; filename: string; mimeType: string }, field: string): FormData {
+  const form = new FormData();
+  form.append(field, new Blob([new Uint8Array(file.buffer)], { type: file.mimeType || 'application/octet-stream' }), file.filename);
+  return form;
+}
+
+export interface ParserQuoteOutcome {
+  ok: boolean;
+  quoteId?: string;
+  status?: number;
+  error?: string;
+}
+
+/**
+ * Price ONE stored or replacement file — POST /api/parser/quote-files, the
+ * same free structure scan the upload flow uses. The quote is bound to these
+ * exact bytes (sha256 + size), so the paid read that follows must send them
+ * unchanged.
+ */
+export async function quoteFileWithParser(
+  file: { buffer: Buffer; filename: string; mimeType: string },
+  options: { timeoutMs?: number } = {},
+): Promise<ParserQuoteOutcome> {
+  const url = `${parserServiceUrl()}/api/parser/quote-files`;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'POST', body: fileForm(file, 'files') }, options.timeoutMs ?? 60_000);
+    const text = await res.text();
+    let parsed: unknown = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+    const data = (parsed && typeof parsed === 'object' && 'data' in parsed ? (parsed as { data?: unknown }).data : parsed) as { quoteId?: unknown } | null;
+    if (res.ok && data?.quoteId) return { ok: true, quoteId: String(data.quoteId) };
+    return { ok: false, status: res.status, error: parserError(parsed).message || `Parser responded ${res.status}` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn('Parser quote failed', { url, error: message });
+    return { ok: false, error: message };
+  }
+}
+
+export interface ParserPaidReadOutcome extends ParserResolveOutcome {
+  /** The parser's HTTP status when it refused (402 unpaid, 409 voided/used, 410 expired). */
+  status?: number;
+  /** The parser's error code — QUOTE_VOIDED, QUOTE_ALREADY_USED, QUOTE_FILE_MISMATCH … */
+  code?: string;
+}
+
+/**
+ * Read ONE file against a paid quote — POST /api/parser/resolve-file-paid.
+ * The parser checks the quote is paid and these are the quoted bytes, claims
+ * it (once), reads, and records what the read delivered, so a read that
+ * produced nothing is refunded by the same settlement every paid run gets.
+ *
+ * `full` asks for the whole per-document read — rules, model, agent — through
+ * the reader for `domain`, returned with the signed run record. Without it the
+ * parser reads the rule layer only, as it always did.
+ */
+export async function resolvePaidFileWithParser(
+  file: { buffer: Buffer; filename: string; mimeType: string },
+  quoteId: string,
+  options: { timeoutMs?: number; domain?: 'bbbee' | 'esg'; full?: boolean } = {},
+): Promise<ParserPaidReadOutcome> {
+  const url = `${parserServiceUrl()}/api/parser/resolve-file-paid`;
+  const timeoutMs = options.timeoutMs ?? fileTimeoutMs();
+  try {
+    const form = fileForm(file, 'file');
+    form.append('quote_id', quoteId);
+    if (options.full) form.append('read', 'full');
+    if (options.domain) form.append('domain', options.domain);
+    const res = await fetchWithTimeout(url, { method: 'POST', body: form }, timeoutMs);
+    const text = await res.text();
+    let parsed: unknown = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+    if ((res.ok || res.status === 422) && parsed && typeof parsed === 'object' && 'status' in parsed) {
+      return { ok: true, result: parsed as ParserResult };
+    }
+    const { code, message } = parserError(parsed);
+    return { ok: false, status: res.status, code, error: message || `Parser responded ${res.status}` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn('Parser paid read failed', { url, error: message });
     return { ok: false, error: message };
   }
 }

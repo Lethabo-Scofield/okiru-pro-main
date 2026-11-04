@@ -2,7 +2,7 @@
  * Excel-extraction LLM reconciliation pass.
  *
  * Stage 2 of the toolkit-Excel import pipeline:
- *   1. Rule-based parser produces a `PipelineResult` from `excelParser.ts`.
+ *   1. Rule-based parser produces an `ImportResult` (parsed data, unscored) from `excelParser.ts`.
  *   2. We give the LLM the rule-based result + compact per-sheet snippets
  *      (headers + first N rows) and ask it to identify any obvious mistakes
  *      or missing fields (e.g. "Registration Number" appears in the sheet
@@ -18,7 +18,7 @@ import {
   fastChatCompletion,
   isAzureOpenAIConfigured,
 } from '../../pipeline/extraction/azureOpenAIClient.js';
-import type { PipelineResult } from '../../pipeline/types.js';
+import type { ImportResult } from '../../pipeline/types.js';
 import type { SheetSnippet } from '../../pipeline/excelParser.js';
 
 const logger = createLogger('ExtractionReconciler');
@@ -167,7 +167,7 @@ function asLevel(v: unknown): number | undefined {
  * The model's job is to find corrections, so we want to keep the payload
  * well under context budgets.
  */
-function buildPrompt(result: PipelineResult, snippets: SheetSnippet[]): string {
+function buildPrompt(result: ImportResult, snippets: SheetSnippet[]): string {
   const rb = {
     client: {
       name: result.client.name || null,
@@ -220,18 +220,18 @@ function buildPrompt(result: PipelineResult, snippets: SheetSnippet[]): string {
 }
 
 export interface ReconcileResult {
-  result: PipelineResult;
+  result: ImportResult;
   reconciliationApplied: boolean;
   reconciliationNotes: string[];
 }
 
 /**
- * Run the LLM reconciliation pass. Always returns a `PipelineResult`;
+ * Run the LLM reconciliation pass. Always returns an `ImportResult`;
  * if Azure OpenAI is unavailable or the call fails, the input is returned
  * with `reconciliationApplied = false`.
  */
 export async function reconcileExtraction(
-  result: PipelineResult,
+  result: ImportResult,
   snippets: SheetSnippet[],
 ): Promise<ReconcileResult> {
   if (!isAzureOpenAIConfigured()) {
@@ -290,7 +290,7 @@ export async function reconcileExtraction(
     }
   }
 
-  const merged: PipelineResult = {
+  const merged: ImportResult = {
     ...result,
     client: { ...result.client },
     financials: { ...result.financials },
@@ -298,9 +298,9 @@ export async function reconcileExtraction(
   const changes: string[] = [];
 
   const clientPatch = patch.client ?? {};
-  const apply = <K extends keyof PipelineResult['client']>(
+  const apply = <K extends keyof ImportResult['client']>(
     key: K,
-    val: PipelineResult['client'][K] | undefined,
+    val: ImportResult['client'][K] | undefined,
     isImportant: boolean,
   ) => {
     if (val === undefined) return;
@@ -347,7 +347,7 @@ export async function reconcileExtraction(
   apply('verificationAgency', asString(clientPatch.verificationAgency, 120) as any, false);
 
   const finPatch = patch.financials ?? {};
-  const applyFin = <K extends keyof PipelineResult['financials']>(key: K, val: number | undefined) => {
+  const applyFin = <K extends keyof ImportResult['financials']>(key: K, val: number | undefined) => {
     if (val === undefined) return;
     if (merged.financials[key] && (merged.financials[key] as number) > 0) return; // never overwrite a non-zero number
     (merged.financials[key] as any) = val;

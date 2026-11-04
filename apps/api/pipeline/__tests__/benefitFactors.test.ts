@@ -1,53 +1,49 @@
 /**
- * The benefit-factor contract, and a tripwire on the numbers.
+ * The benefit-factor contract: unrecognised means zero AND reported, and a
+ * declared factor of 0.0 is a ruling rather than an absence.
  *
- * Two jobs:
- *
- *   1. Pin the MECHANISM — unrecognised means zero AND reported, and a declared
- *      factor of 0.0 is a ruling rather than an absence.
- *   2. Pin the DISAGREEMENT — the pipeline and toolkit tables hold different
- *      numbers for the same contribution types. That is not resolved here
- *      (it is a question about the Codes, not the code), but it is enumerated,
- *      so editing either table without settling the other fails loudly instead
- *      of widening the gap in silence.
+ * Pinned against the Toolkit tables — the only ones left. The server-side
+ * engine's own table family was deleted with that engine.
  */
 import { describe, it, expect } from 'vitest';
 import {
   benefitFactorFor,
-  benefitFactorDivergence,
   UnrecognisedTypeLog,
-  PIPELINE_BENEFIT_FACTORS_SD,
-  PIPELINE_BENEFIT_FACTORS_SED,
   TOOLKIT_BENEFIT_FACTORS_ESD,
   TOOLKIT_BENEFIT_FACTORS_SED,
 } from '../rules/benefitFactors.js';
 
 describe('an unrecognised type scores nothing and says so', () => {
   it('returns zero, unrecognised, for a type no table knows', () => {
-    const r = benefitFactorFor('not_a_real_type', PIPELINE_BENEFIT_FACTORS_SD);
+    const r = benefitFactorFor('not_a_real_type', TOOLKIT_BENEFIT_FACTORS_ESD);
     expect(r.factor).toBe(0);
     expect(r.recognised).toBe(false);
   });
 
   it('treats a blank or missing type as unrecognised', () => {
     for (const t of [undefined, '', '   ']) {
-      expect(benefitFactorFor(t, PIPELINE_BENEFIT_FACTORS_SD).recognised).toBe(false);
+      expect(benefitFactorFor(t, TOOLKIT_BENEFIT_FACTORS_ESD).recognised).toBe(false);
     }
   });
 
   it('recognises a DECLARED factor of zero — a ruling, not an absence', () => {
-    // equity_investment scores 0.0 under SD on purpose. If this were a
-    // truthiness check it would read as "unknown" and be reported to a human
-    // who has nothing to fix.
-    const r = benefitFactorFor('equity_investment', PIPELINE_BENEFIT_FACTORS_SD);
+    // If this were a truthiness check a declared 0.0 would read as "unknown"
+    // and be reported to a human who has nothing to fix.
+    const r = benefitFactorFor('equity_investment', { equity_investment: 0 });
     expect(r.factor).toBe(0);
     expect(r.recognised).toBe(true);
   });
 
+  it('does not treat inherited object keys as contribution types', () => {
+    expect(benefitFactorFor('constructor', TOOLKIT_BENEFIT_FACTORS_SED).recognised).toBe(false);
+    expect(benefitFactorFor('toString', TOOLKIT_BENEFIT_FACTORS_SED).recognised).toBe(false);
+  });
+
   it('is the 33x case that started this', () => {
     // guarantees carries 0.03. The old `?? 1.0` scored a misread row at 1.0.
-    expect(benefitFactorFor('guarantees', PIPELINE_BENEFIT_FACTORS_SD).factor).toBe(0.03);
-    expect(benefitFactorFor('guarantees_typo', PIPELINE_BENEFIT_FACTORS_SD).factor).toBe(0);
+    expect(benefitFactorFor('guarantees', TOOLKIT_BENEFIT_FACTORS_ESD).factor).toBe(0.03);
+    expect(benefitFactorFor('guarantees', TOOLKIT_BENEFIT_FACTORS_SED).factor).toBe(0.03);
+    expect(benefitFactorFor('guarantees_typo', TOOLKIT_BENEFIT_FACTORS_ESD).factor).toBe(0);
   });
 });
 
@@ -75,80 +71,5 @@ describe('the silent zero is no longer silent', () => {
     log.record('mystery');
     log.record('mystery');
     expect(log.types).toEqual(['mystery']);
-  });
-});
-
-describe('the two factor families disagree, and the disagreement is pinned', () => {
-  const esd = benefitFactorDivergence(PIPELINE_BENEFIT_FACTORS_SD, TOOLKIT_BENEFIT_FACTORS_ESD);
-  const sed = benefitFactorDivergence(PIPELINE_BENEFIT_FACTORS_SED, TOOLKIT_BENEFIT_FACTORS_SED);
-
-  it('ESD/SD disagrees on exactly these contribution types', () => {
-    // If this list changes, someone edited a table. Either the disagreement was
-    // settled (update this test AND say which source ruled) or it just got
-    // wider (do not).
-    //
-    // 2026-10: the TOOLKIT family was settled against the Empower toolkit's own
-    // 'ESD and SED Calcs' tables (RCOGP Generic v1.4): lower_interest_loan is
-    // computed per row (table cell blank → 0), lower_dividend_investment added,
-    // equity_investment became an alias of minority_investment. The pipeline
-    // family was left as it was.
-    expect(esd.map((d) => d.contributionType)).toEqual([
-      'employee_time',
-      'equity_investment',
-      'interest_free_loan',
-      'lower_dividend_investment',
-      'lower_interest_loan',
-      'lower_interest_rate',
-      'minority_investment',
-      'overhead_costs',
-      'professional_services_discount',
-      'professional_services_discounted',
-      'professional_services_free',
-      'shorter_payment_periods',
-      'shorter_payment_terms',
-      'standard_loan',
-    ]);
-  });
-
-  it('SED disagrees on exactly these contribution types', () => {
-    // The toolkit's SED table holds seven types; loans, guarantees and
-    // investments are ESD instruments and score 0 there (2026-10).
-    expect(sed.map((d) => d.contributionType)).toEqual([
-      'equity_investment',
-      'guarantees',
-      'interest_free_loan',
-      'lower_dividend_investment',
-      'lower_interest_loan',
-      'lower_interest_rate',
-      'minority_investment',
-      'professional_services_discounted',
-      'professional_services_free',
-      'shorter_payment_periods',
-      'shorter_payment_terms',
-      'standard_loan',
-    ]);
-  });
-
-  it('records how far apart the worst offender is', () => {
-    const shorterPayment = esd.find((d) => d.contributionType === 'shorter_payment_terms')!;
-    // 0.70 against 0.15 — the same contribution recognised nearly 5x differently
-    // depending on which engine scored it.
-    expect(shorterPayment.pipeline).toBe(0.7);
-    expect(shorterPayment.toolkit).toBe(0.15);
-    expect(shorterPayment.spread).toBeCloseTo(4.667, 2);
-  });
-
-  it('agrees on the types nobody disputes', () => {
-    for (const type of ['grant', 'direct_cost', 'cost_covering', 'discounts', 'guarantees']) {
-      expect(PIPELINE_BENEFIT_FACTORS_SD[type]).toBe(TOOLKIT_BENEFIT_FACTORS_ESD[type]);
-    }
-  });
-
-  it('reports a type present in one family and absent from the other', () => {
-    // lower_interest_rate exists only in the pipeline tables.
-    const orphan = esd.find((d) => d.contributionType === 'lower_interest_rate')!;
-    expect(orphan.pipeline).toBe(0.7);
-    expect(orphan.toolkit).toBeNull();
-    expect(orphan.spread).toBeNull();
   });
 });

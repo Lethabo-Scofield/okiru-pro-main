@@ -3,6 +3,9 @@ import type { Request as ExpressRequest, Response, NextFunction } from 'express'
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 import { storage } from '../../storage.js';
 import { ClientModel, ProcessorSessionModel, WorkspaceMemberModel } from '../../models.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('PillarAccess');
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
@@ -107,20 +110,41 @@ async function verifyPillarAccessInner(
   }
 
   try {
-    const session = await ProcessorSessionModel.findOne({
-      clientId,
-      workspaceId: { $nin: [null, ''] },
-    })
-      .sort({ updatedAt: -1 })
-      .lean() as any;
+    // The company’s own binding is the authority; the workspace-bound
+    // ProcessorSession is a fallback for companies made through the super-admin
+    // processor. ProcessorSession used to be the ONLY link consulted here, and
+    // a normally-created company has client.workspaceId set but no
+    // workspace-bound session — so this lookup found nothing and fell straight
+    // through to `return true`. Pillar scopes were recorded and then never
+    // applied to essentially every company: a workspace viewer was read-only in
+    // the workbook and could add and delete shareholders in the toolkit, on the
+    // same data. resolveWorkbookPillarAccess in apps/web already resolves it in
+    // this order; this is the toolkit side agreeing with it.
+    const client = (await ClientModel.findOne(
+      { $or: [{ clientId }, { id: clientId }] },
+      { _id: 0, workspaceId: 1, createdByUserId: 1 },
+    ).lean()) as { workspaceId?: string | null; createdByUserId?: string | null } | null;
 
-    if (!session?.workspaceId) return true; // no workspace overlay → pass
+    let workspaceId = client?.workspaceId ? String(client.workspaceId) : "";
+    let ownerId: string | null = client?.createdByUserId ?? null;
 
-    const ownerId = session.createdBy ?? session.createdByUserId ?? null;
+    if (!workspaceId) {
+      const session = await ProcessorSessionModel.findOne({
+        clientId,
+        workspaceId: { $nin: [null, ''] },
+      })
+        .sort({ updatedAt: -1 })
+        .lean() as any;
+
+      if (!session?.workspaceId) return true; // no workspace overlay → pass
+      workspaceId = String(session.workspaceId);
+      ownerId = session.createdBy ?? session.createdByUserId ?? ownerId;
+    }
+
     if (ownerId && ownerId === userId) return true;
 
     const member = await WorkspaceMemberModel.findOne({
-      workspaceId: String(session.workspaceId),
+      workspaceId,
       userId,
     }).lean() as any;
 
@@ -142,10 +166,27 @@ async function verifyPillarAccessInner(
     if (pillarInScope(pillarKey, scopes)) return true;
     res.status(403).json({ message: `Access denied (pillar '${pillarKey}' out of scope)` });
     return false;
-  } catch {
-    // Infra error — don't mask outages with a 5xx storm at the auth layer;
-    // verifyClientAccess upstream is still enforcing org/creator.
-    return true;
+  } catch (err) {
+    // FAIL CLOSED. This used to `return true` on any lookup error, reasoning
+    // that verifyClientAccess upstream still enforced org/creator so only the
+    // finer pillar overlay was skipped. But "skip the pillar overlay" is
+    // exactly the escalation the overlay exists to prevent: a scoped
+    // collaborator or a read-only viewer would, during a Mongo blip, be handed
+    // full write access to a pillar they may not touch. A lookup we could not
+    // complete is not a grant. 503 says so honestly — retryable, not a 403 that
+    // would read as a settled denial — and the mutation is refused meanwhile.
+    // Mirrors the web side's resolveWorkbookPillarAccess, which already falls
+    // back to read-only on the same error.
+    logger.warn('pillar-access lookup failed — denying (fail closed)', {
+      clientId,
+      pillarKey,
+      requireFull,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    if (!res.headersSent) {
+      res.status(503).json({ message: 'Access check temporarily unavailable — please retry' });
+    }
+    return false;
   }
 }
 

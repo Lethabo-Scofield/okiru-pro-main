@@ -140,14 +140,6 @@ const shareholderSchema = new Schema({
   isDesignatedGroup: { type: Boolean, default: false },
   designatedGroupType: { type: String, default: '' },
   blackNewEntrant: { type: Boolean, default: false },
-  // The share of this holder's stake held by black designated groups / black
-  // new entrants (register BDG% / BNE%, fractions), and the holder's own
-  // acquisition debt. No defaults on purpose: absent means "not stated", and
-  // the ownership calculator falls back to the yes/no flags. The strict schema
-  // used to drop all three on every save.
-  designatedGroupOwnership: { type: Number },
-  blackNewEntrantOwnership: { type: Number },
-  outstandingDebt: { type: Number },
   yearsHeld: { type: Number, default: 0 },
   graduationFactor: { type: Number, default: 0 },
   workbookRowId: { type: String, default: null, index: true, sparse: true },
@@ -366,6 +358,14 @@ const documentSchema = new Schema({
    */
   reviewedAt: { type: Date, default: null },
   reviewedByUserId: { type: String, default: null },
+  /**
+   * A paid fresh read in progress: the parser quote it was priced under and
+   * the sha256 of the exact bytes priced. The read must present both — the
+   * quote cannot be spent on this document with different bytes, or on
+   * another document.
+   */
+  pendingRereadQuoteId: { type: String, default: null },
+  pendingRereadSha256: { type: String, default: null },
 }, { collection: "documents" });
 
 documentSchema.index({ organizationId: 1, source: 1, parserLastRunAt: -1 });
@@ -419,12 +419,35 @@ const parserRunSchema = new Schema({
   // Lossless snapshot of the parser result. Missing expected fields, provenance,
   // validation, calculator filtering, and audit details remain exactly as returned.
   parserOutput: { type: Schema.Types.Mixed, required: true },
+  // What the model and the agent read from the same file — the AI block of
+  // the parser's signed record (field, value, source layer rule|ai|agent|derived,
+  // page/cell citation and quote). Null on a run that predates it or had no
+  // model read; parserOutput above stays the rule layer.
+  aiValues: { type: Schema.Types.Mixed, default: null },
+  aiValueCount: { type: Number, default: 0 },
+  // The parser's signature over this run. Null on a run stored before runs
+  // were signed.
+  attestation: {
+    type: new Schema({
+      id: { type: String, required: true },
+      issuedAt: { type: Date, required: true },
+      quoteId: { type: String, default: null },
+      contentSha256: { type: String, required: true },
+    }, { _id: false }),
+    default: null,
+  },
   reviewHistory: { type: [parserReviewEventSchema], default: [] },
   createdAt: { type: Date, default: Date.now, index: true },
 }, { collection: 'parser_runs', minimize: false });
 
 parserRunSchema.index({ documentId: 1, createdAt: -1 });
 parserRunSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
+// One run per signed record: replaying a signature must not add a duplicate or
+// roll the document back to an older reading.
+parserRunSchema.index(
+  { documentId: 1, 'attestation.id': 1 },
+  { unique: true, partialFilterExpression: { 'attestation.id': { $type: 'string' } } },
+);
 
 const entityTemplateSchema = new Schema({
   id: { type: String, default: uuid, unique: true },

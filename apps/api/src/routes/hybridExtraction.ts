@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import { boundWorkbookSheets } from '../../pipeline/sheetBounds.js';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { inferTablesFromEntities } from '../../pipeline/extraction/aiEntityMapper.js';
 import { htmlToMarkdown, pptxToMarkdown } from '../../pipeline/extraction/documentMarkdown.js';
@@ -400,6 +401,8 @@ async function parseFileToPages(
   if (mimetype === 'text/csv' || ext === 'csv' || mimetype.includes('excel') || ext === 'xlsx' || ext === 'xls') {
     // Limit to 5000 rows per sheet at the parser level to avoid OOM on sheets with 1M+ rows
     const workbook = XLSX.read(buffer, { type: 'buffer', sheetRows: 5000 });
+    // sheetRows caps rows, not columns: 5,000 x 16,384 is still 82M cells.
+    boundWorkbookSheets(workbook);
     const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
     for (const sheetName of workbook.SheetNames) {

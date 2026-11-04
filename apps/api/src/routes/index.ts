@@ -24,12 +24,10 @@ import scenariosRouter from './scenarios.js';
 import financialYearsRouter from './financialYears.js';
 import importRouter from './import.js';
 import exportRouter from './export.js';
-import accuracyRouter from './accuracy.js';
 import scorecardRouter from './scorecard.js';
 import scorecardAdviceRouter from './scorecardAdvice.js';
 import documentsRouter from './documents.js';
 import parserDocumentsRouter from './parserDocuments.js';
-import extractAndScoreRouter from './extractAndScore.js';
 import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
@@ -174,9 +172,6 @@ export async function registerRoutes(
   app.use('/api/clients/:clientId/financial-years', financialYearsRouter);
   app.use('/api/financial-years', financialYearsRouter);
 
-  // Accuracy & ingestion routes
-  app.use('/api/accuracy', accuracyRouter);
-
   // Scorecard & Computation Engine routes
   app.use('/api/scorecard', scorecardRouter);
   app.use('/api/scorecards', scorecardAdviceRouter);
@@ -187,9 +182,6 @@ export async function registerRoutes(
   app.use('/api/documents', documentsRouter);
   app.use('/api/parser-documents', parserDocumentsRouter);
 
-  // Sector toolkit: extract from document texts → full B-BBEE scorecard
-  app.use('/api', extractAndScoreRouter);
-
   // Hybrid extraction endpoint: file upload → BM25 + Semantic + LLM extraction
   app.use('/api', hybridExtractionRouter);
 
@@ -198,7 +190,7 @@ export async function registerRoutes(
 
   // Entity-to-cell mappings (extracted entities → Excel cells)
 
-  // Scorecard builder: manifest + calculate + save (Phase 4)
+  // Scorecard builder: manifest + extraction mapping + save (no scoring)
   app.use('/api', scorecardBuilderRouter);
 
   // Sectors: ArangoDB-backed sector configurations

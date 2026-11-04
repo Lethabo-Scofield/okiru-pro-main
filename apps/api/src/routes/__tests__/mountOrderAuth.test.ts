@@ -1,8 +1,8 @@
 /**
  * Guards against the mount-order auth trap.
  *
- * extractAndScoreRouter and scorecardBuilderRouter are mounted at the BARE
- * '/api' path (app.use('/api', router)). If either attaches requireAuth with a
+ * scorecardBuilderRouter is mounted at the BARE '/api' path
+ * (app.use('/api', router)). If it attaches requireAuth with a
  * router-level `router.use(requireAuth)`, that middleware runs for EVERY /api/*
  * request that reaches the router in the chain — including public routes mounted
  * after it (e.g. the certificate directory), 401-ing them. The guard must be
@@ -11,7 +11,6 @@
 import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import extractAndScoreRouter from '../extractAndScore.js';
 import scorecardBuilderRouter from '../scorecardBuilder.js';
 
 function appWithPublicAfter(broadRouter: express.Router) {
@@ -24,12 +23,6 @@ function appWithPublicAfter(broadRouter: express.Router) {
 }
 
 describe('mount-order auth safety (bare /api routers must not block public routes)', () => {
-  it('extractAndScoreRouter lets an unmatched public route fall through anonymously', async () => {
-    const res = await request(appWithPublicAfter(extractAndScoreRouter)).get('/api/certificates/stats');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
-  });
-
   it('scorecardBuilderRouter lets an unmatched public route fall through anonymously', async () => {
     const res = await request(appWithPublicAfter(scorecardBuilderRouter)).get('/api/certificates/stats');
     expect(res.status).toBe(200);
