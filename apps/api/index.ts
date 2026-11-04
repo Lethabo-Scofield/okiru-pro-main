@@ -145,7 +145,7 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     void import("./src/rules/studio/monitor.js").then((m) => m.startRulesMonitor());
     // First Studio grants from deployment settings (created once, audited).
     void Promise.all([import("./src/rules/runtime.js"), import("./src/rules/studio/initialGrants.js")])
-      .then(async ([runtime, grants]) => grants.ensureInitialGrants(await runtime.getStudioCtx()))
+      .then(async ([runtime, grants]) => grants.ensureInitialGrantsWhenReady(await runtime.getStudioCtx()))
       .catch((err) => console.error("[rules] initial grants failed:", err));
 
     setImmediate(async () => {

@@ -7,7 +7,8 @@ import { createSigner, createVerifier } from '../../signing.js';
 import { freeze, verifiedFreezeEvents, RulesIntegrityError, type ServiceDeps } from '../../rulesService.js';
 import { rulesServedTo, previewUserIds } from '../../runtime.js';
 import { authorize, createGrant, hasAnyGrant, isAllowedUser, revokeGrant, ForbiddenError } from '../permissions.js';
-import { ensureInitialGrants, parseInitialGrants } from '../initialGrants.js';
+import { ensureInitialGrants, ensureInitialGrantsWhenReady, parseInitialGrants } from '../initialGrants.js';
+import { StoreUnavailableError } from '../../store.js';
 import { S3Offsite } from '../snapshots.js';
 import { validateProposal } from '../aiProposals.js';
 import { reviewDraft } from '../impactReview.js';
@@ -155,6 +156,15 @@ describe('first grants from deployment settings', () => {
 
   it('refuses an account that is not on the named list', async () => {
     await expect(ensureInitialGrants(ctxWith(new MemoryStudioStore(), env))).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('waits for the database at start-up, and gives up on anything else', async () => {
+    const store = new MemoryStudioStore();
+    const named = { ...env, RULES_STUDIO_INITIAL_GRANTS: 'alice:expert_editor' } as NodeJS.ProcessEnv;
+    let calls = 0;
+    const flaky = { collection: (n: string) => { if (++calls < 3) throw new StoreUnavailableError(); return store.collection(n as never); } } as unknown as MemoryStudioStore;
+    expect(await ensureInitialGrantsWhenReady(ctxWith(flaky, named), 5, 1)).toBe(1);
+    await expect(ensureInitialGrantsWhenReady(ctxWith(new MemoryStudioStore(), env), 5, 1)).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it('creates each once, and a revoked grant stays revoked', async () => {
