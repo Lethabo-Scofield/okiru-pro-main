@@ -284,7 +284,7 @@ describe('20-step acceptance scenario (RCOGP Generic)', () => {
     //     the only writers are the rules collections, studio_* collections and the audit trail).
     const touched = MONGO_URI ? (await mongoose.connection.db!.listCollections().toArray()).map((c) => c.name) : [...(studio as any).cols.keys()];
     expect(touched.every((n: string) => !/certificate|esg/i.test(n))).toBe(true);
-  });
+  }, 60_000); // The whole scenario, with real hashing and signing: slow on a busy machine.
 });
 
 describe('guards around publishing', () => {

@@ -55,7 +55,8 @@ PR #38 was built on `main` from 7 October, which is 331 commits behind what runs
 
 ## Tests on this branch
 
-- Web: 4,091 passed. `autoresearchFitness` cannot run in a clean checkout because it needs a private workbook that is not in git.
-- Excel parity: every gate passes, and the `calculateScorecard` body is byte-identical to live.
-- API Studio: all pass, plus the 23 real-MongoDB tests against a throwaway database.
-- End to end with real sessions on a local stack: draft, impact, approval by a second person, authenticator, publish, and a check of who receives the new rules.
+- Web: 4,520 passed, across 384 test files. `autoresearchFitness` cannot run in a clean checkout because it needs a private workbook that is not in git.
+- Excel parity: every gate passes, and the `calculateScorecard` body is byte-identical to live apart from two type-only casts.
+- API Studio: 150 passed, plus the 23 real-MongoDB tests against a throwaway database.
+- End to end, API level, with real sessions on the deployed builds, the restricted database user and the real S3 bucket: draft, impact, approval by a second person, authenticator, publish, and a check of who receives the new rules.
+- Not done: clicking through draft to publish in a browser. The main screens were checked by screenshot only.
