@@ -90,7 +90,8 @@ export function envReadiness(env: NodeJS.ProcessEnv = process.env): Readiness {
   add({ id: 'named-users', label: 'Studio limited to named people', ok: has(env.RULES_STUDIO_ALLOWED_USERS), severity: rehearsal ? 'warning' : 'blocker', detail: has(env.RULES_STUDIO_ALLOWED_USERS) ? 'RULES_STUDIO_ALLOWED_USERS is set' : 'RULES_STUDIO_ALLOWED_USERS is not set, so nobody can use the Studio in production', fix: 'List the user ids of the named people.' });
   add({ id: 'approvals', label: 'Independent approvals required', ok: Number(env.RULES_REQUIRED_APPROVALS ?? 1) >= 1, severity: 'warning', detail: `RULES_REQUIRED_APPROVALS=${env.RULES_REQUIRED_APPROVALS ?? '1 (default)'}`, fix: 'Confirm the number of approvals with the owner.' });
   add({ id: 'smtp', label: 'Email delivery (optional)', ok: has(env.SMTP_HOST) && has(env.SMTP_USER), severity: 'warning', detail: has(env.SMTP_HOST) ? 'configured' : 'SMTP not configured; email stays inactive (webhook and in-app still work)', fix: 'Optional.' });
-  add({ id: 'ai', label: 'AI assistance (optional)', ok: has(env.RULES_AI_API_KEY), severity: 'warning', detail: has(env.RULES_AI_API_KEY) ? 'configured' : 'disabled; experts edit rules by hand', fix: 'Optional.' });
+  const aiOn = has(env.RULES_AI_API_KEY) || (env.RULES_AI_PROVIDER === 'bedrock' && has(env.RULES_AI_REGION) && has(env.RULES_AI_MODEL));
+  add({ id: 'ai', label: 'AI assistance (optional)', ok: aiOn, severity: 'warning', detail: aiOn ? 'configured' : 'disabled; experts edit rules by hand', fix: 'Optional.' });
 
   const launchedFlag = env.RULES_LAUNCHED === 'true';
   const canLaunch = checks.filter((c) => c.severity === 'blocker').every((c) => c.ok);

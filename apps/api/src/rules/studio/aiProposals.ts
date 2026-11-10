@@ -1,7 +1,9 @@
 /**
  * Optional AI assistance: "describe a change" -> structured, validated proposals.
  *
- * - Disabled unless RULES_AI_API_KEY is set. No key, no AI, no placeholder success.
+ * - Disabled unless a provider is configured: RULES_AI_API_KEY (Anthropic), or RULES_AI_PROVIDER=bedrock with
+ *   RULES_AI_REGION and RULES_AI_MODEL (Amazon Bedrock, billed to the AWS account). No provider, no AI, no
+ *   placeholder success.
  * - The model sees rule METADATA (labels, what they mean, units, bounds, current values), which rules are
  *   locked and why, and the user's own sentence. It never sees client data, scorecards or fixtures.
  * - It may also answer with a clarifying question, or say that part of the request belongs with a
@@ -25,11 +27,13 @@ import type { Doc } from './studioStore.js';
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
 
+const usesBedrock = (env: NodeJS.ProcessEnv) => env.RULES_AI_PROVIDER === 'bedrock';
+
 export function aiAvailability(env: NodeJS.ProcessEnv = process.env) {
-  const available = !!env.RULES_AI_API_KEY;
+  const available = usesBedrock(env) ? !!(env.RULES_AI_REGION && env.RULES_AI_MODEL) : !!env.RULES_AI_API_KEY;
   return {
     available,
-    provider: available ? (env.RULES_AI_PROVIDER ?? 'anthropic') : null,
+    provider: available ? (usesBedrock(env) ? 'bedrock' : (env.RULES_AI_PROVIDER ?? 'anthropic')) : null,
     model: available ? (env.RULES_AI_MODEL ?? DEFAULT_MODEL) : null,
     reason: available ? null : 'The AI assistant is not switched on yet. You can still make the change by hand.',
     dataPolicy: 'Only rule names, limits, current values and your description are sent. Please do not type client names or figures here.',
@@ -116,6 +120,51 @@ export const anthropicProvider: ProviderFetch = async ({ system, user }, env) =>
     throw new StudioError('ai_failed', 'The AI assistant could not be reached', 502);
   }
 };
+
+const TOOL_NAME = 'propose_rule_changes';
+
+/**
+ * Amazon Bedrock through the Converse API, so any Bedrock model works (OpenAI's gpt-oss, Claude, ...). The answer is
+ * forced into one tool call whose input schema is the proposal shape; validateProposal still checks every item.
+ */
+export const bedrockProvider: ProviderFetch = async ({ system, user }, env) => {
+  const { BedrockRuntimeClient, ConverseCommand } = await import('@aws-sdk/client-bedrock-runtime');
+  const credentials = env.RULES_AI_AWS_ACCESS_KEY_ID && env.RULES_AI_AWS_SECRET_ACCESS_KEY
+    ? { accessKeyId: env.RULES_AI_AWS_ACCESS_KEY_ID, secretAccessKey: env.RULES_AI_AWS_SECRET_ACCESS_KEY }
+    : undefined;
+  const client = new BedrockRuntimeClient({ region: env.RULES_AI_REGION, maxAttempts: 3, ...(credentials ? { credentials } : {}) });
+  let out;
+  try {
+    out = await client.send(new ConverseCommand({
+      modelId: env.RULES_AI_MODEL,
+      system: [{ text: `${system}\nAlways answer by calling the ${TOOL_NAME} tool exactly once.` }],
+      messages: [{ role: 'user', content: [{ text: user }] }],
+      toolConfig: {
+        tools: [{ toolSpec: { name: TOOL_NAME, description: 'Return the proposed rule edits, one clarifying question, and anything that must go to the developers.', inputSchema: { json: OUTPUT_SCHEMA as never } } }],
+        toolChoice: { tool: { name: TOOL_NAME } },
+      },
+      inferenceConfig: { maxTokens: 4000 },
+    }), { abortSignal: AbortSignal.timeout(60_000) });
+  } catch (e) {
+    const name = (e as { name?: string }).name ?? '';
+    if (name === 'ThrottlingException' || name === 'ServiceQuotaExceededException') throw new StudioError('ai_failed', 'The AI assistant is busy. Try again in a minute.', 502);
+    if (name === 'AccessDeniedException' || name === 'UnrecognizedClientException') throw new StudioError('ai_failed', 'The AI service refused the server\'s credentials. An administrator needs to check them.', 502);
+    throw new StudioError('ai_failed', 'The AI assistant could not be reached', 502);
+  }
+  if (out.stopReason === 'content_filtered' || out.stopReason === 'guardrail_intervened') {
+    throw new StudioError('ai_refused', 'The AI assistant declined that description. Try rewording it, or make the change by hand.', 422);
+  }
+  if (out.stopReason === 'max_tokens') throw new StudioError('ai_failed', 'The AI answer was cut off, so nothing was proposed. Try a shorter description.', 502);
+  const content = out.output?.message?.content ?? [];
+  const tool = content.find((c) => c.toolUse?.name === TOOL_NAME)?.toolUse;
+  if (tool?.input) return JSON.stringify(tool.input);
+  // No tool call (for example the model declined a description that tried to redirect it): show what it said, propose nothing.
+  const said = content.map((c) => c.text ?? '').join('').trim();
+  return JSON.stringify({ understanding: said.slice(0, 600) || 'The assistant could not turn that into a rule change.', changes: [], needsDeveloper: [], question: null });
+};
+
+/** The configured provider: Bedrock when RULES_AI_PROVIDER=bedrock, otherwise the Anthropic API. */
+export const configuredProvider: ProviderFetch = (prompt, env) => (usesBedrock(env) ? bedrockProvider : anthropicProvider)(prompt, env);
 
 interface ParsedAnswer {
   understanding: string;
@@ -206,7 +255,7 @@ function catalogueFor(scorecardId: Parameters<typeof getRules>[0], current: Rule
   };
 }
 
-export async function proposeChange(ctx: StudioCtx, userId: string, cid: string, prompt: string, provider: ProviderFetch = anthropicProvider): Promise<AiProposal> {
+export async function proposeChange(ctx: StudioCtx, userId: string, cid: string, prompt: string, provider: ProviderFetch = configuredProvider): Promise<AiProposal> {
   const cs = await ctx.studio.collection<Changeset>('ruleChangesets').get(cid);
   if (!cs) throw new StudioError('not_found', 'Draft not found', 404);
   await authorize(ctx.studio, userId, 'draft.write', cs.scorecardId, ctx.env);

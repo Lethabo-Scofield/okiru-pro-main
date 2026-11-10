@@ -1,5 +1,5 @@
 /** The review findings closed on integration: each test is one gap that must stay closed. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { generateKeyPairSync } from 'crypto';
 import { MemoryRulesStore } from '../../__tests__/memoryStore';
 import { MemoryStudioStore } from './memoryStudioStore';
@@ -10,7 +10,7 @@ import { authorize, createGrant, hasAnyGrant, isAllowedUser, revokeGrant, Forbid
 import { ensureInitialGrants, ensureInitialGrantsWhenReady, parseInitialGrants } from '../initialGrants.js';
 import { StoreUnavailableError } from '../../store.js';
 import { S3Offsite } from '../snapshots.js';
-import { validateProposal } from '../aiProposals.js';
+import { validateProposal, aiAvailability, bedrockProvider } from '../aiProposals.js';
 import { reviewDraft } from '../impactReview.js';
 import { getRules } from '../../../../../web/Toolkit/src/lib/rules/registry';
 
@@ -176,6 +176,28 @@ describe('first grants from deployment settings', () => {
     await revokeGrant(store, grants[0].id, new Date());
     expect(await ensureInitialGrants(ctxWith(store, named))).toBe(0);
     await expect(authorize(store, 'alice', 'draft.write', 'rcogp-generic', named)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe('the AI on Amazon Bedrock', () => {
+  const env = { RULES_AI_PROVIDER: 'bedrock', RULES_AI_REGION: 'eu-west-1', RULES_AI_MODEL: 'openai.gpt-oss-120b-1:0' } as NodeJS.ProcessEnv;
+
+  it('is available with a region and a model, and needs no Anthropic key', () => {
+    expect(aiAvailability(env)).toMatchObject({ available: true, provider: 'bedrock', model: 'openai.gpt-oss-120b-1:0' });
+    expect(aiAvailability({ RULES_AI_PROVIDER: 'bedrock', RULES_AI_REGION: 'eu-west-1' } as NodeJS.ProcessEnv).available).toBe(false);
+  });
+
+  it('forces the answer into the proposal tool and passes its input on as JSON', async () => {
+    const sent: any[] = [];
+    vi.doMock('@aws-sdk/client-bedrock-runtime', () => ({
+      BedrockRuntimeClient: class { async send(cmd: any) { sent.push(cmd.input); return { stopReason: 'tool_use', output: { message: { content: [{ toolUse: { name: 'propose_rule_changes', input: { changes: [], understanding: 'x', needsDeveloper: [], question: 'Which value?' } } }] } } }; } },
+      ConverseCommand: class { constructor(public input: any) {} },
+    }));
+    const raw = await bedrockProvider({ system: 'S', user: 'U' }, env);
+    expect(JSON.parse(raw).question).toBe('Which value?');
+    expect(sent[0].modelId).toBe('openai.gpt-oss-120b-1:0');
+    expect(sent[0].toolConfig.toolChoice).toEqual({ tool: { name: 'propose_rule_changes' } });
+    vi.doUnmock('@aws-sdk/client-bedrock-runtime');
   });
 });
 
