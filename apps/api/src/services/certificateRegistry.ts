@@ -1,3 +1,4 @@
+import { buildFieldStatuses, summariseFieldStatuses } from './certificateFieldStatus.js';
 import { createHash } from 'crypto';
 import { CertificateMetadataModel } from '../../models.js';
 import {
@@ -63,16 +64,18 @@ function publicStatus(doc: Record<string, any>): string {
   if (['text_too_short', 'unsupported', 'missing_blob'].includes(doc.extractionStatus)) {
     return 'extraction_incomplete';
   }
-  if (!doc.verified && doc.enrichmentStatus === 'review_required') return 'pending_verification';
+  if (!doc.verified && (doc.metadataStatus === 'needs_review' || doc.enrichmentStatus === 'review_required')) return 'pending_verification';
   return doc.status || 'unknown';
 }
 
 export function mapCertificateRegistryItem(doc: Record<string, any>) {
+  const fieldStatus = buildFieldStatuses(doc);
   const fileName = cleanString(doc.fileName) || cleanString(doc.originalFileName) || cleanString(doc.blobName);
   const contentType = cleanString(doc.contentType) || null;
   return {
     id: doc.id,
     supplier_name: cleanString(doc.supplierName) || null,
+    trading_name: cleanString(doc.tradingName) || null,
     certificate_number: cleanString(doc.certificateNumber) || null,
     bbbee_level: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
     certificate_type: cleanString(doc.certificateType) || null,
@@ -93,12 +96,34 @@ export function mapCertificateRegistryItem(doc: Record<string, any>) {
     // divisions, or Masstores trading as Makro and as Game, are one company
     // legitimately sharing a VAT rather than a data error.
     company_registration_number: cleanString(doc.companyRegistrationNumber || doc.registrationNumber) || null,
+    tax_number: cleanString(doc.taxNumber) || null,
     black_ownership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
     black_women_ownership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
     sector_code: cleanString(doc.sectorCode) || null,
     sector_name: cleanString(doc.sectorName) || null,
+    bbbee_level_status: cleanString(doc.bbbeeLevelStatus) || null,
+    bbbee_score: typeof doc.bbbeeScore === 'number' ? doc.bbbeeScore : null,
+    procurement_recognition: typeof doc.procurementRecognition === 'number' ? doc.procurementRecognition : null,
+    verification_agency: cleanString(doc.verificationAgency) || null,
+    sanas_accreditation_number: cleanString(doc.sanasAccreditationNumber) || null,
+    measurement_period: cleanString(doc.measurementPeriod) || null,
+    commissioner_details: cleanString(doc.commissionerDetails) || null,
+    physical_address: cleanString(doc.physicalAddress) || null,
+    contact_details: doc.contactDetails ?? null,
     extraction_status: cleanString(doc.extractionStatus) || null,
-    review_required: doc.enrichmentStatus === 'review_required'
+    text_extraction_status: cleanString(doc.textExtractionStatus || doc.extractionStatus) || null,
+    enrichment_status: cleanString(doc.enrichmentStatus) || null,
+    metadata_status: cleanString(doc.metadataStatus) || null,
+    field_confidence: doc.fieldConfidence && typeof doc.fieldConfidence === 'object' ? doc.fieldConfidence : {},
+    review_fields: Array.isArray(doc.reviewFields) ? doc.reviewFields : [],
+    review_candidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
+    // Explicit per-field state (confirmed / needs_review / missing) derived from the
+    // value, its provenance and any held review candidate, so a client never has to
+    // guess whether a blank means "not found" or "found, awaiting review".
+    field_status: fieldStatus,
+    metadata_summary: summariseFieldStatuses(fieldStatus),
+    review_required: doc.metadataStatus === 'needs_review'
+      || doc.enrichmentStatus === 'review_required'
       || (Array.isArray(doc.reviewFields) && doc.reviewFields.length > 0),
     slug: cleanString(doc.slug) || null,
   };
@@ -226,10 +251,15 @@ export async function listCertificateRegistry(query: CertificateRegistryQuery) {
     certificateType: 1, issueDate: 1, expiryDate: 1, status: 1,
     fileName: 1, originalFileName: 1, blobName: 1, contentType: 1,
     fileSize: 1, uploadedAt: 1, createdAt: 1, updatedAt: 1, blobMissing: 1,
-    companySize: 1, vatNumber: 1, taxNumber: 1, blackOwnership: 1,
-    blackWomenOwnership: 1, sectorCode: 1, sectorName: 1,
+    companySize: 1, vatNumber: 1, blackOwnership: 1,
+    blackWomenOwnership: 1, sectorCode: 1, sectorName: 1, tradingName: 1,
     companyRegistrationNumber: 1, registrationNumber: 1,
-    extractionStatus: 1, enrichmentStatus: 1, reviewFields: 1, slug: 1,
+    taxNumber: 1, bbbeeLevelStatus: 1, bbbeeScore: 1,
+    procurementRecognition: 1, verificationAgency: 1, sanasAccreditationNumber: 1,
+    measurementPeriod: 1, commissionerDetails: 1, physicalAddress: 1, contactDetails: 1,
+    extractionStatus: 1, textExtractionStatus: 1, enrichmentStatus: 1, metadataStatus: 1,
+    extractionMode: 1, extractedTextLength: 1, lastEnrichedAt: 1,
+    fieldConfidence: 1, reviewFields: 1, reviewCandidates: 1, slug: 1,
   };
 
   const [documents, total] = await Promise.all([
@@ -325,8 +355,10 @@ export async function syncCertificateStorage() {
                 id,
                 supplierName: null,
                 extractionStatus: 'pending',
+                textExtractionStatus: 'pending',
                 extractionMode: 'none',
                 enrichmentStatus: 'pending',
+                metadataStatus: 'pending',
                 createdAt: new Date(),
               },
               $set: storageFields,

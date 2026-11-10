@@ -98,10 +98,10 @@ export default function AdminCertificates() {
     setError(null);
     try {
       const [listRes, reportsRes, dupesRes, analyticsRes] = await Promise.all([
-        fetch('/api/certificates/list?limit=100&sort=recent'),
-        fetch('/api/certificates/admin/reports?limit=100'),
-        fetch('/api/certificates/admin/duplicates'),
-        fetch('/api/certificates/admin/analytics'),
+        fetch('/internal/records/list?limit=100&sort=recent'),
+        fetch('/internal/records/admin/reports?limit=100'),
+        fetch('/internal/records/admin/duplicates'),
+        fetch('/internal/records/admin/analytics'),
       ]);
 
       if (reportsRes.status === 401 || reportsRes.status === 403) {
@@ -137,7 +137,7 @@ export default function AdminCertificates() {
   const verifyCert = useCallback(async (id: string, verify: boolean) => {
     setActing(id);
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(id)}/${verify ? 'verify' : 'unverify'}`, {
+      const res = await fetch(`/internal/records/${encodeURIComponent(id)}/${verify ? 'verify' : 'unverify'}`, {
         method: 'POST',
       });
       const json = await res.json();

@@ -2973,6 +2973,8 @@ export async function registerRoutes(
           contactPhone: c.contactPhone || '',
           annualTurnover: c.annualTurnover || 0,
           numberOfEmployees: c.numberOfEmployees || 0,
+          // Rules Studio: the ruleset version(s) this client's scorecards are pinned to.
+          rulesetPins: c.rulesetPins ?? {},
           measurementPeriodStart: c.measurementPeriodStart || null,
           measurementPeriodEnd: c.measurementPeriodEnd || null,
           beeCertificateNumber: c.beeCertificateNumber || '',

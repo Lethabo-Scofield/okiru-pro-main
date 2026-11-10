@@ -10,7 +10,6 @@
  * required environment variables are missing it reports `configured: false`
  * and callers return a friendly configuration message instead of crashing.
  */
-import { JWT } from "google-auth-library";
 import { createLogger } from "../logger.js";
 
 const logger = createLogger("GoogleAnalytics");
@@ -142,25 +141,36 @@ export function isSearchConsoleConfigured(): boolean {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-let cachedClient: JWT | null = null;
+type GoogleJwtClient = {
+  getAccessToken: () => Promise<{ token?: string | null } | string | null>;
+};
 
-function getAuthClient(): JWT {
+let cachedClient: GoogleJwtClient | null = null;
+
+async function getAuthClient(): Promise<GoogleJwtClient> {
   if (cachedClient) return cachedClient;
   const sa = getServiceAccount();
   if (!sa) {
     throw new Error("Google service account is not configured");
+  }
+  let JWT: new (options: { email: string; key: string; scopes: string[] }) => GoogleJwtClient;
+  try {
+    ({ JWT } = await import("google-auth-library"));
+  } catch {
+    throw new Error("google-auth-library is not installed");
   }
   cachedClient = new JWT({ email: sa.email, key: sa.key, scopes: SCOPES });
   return cachedClient;
 }
 
 async function getAccessToken(): Promise<string> {
-  const client = getAuthClient();
+  const client = await getAuthClient();
   const res = await client.getAccessToken();
-  if (!res || !res.token) {
+  const token = typeof res === "string" ? res : res?.token;
+  if (!token) {
     throw new Error("Failed to obtain Google access token");
   }
-  return res.token;
+  return token;
 }
 
 // ─── HTTP helper with timeout ──────────────────────────────────────────────────

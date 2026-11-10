@@ -8,14 +8,29 @@ const COMPANY_SIZES = ['EME', 'QSE', 'Generic', 'Large', 'Specialised'] as const
 
 export interface CertificateFormValues {
   supplierName: string;
+  tradingName: string;
+  registrationNumber: string;
   vatNumber: string;
+  taxNumber: string;
   sectorCode: string;
   location: string;
   businessUnit: string;
   companySize: string;
   bbbeeLevel: string;
+  bbbeeLevelStatus: string;
+  bbbeeScore: string;
+  certificateType: string;
+  procurementRecognition: string;
   empoweringSupplier: '' | 'yes' | 'no';
   expiryDate: string;
+  issueDate: string;
+  measurementPeriod: string;
+  certificateNumber: string;
+  verificationAgency: string;
+  sanasAccreditationNumber: string;
+  commissionerDetails: string;
+  physicalAddress: string;
+  contactDetails: string;
   blackOwnership: string;
   blackFemaleOwnership: string;
   flowThroughBlackOwnership: string;
@@ -29,14 +44,29 @@ export interface CertificateFormValues {
 
 export const EMPTY_CERTIFICATE_FORM: CertificateFormValues = {
   supplierName: '',
+  tradingName: '',
+  registrationNumber: '',
   vatNumber: '',
+  taxNumber: '',
   sectorCode: '',
   location: '',
   businessUnit: '',
   companySize: '',
   bbbeeLevel: '',
+  bbbeeLevelStatus: '',
+  bbbeeScore: '',
+  certificateType: '',
+  procurementRecognition: '',
   empoweringSupplier: '',
   expiryDate: '',
+  issueDate: '',
+  measurementPeriod: '',
+  certificateNumber: '',
+  verificationAgency: '',
+  sanasAccreditationNumber: '',
+  commissionerDetails: '',
+  physicalAddress: '',
+  contactDetails: '',
   blackOwnership: '',
   blackFemaleOwnership: '',
   flowThroughBlackOwnership: '',
@@ -88,7 +118,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch('/api/certificates/extract-preview', { method: 'POST', body: fd });
+      const res = await fetch('/internal/records/extract-preview', { method: 'POST', body: fd });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || 'Extraction failed');
 
@@ -96,12 +126,27 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
       setForm((prev) => ({
         ...prev,
         supplierName: data.supplierName || prev.supplierName,
+        tradingName: data.tradingName || prev.tradingName,
+        registrationNumber: data.registrationNumber || prev.registrationNumber,
         vatNumber: data.vatNumber || prev.vatNumber,
+        taxNumber: data.taxNumber || prev.taxNumber,
         companySize: data.companySize || prev.companySize,
         bbbeeLevel: data.bbbeeLevel != null ? String(data.bbbeeLevel) : prev.bbbeeLevel,
+        bbbeeLevelStatus: data.bbbeeLevelStatus || prev.bbbeeLevelStatus,
+        bbbeeScore: data.bbbeeScore != null ? String(data.bbbeeScore) : prev.bbbeeScore,
+        certificateType: data.certificateType || prev.certificateType,
+        procurementRecognition: data.procurementRecognition != null ? String(data.procurementRecognition) : prev.procurementRecognition,
         blackOwnership: pctToInput(data.blackOwnership) || prev.blackOwnership,
         blackFemaleOwnership: pctToInput(data.blackWomenOwnership) || prev.blackFemaleOwnership,
         expiryDate: data.expiryDate || prev.expiryDate,
+        issueDate: data.issueDate || prev.issueDate,
+        measurementPeriod: data.measurementPeriod || prev.measurementPeriod,
+        certificateNumber: data.certificateNumber || prev.certificateNumber,
+        verificationAgency: data.verificationAgency || prev.verificationAgency,
+        sanasAccreditationNumber: data.sanasAccreditationNumber || prev.sanasAccreditationNumber,
+        commissionerDetails: data.commissionerDetails || prev.commissionerDetails,
+        physicalAddress: data.physicalAddress || prev.physicalAddress,
+        contactDetails: typeof data.contactDetails === 'string' ? data.contactDetails : prev.contactDetails,
         sectorCode: data.sectorDetected && data.sectorCode ? data.sectorCode : prev.sectorCode,
       }));
       if (!data.sectorDetected) {
@@ -438,12 +483,21 @@ function ReviewPanel({ file, form }: { file: File | null; form: CertificateFormV
   const rows: Array<{ label: string; value: string }> = [
     { label: 'File', value: file?.name ?? '—' },
     { label: 'Supplier Name', value: form.supplierName || '—' },
+    { label: 'Trading Name', value: form.tradingName || '—' },
+    { label: 'Registration Number', value: form.registrationNumber || '—' },
     { label: 'VAT Number', value: form.vatNumber || '—' },
+    { label: 'Tax Number', value: form.taxNumber || '—' },
     { label: 'Sector', value: sectorDisplayLabel(form.sectorCode) },
     { label: 'Location', value: form.location || '—' },
     { label: 'Business Unit', value: form.businessUnit || '—' },
     { label: 'Current Company Size', value: form.companySize || '—' },
     { label: 'B-BBEE Level', value: form.bbbeeLevel ? `Level ${form.bbbeeLevel}` : '—' },
+    { label: 'B-BBEE Score', value: form.bbbeeScore || '—' },
+    { label: 'Certificate Type', value: form.certificateType || '—' },
+    { label: 'Certificate Number', value: form.certificateNumber || '—' },
+    { label: 'Issue Date', value: form.issueDate || '—' },
+    { label: 'Verification Agency', value: form.verificationAgency || '—' },
+    { label: 'SANAS Number', value: form.sanasAccreditationNumber || '—' },
     { label: 'Empowering Supplier', value: yesNoLabel(form.empoweringSupplier) },
     { label: 'Certificate Expiry Date', value: form.expiryDate || '—' },
     { label: 'Current Black Ownership %', value: form.blackOwnership ? `${form.blackOwnership}%` : '—' },
@@ -474,19 +528,34 @@ function ReviewPanel({ file, form }: { file: File | null; form: CertificateFormV
   );
 }
 
-/** Build multipart body for POST /api/certificates/upload */
+/** Build multipart body for POST /internal/records/upload */
 export function certificateFormToFormData(file: File, values: CertificateFormValues): FormData {
   const fd = new FormData();
   fd.append('files', file);
   fd.append('companyName', values.supplierName.trim());
+  if (values.tradingName.trim()) fd.append('tradingName', values.tradingName.trim());
+  if (values.registrationNumber.trim()) fd.append('registrationNumber', values.registrationNumber.trim());
   if (values.vatNumber.trim()) fd.append('vatNumber', values.vatNumber.trim());
+  if (values.taxNumber.trim()) fd.append('taxNumber', values.taxNumber.trim());
   fd.append('sectorCode', values.sectorCode);
   if (values.location.trim()) fd.append('location', values.location.trim());
   if (values.businessUnit.trim()) fd.append('businessUnit', values.businessUnit.trim());
   if (values.companySize) fd.append('companySize', values.companySize);
   if (values.bbbeeLevel) fd.append('bbbeeLevel', values.bbbeeLevel);
+  if (values.bbbeeLevelStatus) fd.append('bbbeeLevelStatus', values.bbbeeLevelStatus);
+  if (values.bbbeeScore) fd.append('bbbeeScore', values.bbbeeScore);
+  if (values.certificateType) fd.append('certificateType', values.certificateType);
+  if (values.procurementRecognition) fd.append('procurementRecognition', values.procurementRecognition);
   if (values.empoweringSupplier) fd.append('empoweringSupplier', values.empoweringSupplier);
   if (values.expiryDate) fd.append('expiryDate', values.expiryDate);
+  if (values.issueDate) fd.append('issueDate', values.issueDate);
+  if (values.measurementPeriod) fd.append('measurementPeriod', values.measurementPeriod);
+  if (values.certificateNumber) fd.append('certificateNumber', values.certificateNumber);
+  if (values.verificationAgency) fd.append('verificationAgency', values.verificationAgency);
+  if (values.sanasAccreditationNumber) fd.append('sanasAccreditationNumber', values.sanasAccreditationNumber);
+  if (values.commissionerDetails) fd.append('commissionerDetails', values.commissionerDetails);
+  if (values.physicalAddress) fd.append('physicalAddress', values.physicalAddress);
+  if (values.contactDetails) fd.append('contactDetails', values.contactDetails);
   if (values.blackOwnership) fd.append('blackOwnership', values.blackOwnership);
   if (values.blackFemaleOwnership) fd.append('blackWomenOwnership', values.blackFemaleOwnership);
   if (values.flowThroughBlackOwnership) fd.append('flowThroughBlackOwnership', values.flowThroughBlackOwnership);
@@ -503,14 +572,29 @@ export function certificateFormToFormData(file: File, values: CertificateFormVal
 export function certificateDetailToFormValues(data: Record<string, unknown>): CertificateFormValues {
   return {
     supplierName: String(data.companyName ?? ''),
+    tradingName: String(data.tradingName ?? ''),
+    registrationNumber: String(data.registrationNumber ?? data.companyRegistrationNumber ?? ''),
     vatNumber: String(data.vatNumber ?? ''),
+    taxNumber: String(data.taxNumber ?? ''),
     sectorCode: String(data.sectorCode ?? ''),
     location: String(data.location ?? ''),
     businessUnit: String(data.businessUnit ?? ''),
     companySize: String(data.companySize ?? ''),
     bbbeeLevel: data.bbbeeLevel != null ? String(data.bbbeeLevel) : '',
+    bbbeeLevelStatus: String(data.bbbeeLevelStatus ?? ''),
+    bbbeeScore: data.bbbeeScore != null ? String(data.bbbeeScore) : '',
+    certificateType: String(data.certificateType ?? ''),
+    procurementRecognition: data.procurementRecognition != null ? String(data.procurementRecognition) : '',
     empoweringSupplier: boolToSelect(data.empoweringSupplier as boolean | null),
     expiryDate: data.expiryDate ? String(data.expiryDate).slice(0, 10) : '',
+    issueDate: data.issueDate ? String(data.issueDate).slice(0, 10) : '',
+    measurementPeriod: String(data.measurementPeriod ?? ''),
+    certificateNumber: String(data.certificateNumber ?? ''),
+    verificationAgency: String(data.verificationAgency ?? ''),
+    sanasAccreditationNumber: String(data.sanasAccreditationNumber ?? ''),
+    commissionerDetails: String(data.commissionerDetails ?? ''),
+    physicalAddress: String(data.physicalAddress ?? ''),
+    contactDetails: typeof data.contactDetails === 'string' ? data.contactDetails : '',
     blackOwnership: pctToInput(data.blackOwnership as number | null),
     blackFemaleOwnership: pctToInput(data.blackWomenOwnership as number | null),
     flowThroughBlackOwnership: pctToInput(data.flowThroughBlackOwnership as number | null),
@@ -523,18 +607,33 @@ export function certificateDetailToFormValues(data: Record<string, unknown>): Ce
   };
 }
 
-/** JSON body for PATCH /api/certificates/:id */
+/** JSON body for PATCH /internal/records/:id */
 export function certificateFormToPatchBody(values: CertificateFormValues): Record<string, unknown> {
   return {
     supplierName: values.supplierName.trim(),
+    tradingName: values.tradingName.trim() || null,
+    registrationNumber: values.registrationNumber.trim() || null,
     vatNumber: values.vatNumber.trim() || null,
+    taxNumber: values.taxNumber.trim() || null,
     sectorCode: values.sectorCode || null,
     location: values.location.trim() || null,
     businessUnit: values.businessUnit.trim() || null,
     companySize: values.companySize || null,
     bbbeeLevel: values.bbbeeLevel ? Number(values.bbbeeLevel) : null,
+    bbbeeLevelStatus: values.bbbeeLevelStatus.trim() || null,
+    bbbeeScore: values.bbbeeScore ? Number(values.bbbeeScore) : null,
+    certificateType: values.certificateType.trim() || null,
+    procurementRecognition: values.procurementRecognition ? Number(values.procurementRecognition) : null,
     empoweringSupplier: values.empoweringSupplier === 'yes' ? true : values.empoweringSupplier === 'no' ? false : null,
     expiryDate: values.expiryDate || null,
+    issueDate: values.issueDate || null,
+    measurementPeriod: values.measurementPeriod.trim() || null,
+    certificateNumber: values.certificateNumber.trim() || null,
+    verificationAgency: values.verificationAgency.trim() || null,
+    sanasAccreditationNumber: values.sanasAccreditationNumber.trim() || null,
+    commissionerDetails: values.commissionerDetails.trim() || null,
+    physicalAddress: values.physicalAddress.trim() || null,
+    contactDetails: values.contactDetails.trim() || null,
     blackOwnership: values.blackOwnership ? Number(values.blackOwnership) : null,
     blackWomenOwnership: values.blackFemaleOwnership ? Number(values.blackFemaleOwnership) : null,
     flowThroughBlackOwnership: values.flowThroughBlackOwnership ? Number(values.flowThroughBlackOwnership) : null,

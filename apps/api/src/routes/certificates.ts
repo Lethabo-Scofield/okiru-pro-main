@@ -12,7 +12,8 @@ import {
 } from '../services/mongoSearch.js';
 import { requireAuth } from '../middleware/auth.js';
 import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
-import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData, extractPreviewFromBuffer, previewExtractionToFormJson } from '../services/certificateExtractor.js';
+import { getCertificateStats, extractCertificateData, extractPreviewFromBuffer, previewExtractionToFormJson } from '../services/certificateExtractor.js';
+import { processAllCertificatePipelines, processOneCertificatePipeline } from '../services/certificatePipeline.js';
 import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
 import { certificateStore, normalizeVat, type CertificateRecord, type CertificateVersionLite } from '../services/certificateStore.js';
@@ -42,6 +43,8 @@ import {
   generateCertificateViewUrl,
 } from '../services/azureCertStorage.js';
 import { listCertificateRegistry, syncCertificateStorage } from '../services/certificateRegistry.js';
+import { buildFieldStatuses, type FieldStatus } from '../services/certificateFieldStatus.js';
+import { buildReviewResolution, type ReviewAction } from '../services/certificateReview.js';
 import {
   invalidateMatchIndex,
   matchSuppliers,
@@ -55,6 +58,7 @@ import {
   CERTIFICATE_ENRICHMENT_VERSION,
   ENRICHMENT_FIELDS,
   PRODUCTION_CERTIFICATE_FIELDS,
+  collectFieldCandidates,
   getProductionCertificateCoverage,
   runCertificateEnrichmentJob,
   runCertificateVatRecoveryJob,
@@ -87,14 +91,23 @@ function getContainerClient(blobServiceClient: BlobServiceClient) {
   return getCertContainerClient(blobServiceClient);
 }
 
-function requireInternalApiKey(req: Request, res: Response): boolean {
+function hasValidInternalApiKey(req: Request): boolean {
   const providedKey = req.headers['x-api-key'] as string | undefined;
   const expectedKey = process.env.API_INTERNAL_KEY;
-  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+  return Boolean(expectedKey && providedKey && providedKey === expectedKey);
+}
+
+function requireInternalApiKey(req: Request, res: Response): boolean {
+  if (!hasValidInternalApiKey(req)) {
     res.status(401).json({ message: 'Invalid or missing x-api-key header' });
     return false;
   }
   return true;
+}
+
+function requireSessionOrInternalApiKey(req: Request, res: Response, next: NextFunction) {
+  if (hasValidInternalApiKey(req)) return next();
+  return requireAuth(req as Parameters<typeof requireAuth>[0], res, next);
 }
 
 function certificateStorageError(res: Response, error: unknown) {
@@ -230,6 +243,12 @@ const LIST_SAFE_PROJECTION = {
   enrichmentStatus: 1,
   reviewFields: 1,
   reviewCandidates: 1,
+  fieldConfidence: 1,
+  registrationNumber: 1,
+  companyRegistrationNumber: 1,
+  extractionMode: 1,
+  extractedTextLength: 1,
+  lastEnrichedAt: 1,
   verified: 1,
   slug: 1,
   status: 1,
@@ -255,7 +274,12 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
   extractionStatus: string | null;
   reviewRequired: boolean;
   reviewCandidates: Record<string, unknown>;
+  fieldConfidence: Record<string, unknown>;
+  fieldStatus: Record<string, FieldStatus>;
+  sectorMapped: boolean;
+  registrationNumber: string | null;
 } {
+  const fieldStatus = buildFieldStatuses(doc);
   const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
   const fileName = typeof doc.fileName === 'string' && doc.fileName.trim()
     ? doc.fileName
@@ -284,8 +308,13 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
       code: sector?.sectorCode ?? null,
       name: sector?.sectorName ?? null,
     },
+    // Only canonical hub sectors are exposed here; a legacy code is withheld and the
+    // record flagged for review. `fieldStatus.sectorCode` still reports the stored
+    // value and why it needs review, so it is never silently blank.
     sectorCode: sector?.sectorCode ?? null,
     sectorName: sector?.sectorName ?? null,
+    sectorMapped: !!sector,
+    registrationNumber: doc.companyRegistrationNumber || doc.registrationNumber || null,
     vatNumber: doc.vatNumber ?? null,
     bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
     bbbeeLevelStatus: doc.bbbeeLevelStatus ?? null,
@@ -302,6 +331,8 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
     enrichmentStatus: doc.enrichmentStatus ?? null,
     reviewFields: Array.isArray(doc.reviewFields) ? doc.reviewFields : [],
     reviewCandidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
+    fieldConfidence: doc.fieldConfidence && typeof doc.fieldConfidence === 'object' ? doc.fieldConfidence : {},
+    fieldStatus,
     status,
     lastModified: dateOnly(doc.updatedAt),
     verified: doc.verified === true,
@@ -1399,7 +1430,7 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
 //     --header="x-api-key: $API_INTERNAL_KEY" \
 //     http://127.0.0.1:5000/api/certificates/process
 // ============================================================================
-router.post('/process', requireAuth, async (req: Request, res: Response) => {
+router.post('/process', requireSessionOrInternalApiKey, async (req: Request, res: Response) => {
   const providedKey = req.headers['x-api-key'] as string | undefined;
   const expectedKey = process.env.API_INTERNAL_KEY;
   if (!expectedKey || !providedKey || providedKey !== expectedKey) {
@@ -1426,7 +1457,7 @@ router.post('/process', requireAuth, async (req: Request, res: Response) => {
   sendEvent({ type: 'start', message: `Starting bulk certificate extraction (force=${force})...` });
 
   try {
-    const result = await processAllCertificates(blobServiceClient, force, (done, total) => {
+    const result = await processAllCertificatePipelines(blobServiceClient, force, (done, total) => {
       if (done % 10 === 0 || done === total) {
         sendEvent({ type: 'progress', done, total });
       }
@@ -1462,7 +1493,7 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
 
     sendEvent({ type: 'start', message: 'Starting certificate extraction...' });
 
-    const result = await processAllCertificates(blobServiceClient, force, (done, total) => {
+    const result = await processAllCertificatePipelines(blobServiceClient, force, (done, total) => {
       if (done % 5 === 0 || done === total) {
         sendEvent({ type: 'progress', done, total });
       }
@@ -1497,6 +1528,11 @@ async function runCertificateEnrichmentEndpoint(
           typeof f === 'string' && (ENRICHMENT_FIELDS as readonly string[]).includes(f),
         )
       : undefined;
+    const blobNames = Array.isArray(req.body?.blobNames)
+      ? req.body.blobNames.filter((name: unknown): name is string =>
+          typeof name === 'string' && name.trim().length > 0,
+        )
+      : undefined;
     const fields = requestedFields?.length ? requestedFields : [...PRODUCTION_CERTIFICATE_FIELDS];
     const result = await runCertificateEnrichmentJob((blobServiceClient ?? {}) as any, {
       limit: req.body?.limit,
@@ -1506,6 +1542,7 @@ async function runCertificateEnrichmentEndpoint(
       onlyUsableText: defaults.onlyUsableText ?? (req.body?.onlyUsableText === true),
       includeDetails: req.body?.includeDetails === true,
       reviewSampleLimit: req.body?.reviewSampleLimit,
+      blobNames,
       fields,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
@@ -1518,11 +1555,11 @@ async function runCertificateEnrichmentEndpoint(
   }
 }
 
-router.post('/enrich-missing', requireAuth, async (req: Request, res: Response) => {
+router.post('/enrich-missing', requireSessionOrInternalApiKey, async (req: Request, res: Response) => {
   return runCertificateEnrichmentEndpoint(req, res);
 });
 
-router.post('/enrich-usable-text', requireAuth, async (req: Request, res: Response) => {
+router.post('/enrich-usable-text', requireSessionOrInternalApiKey, async (req: Request, res: Response) => {
   return runCertificateEnrichmentEndpoint(req, res, { onlyUsableText: true, forceText: false });
 });
 
@@ -1719,6 +1756,7 @@ router.post('/:id/confirm-vat', requireAuth, async (req: Request, res: Response)
           reviewCandidates,
           reviewFields,
           enrichmentStatus: reviewFields.length || Object.keys(reviewCandidates).length ? 'review_required' : 'completed',
+          metadataStatus: reviewFields.length || Object.keys(reviewCandidates).length ? 'needs_review' : 'complete',
           lastEnrichedAt: new Date(),
           enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
           updatedAt: new Date(),
@@ -1905,7 +1943,7 @@ router.get('/review-queue', requireAuth, async (req: Request, res: Response) => 
   }
 });
 
-router.post('/retry-extraction', requireAuth, async (req: Request, res: Response) => {
+router.post('/retry-extraction', requireSessionOrInternalApiKey, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   const blobServiceClient = getBlobServiceClient();
@@ -2058,6 +2096,18 @@ router.post('/extract-preview', requireAuth, (req: Request, res: Response, next:
     }
     const extracted = await extractPreviewFromBuffer(file.buffer, file.originalname, file.mimetype);
     const payload = previewExtractionToFormJson(extracted);
+    const deterministic = collectFieldCandidates(
+      extracted.extractedText,
+      file.originalname,
+      [...PRODUCTION_CERTIFICATE_FIELDS],
+      [],
+    );
+    for (const candidate of deterministic) {
+      const value = candidate.value instanceof Date
+        ? candidate.value.toISOString().slice(0, 10)
+        : candidate.value;
+      (payload as Record<string, unknown>)[candidate.field] = value;
+    }
     return res.json({
       success: true,
       data: payload,
@@ -2221,6 +2271,9 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
                 expiryDate: expiryDate ? new Date(expiryDate) : (doc.expiryDate || null),
                 status: statusFromExpiryDate(expiryDate || doc.expiryDate),
                 extractionStatus: 'pending',
+                textExtractionStatus: 'pending',
+                enrichmentStatus: 'pending',
+                metadataStatus: 'pending',
                 extractionError: null,
                 updatedAt: new Date(),
               },
@@ -2232,7 +2285,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
 
           if (blobServiceClient) {
             setImmediate(async () => {
-              try { await processOneCertificate(blobServiceClient, newBlobName, true); }
+              try { await processOneCertificatePipeline(blobServiceClient, newBlobName, true); }
               catch (err: any) { logger.error('Background extraction failed', err, { blobName: newBlobName }); }
             });
           }
@@ -2380,7 +2433,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
         setImmediate(async () => {
           for (const blobName of uploadedBlobs) {
             try {
-              await processOneCertificate(blobServiceClient, blobName, true);
+              await processOneCertificatePipeline(blobServiceClient, blobName, true);
             } catch (err: any) {
               logger.error('Background extraction failed', err, { blobName });
             }
@@ -2827,6 +2880,60 @@ router.get('/mine', requireAuth, async (req: Request, res: Response) => {
   return res.json(ok({ items: sliced, total, limit, skip }));
 });
 
+// --- COMPANY / ADMIN: resolve ONE held review candidate -------------------
+// confirm = accept the held value, edit = supply a corrected value, reject = keep
+// the candidate inspectable but never propose it again. Only the named field is
+// touched, so resolving one field can never silently confirm the others.
+router.post('/:id/review', requireAuth, async (req: Request, res: Response) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_INPUT'));
+  if (!isMongoConnected()) return res.status(503).json(fail('Reviewing metadata needs the database', 'DB_UNAVAILABLE'));
+
+  const sessionUserId = (req.session as any).userId as string | undefined;
+  const isAdmin = ((req.session as any).userData?.role as string | undefined) === 'super_admin';
+  const body = (req.body || {}) as Record<string, unknown>;
+
+  try {
+    const doc = await CertificateMetadataModel.findOne({ id }).lean() as any;
+    if (!doc) return res.status(404).json(fail('Certificate not found', 'NOT_FOUND'));
+    if (!isAdmin && doc.uploadedByUserId !== sessionUserId) {
+      return res.status(403).json(fail('Not authorised to review this certificate', 'FORBIDDEN'));
+    }
+
+    const resolution = buildReviewResolution({
+      doc,
+      field: String(body.field ?? ''),
+      action: String(body.action ?? '') as ReviewAction,
+      value: body.value,
+      userId: sessionUserId ?? null,
+      note: typeof body.note === 'string' ? body.note.slice(0, 500) : null,
+    });
+    if (!resolution.ok) {
+      return res.status(resolution.status).json(fail(resolution.message, resolution.status === 409 ? 'CONFLICT' : 'INVALID_INPUT'));
+    }
+
+    const after = await CertificateMetadataModel.findOneAndUpdate({ id }, resolution.update as any, { returnDocument: 'after' }).lean() as any;
+    invalidateDerivedCaches();
+    logger.info('Certificate review resolved', { id, field: resolution.field, action: resolution.action });
+
+    const fieldStatuses = buildFieldStatuses(after ?? {});
+    return res.json(ok({
+      id,
+      field: resolution.field,
+      action: resolution.action,
+      fieldStatus: fieldStatuses[resolution.field] ?? null,
+      fieldStatuses,
+      reviewFields: Array.isArray(after?.reviewFields) ? after.reviewFields : [],
+      reviewCandidates: after?.reviewCandidates ?? {},
+      enrichmentStatus: after?.enrichmentStatus ?? null,
+      metadataStatus: after?.metadataStatus ?? null,
+    }));
+  } catch (err: any) {
+    logger.error('Failed to resolve certificate review', err);
+    return res.status(500).json(fail('Failed to resolve review', 'DB_ERROR'));
+  }
+});
+
 // --- COMPANY / ADMIN: correct certificate metadata -------------------------
 router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   const id = String(req.params.id || '').trim();
@@ -2838,6 +2945,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
 
   const PATCHABLE = [
     'supplierName', 'vatNumber', 'companySize',
+    'registrationNumber', 'tradingName', 'taxNumber',
     'blackOwnership', 'blackWomenOwnership',
     'flowThroughBlackOwnership', 'blackDesignatedGroupOwnership',
     'empoweringSupplier', 'firstProcurementDate', 'sizeAtFirstProcurement',
@@ -2909,25 +3017,58 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
         }
       }
       updates['updatedAt'] = new Date();
-      const confirmedFields = Object.keys(updates).filter((key) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(key));
+      // Clearing a field (null) is not a confirmation: its held candidate and review
+      // flag stay, so the gap remains visible instead of being marked resolved.
+      const confirmedFields = Object.keys(updates).filter(
+        (key) => !['updatedAt', 'vatNumberNormalized', 'status', 'sectorName', 'bbbeeLevelStatus'].includes(key) && updates[key] != null,
+      );
+      // A person set these values: mark them manual so enrichment can never replace them.
+      const PROVENANCE_KEY: Record<string, string> = {
+        supplierName: 'companyName', registrationNumber: 'registrationNumber', vatNumber: 'vatNumber',
+        bbbeeLevel: 'bbbeeLevel', blackOwnership: 'blackOwnership', blackWomenOwnership: 'blackWomenOwnership',
+        companySize: 'companySize', expiryDate: 'expiryDate', sectorCode: 'sectorCode',
+      };
+      const provenance: Record<string, unknown> = {};
+      for (const key of confirmedFields) {
+        const enrichmentKey = PROVENANCE_KEY[key];
+        if (!enrichmentKey) continue;
+        provenance[`fieldConfidence.${enrichmentKey}`] = {
+          confidence: 1, source: 'manual', extractionMethod: 'manual_edit', validation: 'confirmed_by_person',
+          confirmedBy: sessionUserId ?? null, confirmedAt: new Date(), action: 'edit',
+        };
+      }
+      // Review state is keyed by the enrichment name (companyName), not the stored
+      // column (supplierName); translate before clearing or the flag never goes away.
+      const resolvedKeys = confirmedFields.map((key) => PROVENANCE_KEY[key] ?? key);
       const unsetReviewCandidates = Object.fromEntries(
-        confirmedFields.map((field) => [`reviewCandidates.${field}`, '']),
+        resolvedKeys.map((field) => [`reviewCandidates.${field}`, '']),
       );
       const remainingReviewFields = Array.isArray(doc.reviewFields)
-        ? doc.reviewFields.filter((field: string) => !confirmedFields.includes(field))
+        ? doc.reviewFields.filter((field: string) => !resolvedKeys.includes(field))
         : [];
       const remainingReviewCandidates = doc.reviewCandidates && typeof doc.reviewCandidates === 'object'
-        ? Object.keys(doc.reviewCandidates).filter((field) => !confirmedFields.includes(field))
+        ? Object.keys(doc.reviewCandidates).filter((field) => !resolvedKeys.includes(field))
         : [];
       await CertificateMetadataModel.updateOne(
         { id },
         {
           $set: {
             ...updates,
+            ...provenance,
             reviewFields: remainingReviewFields,
             enrichmentStatus: remainingReviewFields.length > 0 || remainingReviewCandidates.length > 0 ? 'review_required' : 'completed',
+            metadataStatus: remainingReviewFields.length > 0 || remainingReviewCandidates.length > 0 ? 'needs_review' : 'complete',
           },
           ...(Object.keys(unsetReviewCandidates).length ? { $unset: unsetReviewCandidates } : {}),
+          $push: {
+            auditLog: {
+              $each: [{
+                id: `edit-${Date.now()}`, at: new Date(), type: 'certificate_metadata_edited',
+                by: sessionUserId ?? null, fields: confirmedFields,
+              }],
+              $slice: -50,
+            },
+          },
         },
       );
       invalidateDerivedCaches();

@@ -41,7 +41,7 @@ describe("the certificate preview", () => {
     render(<CertificatePreview certificateId="blob-abc" onClose={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByTestId("certificate-preview-frame")).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith("/api/certificates/blob-abc/view", { credentials: "include" });
+    expect(fetchMock).toHaveBeenCalledWith("/internal/records/blob-abc/view", { credentials: "include" });
     expect(screen.getByTestId("certificate-preview-frame")).toHaveAttribute(
       "src",
       "https://blob.example/cert.pdf?sig=x",

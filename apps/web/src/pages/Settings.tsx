@@ -22,12 +22,17 @@ import {
   CreditCard,
   Loader2,
   Mail,
+  Monitor,
+  Moon,
+  Paintbrush,
   Receipt,
   ShieldCheck,
+  Sun,
   User as UserIcon,
   Users,
 } from "lucide-react";
 import { useAuth } from "@toolkit/lib/auth";
+import { useTheme } from "@toolkit/components/theme-provider";
 import { apiRequest } from "@/lib/queryClient";
 import { companyProfilePath } from "@/components/UserAccountMenu";
 import { formatTokens, useTokenBalance } from "@/components/TokenBalancePill";
@@ -35,10 +40,11 @@ import type { TokenPack } from "../../shared/tokenPacks";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-type TabId = "account" | "billing" | "team" | "company";
+type TabId = "account" | "appearance" | "billing" | "team" | "company";
 
 const TABS: Array<{ id: TabId; label: string; icon: typeof UserIcon; blurb: string }> = [
   { id: "account", label: "Account", icon: UserIcon, blurb: "Your name, email and sign-in" },
+  { id: "appearance", label: "Appearance", icon: Paintbrush, blurb: "Light, dark or system" },
   { id: "billing", label: "Billing & tokens", icon: CreditCard, blurb: "Balance, plan and history" },
   { id: "team", label: "Team", icon: Users, blurb: "Who can see your scorecards" },
   { id: "company", label: "Company", icon: Building2, blurb: "The measured entity's profile" },
@@ -59,9 +65,9 @@ function Row({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div className="flex flex-col gap-3 border-b border-[color:var(--rule)] px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0">
-        <p className="text-[13.5px] font-medium text-[#e5e5ea]">{label}</p>
+        <p className="text-[13.5px] font-medium text-[color:var(--hi)]">{label}</p>
         {hint && <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">{hint}</p>}
       </div>
       {children && <div className="shrink-0">{children}</div>}
@@ -71,9 +77,9 @@ function Row({
 
 function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)]">
-      <header className="border-b border-white/[0.06] px-5 py-4">
-        <h2 className="text-[15px] font-semibold text-white">{title}</h2>
+    <section className="overflow-hidden rounded-[18px] border border-[color:var(--rule)] bg-[color:var(--ink-2)]">
+      <header className="border-b border-[color:var(--rule)] px-5 py-4">
+        <h2 className="text-[15px] font-semibold text-[color:var(--hi)]">{title}</h2>
         {description && <p className="mt-1 text-[12.5px] leading-5 text-[color:var(--body)]">{description}</p>}
       </header>
       {children}
@@ -96,7 +102,7 @@ export default function Settings() {
   }, [requested, navigate]);
 
   return (
-    <div className="text-white">
+    <div className="text-[color:var(--body)]">
 
       <div className="mx-auto flex max-w-[1080px] flex-col gap-8 px-6 py-8 lg:flex-row">
         <nav className="lg:w-[212px] lg:shrink-0" aria-label="Settings sections">
@@ -112,8 +118,8 @@ export default function Settings() {
                     className={cn(
                       "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13.5px] transition-colors",
                       active
-                        ? "bg-white/[0.08] font-medium text-white"
-                        : "text-[color:var(--body)] hover:bg-white/[0.04] hover:text-[#e5e5ea]",
+                        ? "border border-[color:var(--rule)] bg-[color:var(--ink-3)] font-medium text-[color:var(--hi)] shadow-[0_8px_18px_-16px_rgba(24,24,27,0.5)]"
+                        : "border border-transparent text-[color:var(--body)] hover:bg-[color:var(--ink-3)] hover:text-[color:var(--hi)]",
                     )}
                     data-testid={`settings-tab-${id}`}
                   >
@@ -128,12 +134,78 @@ export default function Settings() {
 
         <main className="min-w-0 flex-1 space-y-5">
           {tab === "account" && <AccountTab />}
+          {tab === "appearance" && <AppearanceTab />}
           {tab === "billing" && <BillingTab />}
           {tab === "team" && <TeamTab />}
           {tab === "company" && <CompanyTab />}
         </main>
       </div>
     </div>
+  );
+}
+
+function AppearanceTab() {
+  const { theme, setTheme } = useTheme();
+  const modes = [
+    {
+      id: "light" as const,
+      label: "Light",
+      hint: "Clean white workspace for daily operations.",
+      icon: Sun,
+    },
+    {
+      id: "dark" as const,
+      label: "Dark",
+      hint: "Lower glare for evening work and long review sessions.",
+      icon: Moon,
+    },
+    {
+      id: "system" as const,
+      label: "System",
+      hint: "Follow your device appearance setting.",
+      icon: Monitor,
+    },
+  ];
+
+  return (
+    <>
+      <Panel title="Appearance" description="Choose how Okiru looks on this device. Your preference is saved in this browser.">
+        <div className="grid gap-3 p-5 sm:grid-cols-3">
+          {modes.map(({ id, label, hint, icon: Icon }) => {
+            const active = theme === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTheme(id)}
+                aria-pressed={active}
+                className={cn(
+                  "rounded-2xl border p-4 text-left transition-colors",
+                  active
+                    ? "border-[color:var(--rule-strong)] bg-[color:var(--ink-3)] shadow-[0_12px_30px_-24px_rgba(24,24,27,0.55)]"
+                    : "border-[color:var(--rule)] bg-[color:var(--ink-2)] hover:bg-[color:var(--ink-3)]",
+                )}
+                data-testid={`appearance-${id}`}
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] text-[color:var(--body)]">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {active && <Check className="h-4 w-4 text-emerald-300" />}
+                </span>
+                <span className="mt-4 block text-[14px] font-semibold text-[color:var(--hi)]">{label}</span>
+                <span className="mt-1.5 block text-[12px] leading-5 text-[color:var(--body)]">{hint}</span>
+              </button>
+            );
+          })}
+        </div>
+        <Row label="Current mode" hint="This updates the whole signed-in app immediately.">
+          <span className="rounded-full bg-[color:var(--ink-3)] px-2.5 py-1 text-[12px] capitalize text-[color:var(--body)]">
+            {theme}
+          </span>
+        </Row>
+      </Panel>
+    </>
   );
 }
 
@@ -146,12 +218,12 @@ function AccountTab() {
   return (
     <>
       <Panel title="Profile" description="How you appear to the rest of your team.">
-        <div className="flex items-center gap-4 border-b border-white/[0.06] px-5 py-5">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.10] text-[16px] font-semibold text-white">
+        <div className="flex items-center gap-4 border-b border-[color:var(--rule)] px-5 py-5">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--ink-3)] text-[16px] font-semibold text-[color:var(--hi)]">
             {initial}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-medium text-white">{display}</p>
+            <p className="truncate text-[15px] font-medium text-[color:var(--hi)]">{display}</p>
             <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px] text-[color:var(--body)]">
               <Mail className="h-3.5 w-3.5" />
               {user?.email || "No email on file"}
@@ -162,7 +234,7 @@ function AccountTab() {
           <span className="font-mono text-[13px] text-[color:var(--body)]">{user?.username ?? "—"}</span>
         </Row>
         <Row label="Role" hint="What you are allowed to do in this workspace.">
-          <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[12px] capitalize text-[color:var(--body)]">
+          <span className="rounded-full bg-[color:var(--ink-3)] px-2.5 py-1 text-[12px] capitalize text-[color:var(--body)]">
             {String(user?.role ?? "user").replace(/_/g, " ")}
           </span>
         </Row>
@@ -176,7 +248,7 @@ function AccountTab() {
               await logout();
               navigate("/auth", { replace: true });
             }}
-            className="rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
+            className="rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-4 py-2 text-[13px] font-medium text-[color:var(--hi)] transition-colors hover:bg-[color:var(--ink-4)]"
             data-testid="settings-sign-out"
           >
             Sign out
@@ -260,12 +332,12 @@ function BillingTab() {
 
   return (
     <>
-      <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)]">
+      <section className="overflow-hidden rounded-[18px] border border-[color:var(--rule)] bg-[color:var(--ink-2)]">
         <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Token balance</p>
             <p className="mt-2 flex items-baseline gap-2">
-              <span className="text-[42px] font-semibold leading-none tabular-nums text-white">
+              <span className="text-[42px] font-semibold leading-none tabular-nums text-[color:var(--hi)]">
                 {isLoading ? "—" : formatTokens(wallet?.balance ?? 0)}
               </span>
               <span className="text-[14px] text-[color:var(--body)]">tokens</span>
@@ -276,9 +348,9 @@ function BillingTab() {
                 : "Your organisation's shared balance."}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/[0.07] bg-[color:var(--ink-3)] px-4 py-3">
+          <div className="rounded-2xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-4 py-3">
             <p className="text-[11px] text-[color:var(--muted)]">Plan</p>
-            <p className="mt-1 flex items-center gap-1.5 text-[14px] font-semibold text-white">
+            <p className="mt-1 flex items-center gap-1.5 text-[14px] font-semibold text-[color:var(--hi)]">
               {wallet?.plan === "pro" ? <ShieldCheck className="h-4 w-4 text-emerald-400" /> : null}
               {wallet?.plan === "pro" ? "Pro" : "Free"}
             </p>
@@ -301,19 +373,19 @@ function BillingTab() {
               key={pack.id}
               className={cn(
                 "flex flex-col rounded-2xl border p-4",
-                pack.highlight ? "border-white/[0.18] bg-white/[0.05]" : "border-white/[0.07] bg-[color:var(--ink-3)]",
+                pack.highlight ? "border-[color:var(--rule-strong)] bg-[color:var(--ink-3)]" : "border-[color:var(--rule)] bg-[color:var(--ink-2)]",
               )}
               data-testid={`token-pack-${pack.id}`}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <p className="text-[14px] font-semibold text-white">{pack.name}</p>
+                <p className="text-[14px] font-semibold text-[color:var(--hi)]">{pack.name}</p>
                 {pack.highlight && (
-                  <span className="rounded-full bg-white/[0.10] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[color:var(--body)]">
+                  <span className="rounded-full bg-[color:var(--ink-4)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[color:var(--body)]">
                     Popular
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-[22px] font-semibold text-white">
+              <p className="mt-1 text-[22px] font-semibold text-[color:var(--hi)]">
                 {money(pack.amountCents)}
                 {pack.grantsPro && <span className="text-[12px] font-normal text-[color:var(--body)]">/month</span>}
               </p>
@@ -333,8 +405,8 @@ function BillingTab() {
                 className={cn(
                   "mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-colors disabled:opacity-50",
                   pack.highlight
-                    ? "bg-white text-[#0e0e10] hover:bg-[#f2f2f7]"
-                    : "border border-white/[0.12] text-[#e5e5ea] hover:bg-white/[0.06]",
+                    ? "border border-[#09090b] bg-[#18181b] text-white hover:bg-black"
+                    : "border border-[color:var(--rule)] bg-[color:var(--ink-3)] text-[color:var(--hi)] hover:bg-[color:var(--ink-4)]",
                 )}
                 data-testid={`buy-${pack.id}`}
               >
@@ -355,11 +427,11 @@ function BillingTab() {
             Nothing yet. Movements appear here as soon as you process documents or buy tokens.
           </p>
         ) : (
-          <ul className="divide-y divide-white/[0.05]">
+          <ul className="divide-y divide-[color:var(--rule)]">
             {entries.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] text-[#e5e5ea]">{entry.description || entry.kind}</p>
+                  <p className="truncate text-[13px] text-[color:var(--hi)]">{entry.description || entry.kind}</p>
                   <p className="mt-0.5 text-[11.5px] text-[color:var(--muted)]">
                     {new Date(entry.createdAt).toLocaleString("en-ZA", {
                       day: "2-digit",
@@ -424,17 +496,17 @@ function TeamTab() {
         ) : members.length === 0 ? (
           <p className="px-5 py-6 text-[12.5px] text-[color:var(--body)]">You are the only member so far.</p>
         ) : (
-          <ul className="divide-y divide-white/[0.05]">
+          <ul className="divide-y divide-[color:var(--rule)]">
             {members.map((member) => (
               <li key={member.id} className="flex items-center gap-3 px-5 py-3.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-[12px] font-semibold text-white">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color:var(--ink-3)] text-[12px] font-semibold text-[color:var(--hi)]">
                   {(member.fullName || member.username || "?").charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13.5px] text-[#e5e5ea]">{member.fullName || member.username}</p>
+                  <p className="truncate text-[13.5px] text-[color:var(--hi)]">{member.fullName || member.username}</p>
                   <p className="truncate text-[11.5px] text-[color:var(--body)]">{member.email || "No email on file"}</p>
                 </div>
-                <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11.5px] capitalize text-[color:var(--body)]">
+                <span className="shrink-0 rounded-full bg-[color:var(--ink-3)] px-2.5 py-1 text-[11.5px] capitalize text-[color:var(--body)]">
                   {member.isAdmin ? "Admin" : String(member.role ?? "user").replace(/_/g, " ")}
                 </span>
               </li>
@@ -445,7 +517,7 @@ function TeamTab() {
           <button
             type="button"
             onClick={() => navigate("/workspace")}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-4 py-2 text-[13px] font-medium text-[color:var(--hi)] transition-colors hover:bg-[color:var(--ink-4)]"
           >
             Open workspace
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -475,7 +547,7 @@ function CompanyTab() {
         <button
           type="button"
           onClick={() => navigate(companyProfilePath("/settings/company"))}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-4 py-2 text-[13px] font-medium text-[color:var(--hi)] transition-colors hover:bg-[color:var(--ink-4)]"
           data-testid="settings-edit-company"
         >
           Edit profile

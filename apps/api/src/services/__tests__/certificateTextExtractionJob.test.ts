@@ -190,11 +190,14 @@ describe('certificate text extraction coverage/retry job', () => {
       extractedTextLength: 0,
     }));
     expect(Object.keys(update.$set).sort()).toEqual([
+      'enrichmentStatus',
       'extractedAt',
       'extractedTextLength',
       'extractionError',
       'extractionMode',
       'extractionStatus',
+      'metadataStatus',
+      'textExtractionStatus',
     ]);
     expect(update.$set.certificateNumber).toBeUndefined();
     expect(update.$set.vatNumber).toBeUndefined();

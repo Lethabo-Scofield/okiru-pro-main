@@ -3,7 +3,7 @@ import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.pn
 
 export function AppLoader() {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-[#08090b]">
       <motion.div
         initial={{ opacity: 0, scale: 0.85 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -56,7 +56,7 @@ export function AppLoader() {
             {[0, 1, 2].map(i => (
               <motion.div
                 key={i}
-                className="h-1.5 w-1.5 rounded-full bg-white/50"
+                className="h-1.5 w-1.5 rounded-full bg-zinc-400"
                 animate={{ opacity: [0.2, 1, 0.2] }}
                 transition={{ duration: 1.2, delay: i * 0.2, repeat: Infinity }}
               />

@@ -30,6 +30,7 @@ const mongoConnectedMock = vi.hoisted(() => vi.fn(() => false));
 const certificateFindMock = vi.hoisted(() => vi.fn());
 const certificateFindOneMock = vi.hoisted(() => vi.fn(() => ({ lean: vi.fn(async () => null) })));
 const certificateUpdateOneMock = vi.hoisted(() => vi.fn(async () => ({})));
+const certificateFindOneAndUpdateMock = vi.hoisted(() => vi.fn());
 const certificateCountDocumentsMock = vi.hoisted(() => vi.fn(async () => 0));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -60,6 +61,7 @@ vi.mock('../../../models.js', () => {
     find: certificateFindMock,
     findOne: certificateFindOneMock,
     updateOne: certificateUpdateOneMock,
+    findOneAndUpdate: certificateFindOneAndUpdateMock,
     countDocuments: certificateCountDocumentsMock,
     deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
   };
@@ -1020,7 +1022,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('runs enrichment only for usable-text records without triggering text extraction', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|super_admin',
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
       apiKey: 'test-internal-key',
       body: {
         limit: 100,
@@ -1569,5 +1571,148 @@ describe('Analytics events from certificate routes', () => {
     expect(fs.existsSync(eventsPath)).toBe(true);
     const events = JSON.parse(fs.readFileSync(eventsPath, 'utf-8'));
     expect(events.some((e: any) => e.type === 'verify' && e.certificateId === rec.id)).toBe(true);
+  });
+});
+
+// ---- Review workflow: confirm / edit / reject one field ---------------------
+
+describe('POST /:id/review - resolving one held candidate', () => {
+  const heldDoc = () => ({
+    id: 'rev-1',
+    uploadedByUserId: 'owner-1',
+    reviewFields: ['vatNumber', 'bbbeeLevel'],
+    reviewCandidates: {
+      vatNumber: { value: '4012345678', confidence: 0.74, source: 'text', reason: 'low confidence' },
+      bbbeeLevel: { value: 2, confidence: 0.7, source: 'text' },
+    },
+  });
+  const afterDoc = (over: Record<string, unknown> = {}) => ({
+    id: 'rev-1',
+    vatNumber: '4012345678',
+    fieldConfidence: { vatNumber: { confidence: 1, source: 'manual', confirmedBy: 'owner-1' } },
+    reviewFields: ['bbbeeLevel'],
+    reviewCandidates: { bbbeeLevel: { value: 2, confidence: 0.7, source: 'text' } },
+    extractionStatus: 'completed', extractionMode: 'pdf_text', extractedTextLength: 900, lastEnrichedAt: new Date(),
+    enrichmentStatus: 'review_required', metadataStatus: 'needs_review',
+    ...over,
+  });
+
+  beforeEach(() => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindOneMock.mockReset();
+    certificateFindOneAndUpdateMock.mockReset();
+    certificateFindOneMock.mockReturnValue({ lean: vi.fn(async () => heldDoc()) });
+    certificateFindOneAndUpdateMock.mockReturnValue({ lean: vi.fn(async () => afterDoc()) });
+  });
+
+  it('requires authentication', async () => {
+    const r = await call('POST', '/api/certificates/rev-1/review', { body: { field: 'vatNumber', action: 'confirm' } });
+    expect(r.status).toBe(401);
+  });
+
+  it('only the owner or a super admin may resolve', async () => {
+    const r = await call('POST', '/api/certificates/rev-1/review', { auth: 'someone-else|user', body: { field: 'vatNumber', action: 'confirm' } });
+    expect(r.status).toBe(403);
+    expect(certificateFindOneAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('confirm: saves ONLY that field as trusted, clears only its candidate, and returns the new field state', async () => {
+    const r = await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'confirm' } });
+    expect(r.status).toBe(200);
+
+    const update = certificateFindOneAndUpdateMock.mock.calls[0][1] as any;
+    expect(update.$set.vatNumber).toBe('4012345678');
+    expect(update.$set['fieldConfidence.vatNumber']).toMatchObject({ source: 'manual', confirmedBy: 'owner-1' });
+    expect(update.$unset).toEqual({ 'reviewCandidates.vatNumber': '' });   // the B-BBEE candidate is NOT touched
+    expect(update.$set.bbbeeLevel).toBeUndefined();
+
+    expect(r.body.data.fieldStatus).toMatchObject({ field: 'vatNumber', status: 'confirmed', value: '4012345678' });
+    expect(r.body.data.fieldStatuses.bbbeeLevel).toMatchObject({ status: 'needs_review', candidate: { value: 2 } });
+    expect(r.body.data.reviewCandidates).toHaveProperty('bbbeeLevel');
+  });
+
+  it('edit: saves the corrected value', async () => {
+    const r = await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'edit', value: '4111111111' } });
+    expect(r.status).toBe(200);
+    expect((certificateFindOneAndUpdateMock.mock.calls[0][1] as any).$set.vatNumber).toBe('4111111111');
+  });
+
+  it('reject: stores no trusted value, keeps the candidate on record and stops it being proposed again', async () => {
+    const r = await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'reject' } });
+    expect(r.status).toBe(200);
+    const update = certificateFindOneAndUpdateMock.mock.calls[0][1] as any;
+    expect(update.$set.vatNumber).toBeUndefined();
+    expect(update.$addToSet['rejectedCandidates.vatNumber'].$each).toEqual(['4012345678']);
+    expect(update.$push.auditLog.$each[0]).toMatchObject({ type: 'certificate_review_resolved', action: 'reject', field: 'vatNumber' });
+  });
+
+  it('rejects invalid values and unknown fields', async () => {
+    expect((await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'edit', value: '123' } })).status).toBe(400);
+    expect((await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'notAField', action: 'confirm' } })).status).toBe(400);
+    expect(certificateFindOneAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('409 when there is nothing pending to confirm or reject', async () => {
+    certificateFindOneMock.mockReturnValue({ lean: vi.fn(async () => ({ id: 'rev-1', uploadedByUserId: 'owner-1', reviewCandidates: {} })) });
+    expect((await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'confirm' } })).status).toBe(409);
+    expect((await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'reject' } })).status).toBe(409);
+  });
+
+  it('404 for an unknown certificate', async () => {
+    certificateFindOneMock.mockReturnValue({ lean: vi.fn(async () => null) });
+    expect((await call('POST', '/api/certificates/nope/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'confirm' } })).status).toBe(404);
+  });
+
+  it('an ambiguous field needs one value chosen', async () => {
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'rev-1',
+        uploadedByUserId: 'owner-1',
+        reviewCandidates: { vatNumber: { ambiguous: true, candidates: [{ value: '4000000001' }, { value: '4000000002' }] } },
+      })),
+    });
+    expect((await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'confirm' } })).status).toBe(400);
+    const chosen = await call('POST', '/api/certificates/rev-1/review', { auth: 'owner-1|user', body: { field: 'vatNumber', action: 'confirm', value: '4000000002' } });
+    expect(chosen.status).toBe(200);
+    expect((certificateFindOneAndUpdateMock.mock.calls[0][1] as any).$set.vatNumber).toBe('4000000002');
+  });
+});
+
+describe('PATCH /:id - manual edits', () => {
+  beforeEach(() => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateUpdateOneMock.mockClear();
+    certificateFindOneMock.mockReset();
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'p-1',
+        uploadedByUserId: 'owner-1',
+        reviewFields: ['companyName', 'vatNumber'],
+        reviewCandidates: { companyName: { value: 'Acme' }, vatNumber: { value: '4012345678' } },
+      })),
+    });
+  });
+
+  it('can set the registration number and marks it as set by a person', async () => {
+    const r = await call('PATCH', '/api/certificates/p-1', { auth: 'owner-1|user', body: { registrationNumber: '2019/123456/07' } });
+    expect(r.status).toBe(200);
+    const update = certificateUpdateOneMock.mock.calls[0][1] as any;
+    expect(update.$set.registrationNumber).toBe('2019/123456/07');
+    expect(update.$set['fieldConfidence.registrationNumber']).toMatchObject({ source: 'manual', confirmedBy: 'owner-1' });
+  });
+
+  it('editing the company name clears ITS review flag (stored as supplierName, reviewed as companyName)', async () => {
+    await call('PATCH', '/api/certificates/p-1', { auth: 'owner-1|user', body: { supplierName: 'Acme (Pty) Ltd' } });
+    const update = certificateUpdateOneMock.mock.calls[0][1] as any;
+    expect(update.$unset).toEqual({ 'reviewCandidates.companyName': '' });
+    expect(update.$set.reviewFields).toEqual(['vatNumber']);
+  });
+
+  it('clearing a field (null) does not count as confirming it: the candidate and flag stay', async () => {
+    await call('PATCH', '/api/certificates/p-1', { auth: 'owner-1|user', body: { vatNumber: null } });
+    const update = certificateUpdateOneMock.mock.calls[0][1] as any;
+    expect(update.$unset ?? {}).toEqual({});
+    expect(update.$set.reviewFields).toEqual(['companyName', 'vatNumber']);
+    expect(update.$set['fieldConfidence.vatNumber']).toBeUndefined();
   });
 });

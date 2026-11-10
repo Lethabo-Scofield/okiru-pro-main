@@ -75,6 +75,10 @@ jobs:
         working-directory: apps/web
         run: pnpm vitest run server/ src/lib
 
+      - name: API typecheck (includes the shared scorer and Rules Studio)
+        working-directory: apps/api
+        run: pnpm typecheck
+
       - name: API tests
         working-directory: apps/api
         run: pnpm test

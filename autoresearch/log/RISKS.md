@@ -111,3 +111,30 @@ Rejected (6, verifier killed as overstated/dup): addEsd/addSed contribution "dro
 | B11 `blackBenefitPercent` | **DEFERRED.** Calculator uses per-type `benefitFactors` map; adding a row-level % multiplier is a scoring rule change. |
 | B12 Skills `isAbet`/`isMandatory` | **DEFERRED.** Not in `skills.ts` at all. Adding requires an expert rule (ABET typically counts as Cat F-G; mandatory training is excluded from B-BBEE in some sectors). |
 | B14 `isSupplierDevRecipient`/`designatedGroupType` | **DEFERRED.** Only in tests, not calculators. Adding either would shift scoring without a cited spec source. |
+
+## audit-sweep 2026-08-24 — quick sweep (P1–P12 + security/prod layer)
+
+Re-ran the recurring-defect catalog + a security/production-readiness layer on the current
+branch (post autoresearch merges). Detection only — no fixes applied. Full write-up:
+`docs/production-readiness-audit-2026-08-24.md`.
+
+**RESOLVED since 2026-06-29 (verified):**
+- P1 phantom saves — every store mutation now calls `api.*` (updateEmployee/updateAfs/
+  updateEsdBonuses/updateFinancialYear/addEmployeesBulk). A1/A3/A4/A5/A7 closed.
+- P9 fail-open RBAC — hooks fail closed (`pillarInScope` → false out-of-scope); server
+  `verifyPillarAccess`/`verifyFullScorecardAccess` middleware enforces pillarScopes (403).
+  A2/B15/B15-srv closed.
+- P12 health lie — readiness probe 503s on Mongo/Arango down (A14 closed).
+- Committed secrets — only templates tracked; no real secrets in source. CORS allowlisted;
+  auth rate-limited.
+
+**OPEN (launch-gating unless noted):**
+| # | Sev | Pattern | Finding | Evidence |
+|---|---|---|---|---|
+| C1 | **CRITICAL** | deps | `pnpm audit --prod`: 1 critical / 37 high / 42 moderate / 10 low | `pnpm audit` 2026-08-24 |
+| C2 | **HIGH** | ops | No CI/CD — `.github/workflows` absent; hand-driven deploys, no test gate | repo root |
+| C3 | **HIGH** | P10 | Silent save failures — 33 `.catch(console.error)`, 0 toasts in store | `store.ts` |
+| C4 | MEDIUM | sec | CSP disabled — helmet `contentSecurityPolicy:false` | `apps/api/index.ts:33` |
+| C5 | MEDIUM | ops | No alerting/metrics on the readiness probe or 5xx rate | infra |
+| C6 | LOW | P3 | `// Issue N` dev-comment clutter (NOT render leaks — verified in JS literals) | `build/pillar-forms/*` |
+| C7 | LOW | P-LINT | Add ESLint (JSX `//` ban) + CI grep gate for `.catch(console.error)` on store mutations | — |

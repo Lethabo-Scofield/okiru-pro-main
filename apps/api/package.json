@@ -17,7 +17,8 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "ingest:certificates": "tsx scripts/ingestCertificates.ts",
-    "enrich:certificate-metadata": "tsx scripts/enrichCertificateMetadata.ts"
+    "enrich:certificate-metadata": "tsx scripts/enrichCertificateMetadata.ts",
+    "diagnose:certificate-metadata": "tsx scripts/certificateMetadataDiagnostic.ts"
   },
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.0.0",

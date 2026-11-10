@@ -19,6 +19,59 @@ import {
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
+/** Rules Studio ruleset pins (see rules/pins.ts). */
+async function pinDeps() {
+  const { getStudioCtx } = await import('../rules/runtime.js');
+  const { createMongoClientPinStore } = await import('../rules/pins.js');
+  const ctx = await getStudioCtx();
+  return { rules: ctx.rules, studio: ctx.studio, pins: await createMongoClientPinStore(), now: ctx.now };
+}
+
+async function pinError(res: Response, err: unknown) {
+  const { mapError } = await import('./rulesStudio.js');
+  const e = err as { code?: string; message?: string };
+  if (e?.code === 'PIN_EXISTS') return void res.status(409).json({ code: e.code, message: e.message });
+  if (e?.code === 'CLIENT_NOT_FOUND') return void res.status(404).json({ code: e.code, message: e.message });
+  return mapError(res, err, 'client ruleset pins');
+}
+
+router.get('/:id/ruleset-pins', requireAuth, async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  try {
+    const d = await pinDeps();
+    const pins = await d.pins.getPins(String(req.params.id));
+    if (pins === null) return void res.status(404).json({ code: 'CLIENT_NOT_FOUND', message: 'Client not found' });
+    return void res.json({ pins });
+  } catch (err) { return pinError(res, err); }
+});
+
+// Pin the version a scorecard was scored under (submission / finalisation). Never moves an existing pin.
+router.post('/:id/ruleset-pins', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  if (!(await verifyFullScorecardAccess(req, res))) return;
+  try {
+    const { pinRuleset } = await import('../rules/pins.js');
+    const b = req.body ?? {};
+    const pins = await pinRuleset(await pinDeps(), { clientId: String(req.params.id), scorecardId: String(b.scorecardId ?? ''), version: Number(b.version), actor: String(req.session.userId), reason: typeof b.reason === 'string' ? b.reason : null });
+    await recordAudit(req, { action: 'client.ruleset_pin', resourceType: 'client', resourceId: String(req.params.id), result: 'success', metadata: { scorecardId: b.scorecardId, version: b.version } });
+    return void res.status(201).json({ pins });
+  } catch (err) { return pinError(res, err); }
+});
+
+// The one explicit, audited way to change a pin: "Re-score under current rules".
+router.post('/:id/ruleset-pins/rescore', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  if (!(await verifyFullScorecardAccess(req, res))) return;
+  try {
+    const { rescoreUnderRules } = await import('../rules/pins.js');
+    const b = req.body ?? {};
+    const toVersion = b.toVersion === 'current' ? 'current' : Number(b.toVersion);
+    const pins = await rescoreUnderRules(await pinDeps(), { clientId: String(req.params.id), scorecardId: String(b.scorecardId ?? ''), toVersion, actor: String(req.session.userId), reason: String(b.reason ?? '') });
+    await recordAudit(req, { action: 'client.ruleset_rescore', resourceType: 'client', resourceId: String(req.params.id), result: 'success', metadata: { scorecardId: b.scorecardId, toVersion } });
+    return void res.json({ pins });
+  } catch (err) { return pinError(res, err); }
+});
+
 /**
  * Fields a caller may never set or change through the API.
  *
@@ -35,6 +88,8 @@ const PROTECTED_CLIENT_FIELDS = new Set([
   'createdByUserId',
   'createdAt',
   'updatedAt',
+  // Pins move only through the audited ruleset-pin endpoints below.
+  'rulesetPins',
 ]);
 
 /** Numeric client fields that must never be negative. */
@@ -139,6 +194,11 @@ router.post('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async
     const { safe, rejected } = stripProtectedClientFields(req.body);
     if (rejected.length) {
       logger.warn('Rejected protected fields on client create', { rejected, userId, orgId });
+    }
+    if (typeof safe.financialYear !== 'string' || !safe.financialYear.trim()) {
+      safe.financialYear = String(new Date().getFullYear());
+    } else {
+      safe.financialYear = safe.financialYear.trim();
     }
     const errors = validateClientPayload(safe, { requireName: true });
     if (errors.length) {

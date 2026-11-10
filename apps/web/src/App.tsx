@@ -27,6 +27,7 @@ const EntityBuilder = lazy(() => import("@/pages/EntityBuilder"));
 const DocumentProcessor = lazy(() => import("@/pages/DocumentProcessor"));
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
+import AdminUserIntelligence from "@/pages/AdminUserIntelligence";
 import AdminAnalytics from "@/pages/AdminAnalytics";
 import ActivityHeatmap from "@/pages/ActivityHeatmap";
 import CertificateHub from "@/pages/CertificateHub";
@@ -53,8 +54,10 @@ import { usePageViewTracking } from "@/lib/gaTracker";
 import { useClarityContext } from "@/lib/clarityContext";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
+import { API_BASE } from "@toolkit/lib/config";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
+const StudioApp = lazy(() => import("@/pages/studio/StudioApp"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
 /** Legacy upload/build flows — super-admin only in production go-live. */
@@ -171,8 +174,24 @@ function ToolkitAuthRedirect() {
 }
 
 function AppRouter() {
+  const [location] = useLocation();
+  const { user } = useAuth();
   usePageViewTracking();
   useClarityContext();
+
+  useEffect(() => {
+    if (!user || !location.startsWith("/certificates")) return;
+    const previousProduct = window.sessionStorage.getItem("okiru-last-product");
+    const eventType = previousProduct && previousProduct !== "certificates" ? "product_switched" : "product_opened";
+    window.sessionStorage.setItem("okiru-last-product", "certificates");
+    void fetch(`${API_BASE}/api/activity/product`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productCode: "certificates", eventType }),
+    }).catch(() => undefined);
+  }, [location, user?.id]);
+
   return (
     <Switch>
       <Route path="/">
@@ -213,6 +232,10 @@ function AppRouter() {
       </Route>
       {/* Settings — account, billing/tokens, team, company in one shell.
           The bare /settings lands on Account; /settings/:tab picks a pane. */}
+      {/* Rules Studio: gated by a Studio grant on the server, not by any platform role. */}
+      <Route path="/studio/*?">
+        <ProtectedRoute><StudioApp /></ProtectedRoute>
+      </Route>
       <Route path="/settings">
         <ProtectedRoute><Settings /></ProtectedRoute>
       </Route>
@@ -308,6 +331,9 @@ function AppRouter() {
       </Route>
       <Route path="/admin/users">
         <ProtectedRoute><SuperAdminOnlyRoute><AdminUsers /></SuperAdminOnlyRoute></ProtectedRoute>
+      </Route>
+      <Route path="/admin/intelligence">
+        <ProtectedRoute><SuperAdminOnlyRoute><AdminUserIntelligence /></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/admin/certificates">
         <ProtectedRoute><AdminCertificates /></ProtectedRoute>
@@ -473,9 +499,12 @@ const isMarketingPath = (path: string) => {
   return p === "/" || p === "/products" || p.startsWith("/products/") || MARKETING_PATHS.includes(p);
 };
 
+/** The Rules Studio is a light-only surface (it is a document-style review tool). */
+const isStudioPath = (path: string) => path === "/studio" || path.startsWith("/studio/");
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={isMarketingPath}>
+    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={(p: string) => isMarketingPath(p) || isStudioPath(p)}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>

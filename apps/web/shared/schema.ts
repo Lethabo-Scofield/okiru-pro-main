@@ -255,6 +255,9 @@ export interface CalculatorConfig {
     enterpriseDevelopment?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
     socioEconomicDevelopment?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
     yesInitiative?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
+    // FSC converters (Banks / LTI / STI) also carry these two pillars.
+    empowermentFinancing?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
+    accessToFinancialServices?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
   };
   /**
    * FSC Banks/LTI — Empowerment Financing pillar config.
@@ -643,6 +646,8 @@ export interface InsertClient {
 }
 
 const clientSchema = new Schema({
+  /** Rules Studio ruleset pins (scorecardId -> { version, pinnedAt, pinnedBy, reason }); written by the API's pin endpoints only. */
+  rulesetPins: { type: Schema.Types.Mixed, default: () => ({}) },
   /** Aligns with API `clients.id` unique index — set equal to clientId on create. */
   id: { type: String, default: null, sparse: true, unique: true },
   clientId: { type: String, required: true, unique: true, index: true },

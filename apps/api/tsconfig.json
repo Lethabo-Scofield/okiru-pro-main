@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "outDir": "dist",
     "strict": true,
     "skipLibCheck": true,
@@ -20,5 +20,5 @@
     "./**/*.ts",
     "../../packages/data-layer/src/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "vite.ts", "**/__tests__/**"]
+  "exclude": ["node_modules", "dist", "vite.ts", "vitest.config.ts", "**/__tests__/**"]
 }

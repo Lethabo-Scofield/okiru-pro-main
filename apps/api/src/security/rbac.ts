@@ -35,6 +35,11 @@ interface CacheEntry {
 
 const CACHE_TTL_MS = 30_000;
 const cache = new Map<string, CacheEntry>();
+const DEMO_USER_ID = "demo-offline-user";
+
+function isDemoLoginEnabled(): boolean {
+  return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
 
 function cacheKey(userId: string, organizationId: string | null): string {
   return `${userId}::${organizationId ?? "_"}`;
@@ -66,6 +71,10 @@ export async function resolvePermissions(
   userId: string,
   organizationId: string | null,
 ): Promise<ResolvedPermissions> {
+  if (userId === DEMO_USER_ID && isDemoLoginEnabled()) {
+    return { permissions: ALL_PERMISSIONS, roles: ["admin", "super_admin"] };
+  }
+
   const key = cacheKey(userId, organizationId);
   const now = Date.now();
   const cached = cache.get(key);

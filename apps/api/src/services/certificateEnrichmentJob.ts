@@ -18,12 +18,13 @@ import {
   hasUsableCertificateExtractedText,
   hasUsefulExtractedText,
   MIN_USEFUL_EXTRACTED_TEXT_LENGTH,
+  storedCertificateText,
   usefulExtractedTextLength,
 } from './certificateExtractionStatus.js';
 
 const logger = createLogger('CertEnrichment');
 const TMP_DIR = join(tmpdir(), 'cert-enrichment');
-export const CERTIFICATE_ENRICHMENT_VERSION = 'cert-enrichment-v1';
+export const CERTIFICATE_ENRICHMENT_VERSION = 'cert-enrichment-v3';
 
 export const ENRICHMENT_FIELDS = [
   'companyName',
@@ -37,6 +38,7 @@ export const ENRICHMENT_FIELDS = [
   'bbbeeLevelStatus',
   'certificateType',
   'procurementRecognition',
+  'bbbeeScore',
   'companySize',
   'blackOwnership',
   'blackWomenOwnership',
@@ -57,24 +59,9 @@ export const ENRICHMENT_FIELDS = [
 export type EnrichmentField = typeof ENRICHMENT_FIELDS[number];
 type EnrichmentStatus = 'pending' | 'processing' | 'completed' | 'review_required' | 'failed' | 'pending_text_recovery';
 
-export const PRODUCTION_CERTIFICATE_FIELDS = [
-  'companyName',
-  'registrationNumber',
-  'sectorCode',
-  'sectorName',
-  'vatNumber',
-  'bbbeeLevel',
-  'bbbeeLevelStatus',
-  'companySize',
-  'blackOwnership',
-  'blackWomenOwnership',
-  'issueDate',
-  'expiryDate',
-  'certificateNumber',
-  'verificationAgency',
-] as const satisfies readonly EnrichmentField[];
+export const PRODUCTION_CERTIFICATE_FIELDS = [...ENRICHMENT_FIELDS] as const;
 
-type FieldCandidate = {
+export type FieldCandidate = {
   field: EnrichmentField;
   mongoField: string;
   value: string | number | boolean | Date | Record<string, string> | null;
@@ -83,21 +70,30 @@ type FieldCandidate = {
   source: 'text' | 'filename' | 'trusted_mapping';
 };
 
+export type ReviewCandidateAlternative = {
+  value: string;
+  snippet: string;
+  confidence: number;
+};
+
 type ReviewField = {
   field: EnrichmentField;
   reason: string;
   evidence?: string;
   value?: unknown;
+  /** The extractor's own confidence for the value, when it had one. */
+  confidence?: number;
+  source?: 'text' | 'filename' | 'regex_fallback';
+  /** More than one plausible value was found: the user must choose. */
+  candidates?: ReviewCandidateAlternative[];
 };
 
-type ReviewCandidate = {
+export type ReviewCandidate = {
   field: EnrichmentField;
   value: unknown;
-  candidates?: Array<{
-    value: string;
-    snippet: string;
-    confidence: number;
-  }>;
+  candidates?: ReviewCandidateAlternative[];
+  /** True when several plausible values compete; `value` is then only the strongest of them. */
+  ambiguous?: boolean;
   confidence: number;
   source: 'text' | 'filename' | 'regex_fallback';
   reason: string;
@@ -106,6 +102,9 @@ type ReviewCandidate = {
   version: string;
   at: Date;
 };
+
+/** Confidence given to a loose hint that came from no strict rule at all. */
+export const LOOSE_HINT_CONFIDENCE = 0.62;
 
 type VatTextCandidate = {
   value: string;
@@ -167,6 +166,7 @@ export type CertificateEnrichmentOptions = {
   reviewSampleLimit?: number;
   fields?: EnrichmentField[];
   onlyUsableText?: boolean;
+  blobNames?: string[];
 };
 
 export type CertificateEnrichmentResult = {
@@ -206,7 +206,7 @@ export type CertificateEnrichmentResult = {
 
 type MongoDoc = Record<string, any>;
 
-const FIELD_TO_MONGO: Record<EnrichmentField, string> = {
+export const FIELD_TO_MONGO: Record<EnrichmentField, string> = {
   companyName: 'supplierName',
   tradingName: 'tradingName',
   registrationNumber: 'registrationNumber',
@@ -218,6 +218,7 @@ const FIELD_TO_MONGO: Record<EnrichmentField, string> = {
   bbbeeLevelStatus: 'bbbeeLevelStatus',
   certificateType: 'certificateType',
   procurementRecognition: 'procurementRecognition',
+  bbbeeScore: 'bbbeeScore',
   companySize: 'companySize',
   blackOwnership: 'blackOwnership',
   blackWomenOwnership: 'blackWomenOwnership',
@@ -235,34 +236,10 @@ const FIELD_TO_MONGO: Record<EnrichmentField, string> = {
   contactDetails: 'contactDetails',
 };
 
-const MIN_SAVE_CONFIDENCE: Record<EnrichmentField, number> = {
-  companyName: 0.7,
-  tradingName: 0.82,
-  registrationNumber: 0.9,
-  taxNumber: 0.9,
-  sectorCode: 0.86,
-  sectorName: 0.86,
-  vatNumber: 0.9,
-  bbbeeLevel: 0.88,
-  bbbeeLevelStatus: 0.88,
-  certificateType: 0.86,
-  procurementRecognition: 0.88,
-  companySize: 0.8,
-  blackOwnership: 0.88,
-  blackWomenOwnership: 0.88,
-  blackDesignatedGroupOwnership: 0.88,
-  empoweringSupplier: 0.86,
-  valueAddingSupplier: 0.86,
-  issueDate: 0.88,
-  expiryDate: 0.88,
-  measurementPeriod: 0.84,
-  certificateNumber: 0.84,
-  verificationAgency: 0.82,
-  sanasAccreditationNumber: 0.9,
-  commissionerDetails: 0.82,
-  physicalAddress: 0.82,
-  contactDetails: 0.82,
-};
+import { FIELD_MIN_SAVE_CONFIDENCE } from './certificateFieldThresholds.js';
+
+/** Every enrichment field has a threshold (asserted in the tests). */
+export const MIN_SAVE_CONFIDENCE = FIELD_MIN_SAVE_CONFIDENCE as Record<EnrichmentField, number>;
 
 function selectedFields(fields?: EnrichmentField[]): EnrichmentField[] {
   if (!fields?.length) return [...PRODUCTION_CERTIFICATE_FIELDS];
@@ -334,21 +311,40 @@ function errorMessage(err: unknown): string {
     : String(err);
 }
 
-function shouldUpdateField(
+/** A person confirmed or edited this value; nothing automatic may replace it. */
+export function isHumanConfirmed(doc: MongoDoc | null, field: EnrichmentField): boolean {
+  const meta = doc?.fieldConfidence?.[field];
+  return !!meta && (meta.source === 'manual' || !!meta.confirmedAt || !!meta.confirmedBy);
+}
+
+/**
+ * May `candidate` replace what is stored for `field`?
+ *
+ * Rules, in order:
+ *  1. An empty field is always filled.
+ *  2. A human-confirmed value is never replaced - not even by `force`.
+ *  3. A stored value is replaced only by a candidate that is strictly MORE
+ *     confident than the confidence recorded for it. `force` does not relax this.
+ *  4. A stored value with no recorded confidence (older data, or edited before
+ *     provenance existed) is treated as trusted and left alone.
+ * Nothing here ever writes null: callers only pass real candidates.
+ */
+export function shouldUpdateField(
   doc: MongoDoc | null,
   field: EnrichmentField,
   candidate: FieldCandidate,
   force: boolean,
 ): boolean {
-  if (force) return true;
   if (!doc) return true;
   const mongoField = FIELD_TO_MONGO[field];
   if (!hasValue(doc[mongoField])) return true;
+  if (isHumanConfirmed(doc, field)) return false;
 
   const existingConfidence = doc.fieldConfidence?.[field]?.confidence;
-  return typeof existingConfidence === 'number'
-    && existingConfidence < MIN_SAVE_CONFIDENCE[field]
-    && candidate.confidence > existingConfidence;
+  if (typeof existingConfidence !== 'number') return false;
+  if (candidate.confidence <= existingConfidence) return false;
+  // Without `force`, only replace a value that was itself below the safe-save bar.
+  return force || existingConfidence < MIN_SAVE_CONFIDENCE[field];
 }
 
 function textSnippet(text: string, index: number, len: number): string {
@@ -384,13 +380,30 @@ function validDate(year: number, month: number, day: number): Date | null {
   return d;
 }
 
-function pushReview(reviews: ReviewField[], field: EnrichmentField, reason: string, candidate?: Partial<FieldCandidate>) {
+function pushReview(
+  reviews: ReviewField[],
+  field: EnrichmentField,
+  reason: string,
+  candidate?: Partial<FieldCandidate> & { candidates?: ReviewCandidateAlternative[] },
+) {
   reviews.push({
     field,
     reason,
     evidence: candidate?.evidence,
     value: candidate?.value,
+    // Keep what the extractor actually knew instead of flattening it later.
+    confidence: typeof candidate?.confidence === 'number' ? candidate.confidence : undefined,
+    source: candidate?.source === 'filename' ? 'filename' : candidate?.source ? 'text' : undefined,
+    candidates: candidate?.candidates,
   });
+}
+
+/** Values a person has rejected for a field; the extractor must not keep re-proposing them. */
+function isRejectedCandidate(doc: MongoDoc | null, field: EnrichmentField, value: unknown): boolean {
+  const rejected = doc?.rejectedCandidates?.[field];
+  if (!Array.isArray(rejected) || !hasValue(value)) return false;
+  const wanted = String(normalizeExistingValue(value)).trim().toLowerCase();
+  return rejected.some((v: unknown) => String(normalizeExistingValue(v)).trim().toLowerCase() === wanted);
 }
 
 function normalizeReviewCandidateValue(field: EnrichmentField, value: unknown): unknown {
@@ -424,13 +437,26 @@ export function buildReviewCandidates(
 ): Record<string, ReviewCandidate> {
   const result: Record<string, ReviewCandidate> = {};
   for (const review of reviewFields) {
-    if (!hasValue(review.value)) continue;
+    const alternatives = (review.candidates ?? []).filter((c) => hasValue(c.value));
+    // A review with neither a value nor alternatives ("missing_vat_number") has
+    // nothing to keep; everything else must stay inspectable.
+    if (!hasValue(review.value) && alternatives.length === 0) continue;
     if (hasTrustedValue(doc, updates, review.field)) continue;
+    const proposed = hasValue(review.value) ? review.value : alternatives[0].value;
+    if (isRejectedCandidate(doc, review.field, proposed)) continue;
+
+    const confidence = typeof review.confidence === 'number' ? review.confidence : LOOSE_HINT_CONFIDENCE;
+    // Several reviews can arrive for one field; keep the strongest, not the last.
+    const existing = result[review.field];
+    if (existing && existing.confidence >= confidence) continue;
+
     result[review.field] = {
       field: review.field,
-      value: normalizeReviewCandidateValue(review.field, review.value),
-      confidence: 0.62,
-      source: review.reason.includes('filename') ? 'filename' : 'regex_fallback',
+      value: normalizeReviewCandidateValue(review.field, proposed),
+      ...(alternatives.length ? { candidates: alternatives } : {}),
+      ...(alternatives.length > 1 ? { ambiguous: true } : {}),
+      confidence,
+      source: review.source ?? (review.reason.includes('filename') ? 'filename' : 'regex_fallback'),
       reason: review.reason,
       evidence: review.evidence,
       needsReview: true,
@@ -542,24 +568,84 @@ function extractTradingName(text: string): FieldCandidate | null {
   };
 }
 
+const REG_VALUE = String.raw`([0-9]{4}\s*\/\s*[0-9]{6}\s*\/\s*[0-9]{2,3}|[0-9]{10,14})`;
+/** "Registration Number:", "Registration No.:", OCR-split "Registration numbe r:". */
+const REG_STRICT_LABEL = new RegExp(String.raw`(?:registration|enterprise|company|entity)\s*(?:no|number|numbe\s*r|nr|reg\.?\s*(?:no|number)?)\.?[:\s#-]*${REG_VALUE}`, 'gi');
+/** "Reg. No.", "Reg No:", "Reg Nr" - the abbreviation also heads a verification agency's letterhead. */
+const REG_LOOSE_LABEL = new RegExp(String.raw`\breg(?:istration)?\.?\s*(?:no|number|nr)\.?[:\s#-]*${REG_VALUE}`, 'gi');
+/** A bare CIPC-format number (YYYY/NNNNNN/NN) with no label at all. */
+const REG_BARE_CIPC = /(?<![\d/])((?:19|20)\d{2}\s*\/\s*\d{6}\s*\/\s*\d{2})(?![\d/])/g;
+
+/**
+ * Registration number.
+ *
+ * Auto-saves only an unambiguous value behind a full "Registration Number" style
+ * label. The supplier's number and the verification agency's number both appear
+ * on a certificate, so two different numbers are never guessed between: they are
+ * kept as alternatives for a person to choose. Abbreviated ("Reg. No.") and
+ * unlabelled numbers are kept as lower-confidence review candidates.
+ */
 function extractRegistrationNumber(text: string, reviews: ReviewField[]): FieldCandidate | null {
-  const matches = [...text.matchAll(/(?:registration|enterprise|company|entity)\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?)[:\s#-]*([0-9]{4}\s*\/\s*[0-9]{6}\s*\/\s*[0-9]{2,3}|[0-9]{10,14})/gi)];
-  for (const m of matches) {
-    const value = normalizeRegistrationNumber(m[1]);
-    if (value) {
-      return {
-        field: 'registrationNumber',
-        mongoField: 'registrationNumber',
-        value,
-        confidence: 0.94,
-        evidence: textSnippet(text, m.index ?? 0, m[0].length),
-        source: 'text',
-      };
+  type Hit = { value: string; snippet: string };
+  const collect = (re: RegExp, invalidReason: string): Hit[] => {
+    const hits: Hit[] = [];
+    const seen = new Set<string>();
+    for (const m of text.matchAll(new RegExp(re.source, re.flags))) {
+      const snippet = textSnippet(text, m.index ?? 0, m[0].length);
+      const value = normalizeRegistrationNumber(m[1]);
+      if (!value) {
+        pushReview(reviews, 'registrationNumber', invalidReason, { value: m[1], evidence: snippet });
+        continue;
+      }
+      if (seen.has(value)) continue;
+      seen.add(value);
+      hits.push({ value, snippet });
     }
-    pushReview(reviews, 'registrationNumber', 'Registration number label found but value failed South African pattern validation', {
-      value: m[1],
-      evidence: textSnippet(text, m.index ?? 0, m[0].length),
+    return hits;
+  };
+  const asAlternatives = (hits: Hit[], confidence: number): ReviewCandidateAlternative[] =>
+    hits.slice(0, 6).map((h) => ({ value: h.value, snippet: h.snippet, confidence }));
+  const review = (hits: Hit[], confidence: number, reason: string): null => {
+    const alternatives = asAlternatives(hits, confidence);
+    pushReview(reviews, 'registrationNumber', reason, {
+      value: alternatives[0].value,
+      confidence,
+      source: 'text',
+      evidence: alternatives[0].snippet,
+      candidates: alternatives.length > 1 ? alternatives : undefined,
     });
+    return null;
+  };
+
+  const strict = collect(REG_STRICT_LABEL, 'Registration number label found but value failed South African pattern validation');
+  if (strict.length === 1) {
+    return {
+      field: 'registrationNumber',
+      mongoField: 'registrationNumber',
+      value: strict[0].value,
+      confidence: 0.94,
+      evidence: strict[0].snippet,
+      source: 'text',
+    };
+  }
+  if (strict.length > 1) return review(strict, 0.7, 'multiple_registration_number_candidates');
+
+  const loose = collect(REG_LOOSE_LABEL, 'Registration number abbreviation found but value failed South African pattern validation');
+  if (loose.length === 1) {
+    return {
+      field: 'registrationNumber',
+      mongoField: 'registrationNumber',
+      value: loose[0].value,
+      confidence: 0.72,
+      evidence: loose[0].snippet,
+      source: 'text',
+    };
+  }
+  if (loose.length > 1) return review(loose, 0.66, 'multiple_registration_number_candidates');
+
+  const bare = collect(REG_BARE_CIPC, 'Registration-number-shaped value failed validation');
+  if (bare.length > 0) {
+    return review(bare, 0.55, bare.length > 1 ? 'multiple_registration_number_candidates' : 'unlabelled_registration_number_candidate');
   }
   return null;
 }
@@ -625,7 +711,14 @@ function collectLabelledVatCandidates(text: string): VatTextCandidate[] {
     const window = text.slice(start, Math.min(text.length, start + 180));
     const found = collectVatLikeNumbers(window, { allowOcrChars: true, rejectNegativeContext: false }).candidates;
     for (const candidate of found) {
-      const betweenLabelAndNumber = window.slice(m[0].length, candidate.index);
+      // "VAT Number (if applicable) 4012345678": the label is followed by a form
+      // annotation, not by another word that would make the number someone else's.
+      // OCR mangles it ("(lf applicable)", "(if aoolicable)", "{if applicable)"),
+      // so tolerate a one-character slip but nothing broader.
+      const betweenLabelAndNumber = window
+        .slice(m[0].length, candidate.index)
+        .replace(/[([{]\s*[il1]f\s+a[a-z]{4,10}\s*[)\]}|]?/gi, ' ')
+        .replace(/[([{]\s*optional\s*[)\]}]?/gi, ' ');
       if (/[A-Za-z]{2,}/.test(betweenLabelAndNumber)) continue;
       if (seen.has(candidate.value)) continue;
       seen.add(candidate.value);
@@ -702,8 +795,18 @@ function extractVat(text: string, reviews: ReviewField[]): FieldCandidate | null
     };
   }
   if (analysis.status === 'multiple_candidates') {
+    // Ambiguous: keep every plausible number, individually inspectable, rather
+    // than one comma-joined string nobody can confirm.
+    const alternatives = analysis.candidates.slice(0, 6).map((candidate) => ({
+      value: candidate.value,
+      snippet: candidate.snippet,
+      confidence: candidate.confidence,
+    }));
     pushReview(reviews, 'vatNumber', 'multiple_vat_like_candidates', {
-      value: analysis.candidates.slice(0, 6).map((candidate) => candidate.value).join(', '),
+      value: alternatives[0]?.value,
+      confidence: Math.max(...alternatives.map((a) => a.confidence)),
+      source: 'text',
+      candidates: alternatives,
       evidence: analysis.candidates.map((candidate) => `${candidate.value}: ${candidate.snippet}`).join(' | '),
     });
   }
@@ -852,6 +955,32 @@ function extractProcurementRecognition(text: string, reviews: ReviewField[]): Fi
     pushReview(reviews, 'procurementRecognition', 'Procurement recognition percentage was outside 0-135', {
       value: m[1],
       evidence: textSnippet(text, m.index, m[0].length),
+    });
+  }
+  return null;
+}
+
+function extractBbbeeScore(text: string, reviews: ReviewField[]): FieldCandidate | null {
+  const patterns = [
+    /(?:overall\s+b-?bbee\s+score|overall\s+score|total\s+score|b-?bbee\s+score|score\s+achieved)[:\s-]*(\d{1,3}(?:[.,]\d{1,2})?)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const score = Number(match[1].replace(',', '.'));
+    if (Number.isFinite(score) && score >= 0 && score <= 130) {
+      return {
+        field: 'bbbeeScore',
+        mongoField: 'bbbeeScore',
+        value: score,
+        confidence: 0.9,
+        evidence: textSnippet(text, match.index, match[0].length),
+        source: 'text',
+      };
+    }
+    pushReview(reviews, 'bbbeeScore', 'B-BBEE score was outside the valid 0-130 range', {
+      value: match[1],
+      evidence: textSnippet(text, match.index, match[0].length),
     });
   }
   return null;
@@ -1488,6 +1617,7 @@ export function collectFieldCandidates(text: string, fileName: string, fields: E
   add(extractBbbeeLevelStatus(text));
   if (fields.includes('certificateType')) add(extractCertificateType(text));
   if (fields.includes('procurementRecognition')) add(extractProcurementRecognition(text, reviews));
+  if (fields.includes('bbbeeScore')) add(extractBbbeeScore(text, reviews));
   add(extractCompanySize(text, reviews));
   add(extractCompanySizeFromFilename(fileName));
   add(extractOwnership(text, 'blackOwnership', reviews));
@@ -1557,6 +1687,7 @@ function createAuditEntry(params: {
   extractionStatus: string;
   updates: Record<string, unknown>;
   reviewFields: ReviewField[];
+  decisions?: FieldDecision[];
 }) {
   return {
     id: randomUUID(),
@@ -1570,6 +1701,8 @@ function createAuditEntry(params: {
     extractionStatus: params.extractionStatus,
     updatedFields: Object.keys(params.updates),
     reviewFields: params.reviewFields.map((r) => r.field),
+    // Provenance: what was extracted, from where, how confident, and what was kept.
+    fieldDecisions: (params.decisions ?? []).slice(0, 40),
   };
 }
 
@@ -1611,9 +1744,10 @@ async function loadMetadataMap(blobNames: string[]): Promise<Map<string, MongoDo
   return map;
 }
 
-async function listUsableTextMetadataDocs(fields: EnrichmentField[], force: boolean, limit: number): Promise<Array<{ blob: { name: string; lastModified: Date | null }; doc: MongoDoc }>> {
+async function listUsableTextMetadataDocs(fields: EnrichmentField[], force: boolean, limit: number, blobNames?: string[]): Promise<Array<{ blob: { name: string; lastModified: Date | null }; doc: MongoDoc }>> {
   const docs = await CertificateMetadataModel.find({
     ...usableTextQuery(),
+    ...(blobNames?.length ? { blobName: { $in: blobNames } } : {}),
   }).sort({ updatedAt: 1 }).limit(Math.max(limit * 4, limit)).lean();
 
   return (docs as MongoDoc[])
@@ -1629,6 +1763,10 @@ async function listUsableTextMetadataDocs(fields: EnrichmentField[], force: bool
 function needsEnrichment(doc: MongoDoc | null, fields: EnrichmentField[], force: boolean): boolean {
   if (force) return true;
   if (!doc) return true;
+  if (
+    doc.enrichmentVersion === CERTIFICATE_ENRICHMENT_VERSION
+    && ['complete', 'needs_review'].includes(String(doc.metadataStatus || ''))
+  ) return false;
   return fields.some((field) => !hasValue(doc[FIELD_TO_MONGO[field]]));
 }
 
@@ -1653,15 +1791,20 @@ async function calculateCoverage(fields: EnrichmentField[]): Promise<Record<Enri
 }
 
 export async function countPresentCertificateField(field: string): Promise<number> {
+  const condition = ['empoweringSupplier', 'valueAddingSupplier'].includes(field)
+    ? { $exists: true, $ne: null }
+    : { $exists: true, $nin: [null, ''] };
   return CertificateMetadataModel.countDocuments({
-    [field]: { $exists: true, $nin: [null, ''] },
+    [field]: condition,
   });
 }
 
 export async function countPresentAnyCertificateField(fields: string[]): Promise<number> {
   return CertificateMetadataModel.countDocuments({
     $or: fields.map((field) => ({
-      [field]: { $exists: true, $nin: [null, ''] },
+      [field]: ['empoweringSupplier', 'valueAddingSupplier'].includes(field)
+        ? { $exists: true, $ne: null }
+        : { $exists: true, $nin: [null, ''] },
     })),
   });
 }
@@ -2087,6 +2230,118 @@ function reviewLinks(blobName: string, fileName: string, reviewFields: ReviewFie
   };
 }
 
+/**
+ * What happened to one field during enrichment: the provenance trail.
+ *   accepted       passed validation and was written as a trusted value
+ *   needs_review   plausible but not safe to save; kept as a review candidate
+ *   kept_existing  a candidate was found but a stored value is protected
+ *   no_candidate   nothing plausible was found
+ */
+export type FieldDecision = {
+  field: EnrichmentField;
+  decision: 'accepted' | 'needs_review' | 'kept_existing' | 'no_candidate';
+  extractedValue: string | null;
+  confidence: number | null;
+  source: string | null;
+  reason: string;
+  persistedValue: string | null;
+};
+
+/** Identifiers only - never document text - and bounded in length. */
+function shortValue(value: unknown): string | null {
+  if (!hasValue(value)) return null;
+  const v = normalizeExistingValue(value);
+  const text = typeof v === 'string' ? v : JSON.stringify(v);
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+/**
+ * Structured provenance logs: one debug line per field decision and one info line
+ * per certificate. Carries identifiers and outcomes, never document text.
+ */
+export function logFieldDecisions(certificateId: string | null, blobName: string, decisions: FieldDecision[]): void {
+  for (const d of decisions) {
+    logger.debug('Certificate field decision', {
+      certificateId,
+      blobName,
+      field: d.field,
+      extractedValue: d.extractedValue,
+      confidence: d.confidence,
+      source: d.source,
+      validationDecision: d.decision,
+      reason: d.reason,
+      persistedValue: d.persistedValue,
+    });
+  }
+  const count = (kind: FieldDecision['decision']) => decisions.filter((d) => d.decision === kind).length;
+  logger.info('Certificate field decisions', {
+    certificateId,
+    blobName,
+    accepted: count('accepted'),
+    needsReview: count('needs_review'),
+    keptExisting: count('kept_existing'),
+    noCandidate: count('no_candidate'),
+    needsReviewFields: decisions.filter((d) => d.decision === 'needs_review').map((d) => d.field),
+  });
+}
+
+export function describeDecision(
+  candidate: FieldCandidate,
+  decision: FieldDecision['decision'],
+  reason: string,
+  persisted: unknown,
+): FieldDecision {
+  return {
+    field: candidate.field,
+    decision,
+    extractedValue: shortValue(candidate.value),
+    confidence: candidate.confidence,
+    source: candidate.source,
+    reason,
+    persistedValue: shortValue(persisted),
+  };
+}
+
+/** Within one run a field gets ONE candidate: the most confident (first wins a tie). */
+export function bestCandidatePerField(candidates: FieldCandidate[]): FieldCandidate[] {
+  const best = new Map<EnrichmentField, FieldCandidate>();
+  for (const candidate of candidates) {
+    const current = best.get(candidate.field);
+    if (!current || candidate.confidence > current.confidence) best.set(candidate.field, candidate);
+  }
+  return [...best.values()];
+}
+
+function protectionReason(doc: MongoDoc | null, candidate: FieldCandidate): string {
+  if (isHumanConfirmed(doc, candidate.field)) return 'existing_value_confirmed_by_a_person';
+  const existing = doc?.fieldConfidence?.[candidate.field]?.confidence;
+  if (typeof existing !== 'number') return 'existing_value_has_no_recorded_confidence_so_is_trusted';
+  return candidate.confidence <= existing ? 'candidate_not_more_confident_than_existing' : 'existing_value_above_safe_save_threshold';
+}
+
+/**
+ * Combine what is already stored with this run's review candidates.
+ * Keeps the more confident of two proposals for a field, and drops any stored
+ * candidate a person has since rejected. Nothing else is ever discarded.
+ */
+export function mergeReviewCandidates(
+  doc: MongoDoc | null,
+  built: Record<string, ReviewCandidate>,
+): Record<string, ReviewCandidate> {
+  const existing: Record<string, any> = doc?.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {};
+  const merged: Record<string, any> = {};
+  for (const [field, candidate] of Object.entries(existing)) {
+    if (candidate && typeof candidate === 'object' && isRejectedCandidate(doc, field as EnrichmentField, (candidate as any).value)) continue;
+    merged[field] = candidate;
+  }
+  for (const [field, candidate] of Object.entries(built)) {
+    const current = merged[field];
+    const currentConfidence = typeof current?.confidence === 'number' ? current.confidence : -1;
+    if (!current || candidate.confidence >= currentConfidence) merged[field] = candidate;
+  }
+  return merged;
+}
+
 export async function runCertificateEnrichmentJob(
   blobServiceClient: BlobServiceClient,
   options: CertificateEnrichmentOptions = {},
@@ -2096,8 +2351,12 @@ export async function runCertificateEnrichmentJob(
   const onlyUsableText = options.onlyUsableText === true;
   const forceText = onlyUsableText ? false : options.forceText === true;
   const includeDetails = options.includeDetails === true;
-  const reviewSampleLimit = Math.min(Math.max(Number(options.reviewSampleLimit) || 50, 0), 500);
+  const requestedReviewSampleLimit = Number(options.reviewSampleLimit);
+  const reviewSampleLimit = Number.isFinite(requestedReviewSampleLimit)
+    ? Math.min(Math.max(requestedReviewSampleLimit, 0), 500)
+    : 50;
   const fields = selectedFields(options.fields);
+  const blobNames = Array.from(new Set((options.blobNames ?? []).filter((name) => typeof name === 'string' && name.trim())));
   const requestedLimit = Number(options.limit);
   const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
     ? Math.min(Math.floor(requestedLimit), 5_000)
@@ -2113,6 +2372,7 @@ export async function runCertificateEnrichmentJob(
         const blobs = await listAzureBlobs(blobServiceClient);
         const metadataMap = await loadMetadataMap(blobs.map((b) => b.name));
         return blobs
+          .filter((blob) => blobNames.length === 0 || blobNames.includes(blob.name))
           .map((blob) => ({
             blob,
             doc: metadataMap.get(blob.name) ?? metadataMap.get(blobBasename(blob.name)) ?? null,
@@ -2120,7 +2380,7 @@ export async function runCertificateEnrichmentJob(
           .filter(({ doc }) => needsEnrichment(doc, fields, force))
           .slice(0, limit);
       })()
-    : await listUsableTextMetadataDocs(fields, force, limit);
+    : await listUsableTextMetadataDocs(fields, force, limit, blobNames);
 
   logger.info('Certificate enrichment batch started', {
     candidates: allCandidates.length,
@@ -2165,7 +2425,7 @@ export async function runCertificateEnrichmentJob(
       if (!dryRun && doc?.blobName) {
         await CertificateMetadataModel.updateOne(
           { blobName: doc.blobName },
-          { $set: { enrichmentStatus: 'processing', updatedAt: new Date() } },
+          { $set: { enrichmentStatus: 'processing', metadataStatus: 'processing', updatedAt: new Date() } },
         );
       }
 
@@ -2177,6 +2437,12 @@ export async function runCertificateEnrichmentJob(
       } else if (onlyUsableText) {
         pushReview(reviewFields, 'companyName', 'Certificate is pending text recovery; enrichment skipped until usable extracted text exists');
         result.reviewRequired++;
+        if (!dryRun && doc?.blobName) {
+          await CertificateMetadataModel.updateOne(
+            { blobName: doc.blobName },
+            { $set: { metadataStatus: 'pending_text_recovery', enrichmentStatus: 'review_required', updatedAt: new Date() } },
+          );
+        }
         if (result.reviewSamples.length < reviewSampleLimit) {
           result.reviewSamples.push(reviewLinks(blob.name, fileName, reviewFields));
         }
@@ -2197,7 +2463,7 @@ export async function runCertificateEnrichmentJob(
         extractedTextLength = usefulExtractedTextLength(text);
         extractionStatus = extractionStatusForText(text) as 'completed' | 'text_too_short';
         if (!dryRun && extractionStatus === 'completed') {
-          updates.extractedText = text.substring(0, 4000);
+          updates.extractedText = storedCertificateText(text);
         }
       }
 
@@ -2206,12 +2472,17 @@ export async function runCertificateEnrichmentJob(
       }
 
       const fieldCandidates = collectFieldCandidates(text, fileName, fields, reviewFields);
-      for (const candidate of fieldCandidates) {
+      const decisions: FieldDecision[] = [];
+      for (const candidate of bestCandidatePerField(fieldCandidates)) {
         if (candidate.confidence < MIN_SAVE_CONFIDENCE[candidate.field]) {
           pushReview(reviewFields, candidate.field, 'Candidate confidence below safe-save threshold', candidate);
+          decisions.push(describeDecision(candidate, 'needs_review', 'below_safe_save_threshold', null));
           continue;
         }
-        if (!shouldUpdateField(doc, candidate.field, candidate, force)) continue;
+        if (!shouldUpdateField(doc, candidate.field, candidate, force)) {
+          decisions.push(describeDecision(candidate, 'kept_existing', protectionReason(doc, candidate), doc?.[candidate.mongoField]));
+          continue;
+        }
 
         updates[candidate.mongoField] = candidate.value;
         confidenceUpdates[candidate.field] = {
@@ -2220,15 +2491,30 @@ export async function runCertificateEnrichmentJob(
           extractionMethod: candidate.source === 'filename' ? 'filename_safe_fallback' : candidate.source === 'trusted_mapping' ? 'text_parser' : 'text_regex',
           evidence: candidate.evidence,
           sourceTextSnippet: candidate.evidence,
+          validation: 'accepted',
           version: CERTIFICATE_ENRICHMENT_VERSION,
           at: new Date(),
         };
+        decisions.push(describeDecision(candidate, 'accepted', 'meets_safe_save_threshold', candidate.value));
       }
 
-      const nextReviewCandidates = {
-        ...(doc?.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}),
-        ...buildReviewCandidates(doc, updates, reviewFields),
-      };
+      // Hints the strict rules refused still need a recorded outcome: either a
+      // retained review candidate or an explicit "nothing found".
+      for (const review of reviewFields) {
+        if (decisions.some((d) => d.field === review.field)) continue;
+        const kept = hasValue(review.value) || (review.candidates?.length ?? 0) > 0;
+        decisions.push({
+          field: review.field,
+          decision: kept ? 'needs_review' : 'no_candidate',
+          extractedValue: kept ? shortValue(review.value ?? review.candidates?.[0]?.value) : null,
+          confidence: typeof review.confidence === 'number' ? review.confidence : kept ? LOOSE_HINT_CONFIDENCE : null,
+          source: review.source ?? (kept ? 'regex_fallback' : null),
+          reason: review.reason,
+          persistedValue: null,
+        });
+      }
+
+      const nextReviewCandidates = mergeReviewCandidates(doc, buildReviewCandidates(doc, updates, reviewFields));
       for (const candidate of fieldCandidates) {
         if (hasTrustedValue(doc, updates, candidate.field)) {
           delete nextReviewCandidates[candidate.field];
@@ -2293,7 +2579,9 @@ export async function runCertificateEnrichmentJob(
         extractionStatus,
         updates,
         reviewFields,
+        decisions,
       });
+      logFieldDecisions(doc?.id ?? null, blob.name, decisions);
       if (!dryRun) {
         const updateDoc = {
           $set: {
@@ -2301,6 +2589,8 @@ export async function runCertificateEnrichmentJob(
             fileName,
             ...updates,
             enrichmentStatus: status,
+            metadataStatus: status === 'review_required' ? 'needs_review' : 'complete',
+            textExtractionStatus: extractionStatus,
             lastEnrichedAt: new Date(),
             enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
             reviewFields: finalReviewFields,
@@ -2350,7 +2640,9 @@ export async function runCertificateEnrichmentJob(
               blobName: blob.name,
               fileName,
               enrichmentStatus: 'failed',
+              metadataStatus: 'failed',
               extractionStatus: 'failed',
+              textExtractionStatus: 'failed',
               extractionMode: 'failed',
               extractionError: errorMessage(err),
               extractedAt: new Date(),

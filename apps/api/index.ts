@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
+// Optional second env file (e.g. apps/api/.env.rehearsal for a local Rules Studio rehearsal). Never overrides real env.
+if (process.env.RULES_ENV_FILE) dotenv.config({ path: process.env.RULES_ENV_FILE, override: false });
 
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
@@ -50,7 +52,7 @@ const allowedOrigins = (corsEnv && corsEnv.length > 0)
         "https://okiru-pro.com",
         "https://www.okiru-pro.com",
       ]
-    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5173"]);
+    : ["http://localhost:3000", "http://localhost:5000", "http://localhost:5002", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "http://127.0.0.1:5002", "http://127.0.0.1:5173"]);
 const corsLogger = createLogger("Cors");
 app.use(cors({
   origin(origin, callback) {
@@ -138,6 +140,10 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     // so it doesn't prevent process exit.
     void import("./src/services/workbookBackSyncFanout.js").then((m) => m.startBackSyncDrainer());
 
+    // Rules Studio nightly signed backup + integrity sweep + external heartbeat.
+    // A no-op unless RULES_MONITOR=true or RULES_LAUNCHED=true.
+    void import("./src/rules/studio/monitor.js").then((m) => m.startRulesMonitor());
+
     setImmediate(async () => {
       // Two replicas, one walk. See jobLease.ts — without the lease both pods
       // download and bill every unextracted certificate, twice, at once.
@@ -158,8 +164,8 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
           return getCertBlobServiceClient();
         },
         loadProcessor: async () => {
-          const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
-          return processAllCertificates;
+          const { processAllCertificatePipelines } = await import("./src/services/certificatePipeline.js");
+          return processAllCertificatePipelines;
         },
       });
     });

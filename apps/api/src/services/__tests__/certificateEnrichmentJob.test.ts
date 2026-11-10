@@ -68,7 +68,7 @@ describe('certificate enrichment job', () => {
     expect(countDocuments).toHaveBeenCalledWith({
       empoweringSupplier: {
         $exists: true,
-        $nin: [null, ''],
+        $ne: null,
       },
     });
   }, 15000);
@@ -230,6 +230,20 @@ describe('certificate enrichment job', () => {
 
     expect(byField.get('bbbeeLevel')).toMatchObject({ value: 4, source: 'text' });
     expect(byField.get('bbbeeLevelStatus')).toMatchObject({ value: 'Level 4', source: 'text' });
+  });
+
+  it('extracts a labelled overall B-BBEE score within the valid range', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const candidates = collectFieldCandidates(
+      'B-BBEE Verification Certificate\nOverall B-BBEE Score: 96.42\nLevel 2 Contributor',
+      'score.pdf',
+      ['bbbeeScore'],
+      [],
+    );
+
+    expect(candidates).toEqual([
+      expect.objectContaining({ field: 'bbbeeScore', value: 96.42, source: 'text' }),
+    ]);
   });
 
   it('extracts uppercase contributor wording with level words', async () => {

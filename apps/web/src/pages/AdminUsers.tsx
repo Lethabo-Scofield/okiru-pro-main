@@ -112,6 +112,9 @@ export default function AdminUsers() {
             <h1 className="text-2xl font-bold tracking-tight" data-testid="text-admin-title">User Management</h1>
             <p className="text-sm text-muted-foreground">View and manage all registered users</p>
           </div>
+          <Button variant="outline" className="ml-auto" onClick={() => navigate("/admin/intelligence")} data-testid="btn-user-intelligence">
+            User intelligence
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

@@ -1,9 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { createLogger } from '../logger.js';
-import { requireAuth } from '../middleware/auth.js';
-import { buildScorecardAdviceContext } from '../services/scorecardAdviceContext.js';
+// Use the shared API auth middleware so the local web proxy's verified demo
+// identity is accepted during development while production still requires a
+// real authenticated session.
+import { requireAuth } from '../middleware/requireAuth.js';
+import { buildScorecardAdviceContext, buildSupplierOnlyAdviceContext } from '../services/scorecardAdviceContext.js';
 import { runScorecardAdviceChat, validateAdviceMessage } from '../services/scorecardAdviceChat.js';
+import { isSupplierQuestion } from '../services/supplierIntelligence.js';
 
 const logger = createLogger('ScorecardAdviceRoute');
 
@@ -28,12 +32,18 @@ router.post('/:scorecardId/advice/chat', requireAuth, async (req: Request, res: 
       return res.status(400).json({ message: 'Only the B-BBEE toolkit assistant is supported right now.' });
     }
 
-    const context = await buildScorecardAdviceContext({
-      scorecardId,
-      userId,
-      organizationId,
-      runtimeSnapshot: req.body?.runtimeSnapshot,
-    });
+    // Supplier discovery is a company-level capability, not a scorecard
+    // explanation. The Toolkit often sends the active client id here, so
+    // checking only for the literal "current" route made supplier questions
+    // fall through to the generic scorecard fallback.
+    const context = isSupplierQuestion(message) && organizationId
+      ? await buildSupplierOnlyAdviceContext({ userId, organizationId })
+      : await buildScorecardAdviceContext({
+          scorecardId,
+          userId,
+          organizationId,
+          runtimeSnapshot: req.body?.runtimeSnapshot,
+        });
 
     if (!context) {
       return res.status(404).json({ message: 'Scorecard not found or access denied' });
@@ -47,6 +57,7 @@ router.post('/:scorecardId/advice/chat', requireAuth, async (req: Request, res: 
       sources: result.sources,
       tables: result.tables,
       actions: result.actions,
+      suppliers: result.supplierResults,
       suggestedQuestions: result.suggestedQuestions,
       warnings: result.warnings,
     });

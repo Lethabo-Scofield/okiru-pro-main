@@ -1715,7 +1715,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
 
 
   return (
-    <div data-testid="document-upload-start">
+    <div className="bbbee-document-upload" data-testid="document-upload-start">
       {/* Scoped animation keyframes */}
       <style>{`
         @keyframes dusFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

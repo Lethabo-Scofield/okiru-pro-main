@@ -185,7 +185,7 @@ html.dark .certificate-hub-light textarea {
 }
 
 :root {
-  --background: 260 10% 96%;
+  --background: 0 0% 100%;
   --foreground: 260 10% 10%;
   --card: 0 0% 100%;
   --card-foreground: 260 10% 10%;
@@ -240,11 +240,11 @@ html.dark .certificate-hub-light textarea {
   --border: 0 0% 15%;
   --input: 0 0% 15%;
   --ring: 0 0% 40%;
-  --chart-1: 220 40% 56%;
-  --chart-2: 158 50% 52%;
-  --chart-3: 36 60% 58%;
-  --chart-4: 200 60% 58%;
-  --chart-5: 340 50% 58%;
+  --chart-1: 220 40% 50%;
+  --chart-2: 158 50% 44%;
+  --chart-3: 36 60% 50%;
+  --chart-4: 200 60% 50%;
+  --chart-5: 340 50% 50%;
   --sidebar: 0 0% 4%;
   --sidebar-foreground: 0 0% 55%;
   --sidebar-primary: 0 0% 85%;

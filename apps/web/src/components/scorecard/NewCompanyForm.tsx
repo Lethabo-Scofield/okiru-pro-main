@@ -60,7 +60,7 @@ interface Props {
 }
 
 const field =
-  "w-full min-w-0 rounded-xl border border-white/[0.10] bg-[#0c0c0e] px-3.5 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-[rgba(255,255,255,0.32)] focus:border-violet-300/50 focus:ring-2 focus:ring-violet-300/10";
+  "w-full min-w-0 rounded-xl border border-[color:var(--rule)] bg-white px-3.5 py-2.5 text-[13px] text-[color:var(--hi)] outline-none transition-colors placeholder:text-[color:var(--muted)] focus:border-violet-400/50 focus:ring-2 focus:ring-violet-400/10";
 const fieldBad = "border-status-error/60 focus:border-status-error/60 focus:ring-status-error/10";
 
 export function NewCompanyForm({
@@ -141,9 +141,9 @@ export function NewCompanyForm({
             className={`${field} ${errorFor("sectorCode") ? fieldBad : ""}`}
             data-testid="select-new-company-sector"
           >
-            <option value="" className="bg-[#0c0c0e]">Choose a sector…</option>
+            <option value="" className="bg-white text-zinc-950">Choose a sector…</option>
             {CLIENT_SECTOR_CODES.map((code) => (
-              <option key={code} value={code} className="bg-[#0c0c0e]">
+              <option key={code} value={code} className="bg-white text-zinc-950">
                 {SECTOR_LABELS[code] ?? code}
               </option>
             ))}
@@ -162,11 +162,11 @@ export function NewCompanyForm({
             className={`${field} disabled:opacity-50 ${errorFor("scorecardType") ? fieldBad : ""}`}
             data-testid="select-new-company-type"
           >
-            <option value="" className="bg-[#0c0c0e]">
+            <option value="" className="bg-white text-zinc-950">
               {values.sectorCode ? "Choose a type…" : "Pick a sector first"}
             </option>
             {typeOptions.map((type) => (
-              <option key={type} value={type} className="bg-[#0c0c0e]">{type}</option>
+              <option key={type} value={type} className="bg-white text-zinc-950">{type}</option>
             ))}
           </select>
           <Message name="scorecardType" />
@@ -197,7 +197,7 @@ export function NewCompanyForm({
         className={
           tone === "primary"
             ? "inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-violet-500 px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)] transition-colors hover:bg-violet-400 disabled:opacity-40 disabled:hover:bg-violet-500 sm:w-auto"
-            : "inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[13px] font-semibold text-[#f2f2f7] transition-colors hover:bg-[rgba(255,255,255,0.10)] disabled:opacity-50 sm:w-auto"
+            : "inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-950 px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 sm:w-auto"
         }
         data-testid="button-start-scorecard"
       >

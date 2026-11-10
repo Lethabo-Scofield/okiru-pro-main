@@ -156,7 +156,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/certificates/by-slug/${encodeURIComponent(slug)}`);
+        const res = await fetch(`/internal/records/by-slug/${encodeURIComponent(slug)}`);
         if (!res.ok) {
           if (res.status === 404) throw new Error('Certificate not found in the public registry.');
           throw new Error(`Lookup failed (${res.status})`);
@@ -181,7 +181,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     if (!data?.id) return;
     setSavingEdit(true);
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}`, {
+      const res = await fetch(`/internal/records/${encodeURIComponent(data.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(certificateFormToPatchBody(values)),
@@ -227,7 +227,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
       return;
     }
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}/history`);
+      const res = await fetch(`/internal/records/${encodeURIComponent(data.id)}/history`);
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error?.message || 'Failed to load history');
       setHistory(json.data);
@@ -248,7 +248,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     }
     setDownloading(true);
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}/download`, { credentials: 'include' });
+      const res = await fetch(`/internal/records/${encodeURIComponent(data.id)}/download`, { credentials: 'include' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ message: 'Download failed' }));
         throw new Error(body.message || `Error ${res.status}`);
@@ -281,7 +281,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     }
     setReportSubmitting(true);
     try {
-      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}/reports`, {
+      const res = await fetch(`/internal/records/${encodeURIComponent(data.id)}/reports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
