@@ -22,8 +22,8 @@ export function Page({ title, subtitle, actions, children }: { title: string; su
     <section className="space-y-4" aria-labelledby="page-title">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 id="page-title" className="text-xl font-semibold text-zinc-900">{title}</h1>
-          {subtitle && <p className="mt-1 max-w-3xl text-sm text-zinc-600">{subtitle}</p>}
+          <h1 id="page-title" className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
+          {subtitle && <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>}
         </div>
         {actions && <div className="flex gap-2">{actions}</div>}
       </header>
@@ -33,21 +33,21 @@ export function Page({ title, subtitle, actions, children }: { title: string; su
 }
 
 export function Panel({ title, children, tone = 'plain' }: { title?: string; children: ReactNode; tone?: 'plain' | 'warn' | 'danger' | 'ok' }) {
-  const tones = { plain: 'border-zinc-200 bg-white', warn: 'border-amber-300 bg-amber-50', danger: 'border-red-300 bg-red-50', ok: 'border-emerald-300 bg-emerald-50' };
+  const tones = { plain: 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900', warn: 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40', danger: 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40', ok: 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' };
   return (
     <div className={`rounded-lg border p-4 ${tones[tone]}`}>
-      {title && <h2 className="mb-2 text-sm font-semibold text-zinc-800">{title}</h2>}
+      {title && <h2 className="mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">{title}</h2>}
       {children}
     </div>
   );
 }
 
 export function ErrorNote({ message }: { message: string }) {
-  return message ? <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">{message}</p> : null;
+  return message ? <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">{message}</p> : null;
 }
 
 export function Loading({ what = 'Loading' }: { what?: string }) {
-  return <p className="text-sm text-zinc-500" role="status">{what}...</p>;
+  return <p className="text-sm text-zinc-500 dark:text-zinc-400" role="status">{what}...</p>;
 }
 
 const VERDICT_TONE: Record<string, string> = {

@@ -54,6 +54,7 @@ const PROXIED_PREFIXES = [
   "/api/export-log",
   /** Rules Studio: published rules (live link) and the Studio API itself. Both live on apps/api. */
   "/api/rules",
+  "/api/rules-studio",
   /** Step-up (TOTP) for Rules Studio actions; the sibling /api/auth routes stay on the web server. */
   "/api/auth/step-up",
 ];

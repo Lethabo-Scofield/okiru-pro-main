@@ -99,14 +99,24 @@ export function Notes() {
   );
 }
 
-/** 14.10 Activity and audit. */
+const actionLabel = (action: unknown) => String(action ?? 'Studio activity')
+  .replace(/^client\./, '')
+  .replace(/[._-]+/g, ' ')
+  .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const targetLabel = (target: unknown) => {
+  const value = String(target ?? '').trim();
+  return value || 'Studio';
+};
+
+/** Human-readable activity timeline. Raw audit details remain available through the API. */
 export function Activity() {
   const list = useStudio<any>('/activity?limit=200');
   const [check, setCheck] = useState<any>(null);
   const [error, setError] = useState('');
   return (
-    <Page title="Activity and audit" subtitle="Every Studio action is recorded in a signed, hash-chained trail."
-      actions={<Button variant="outline" onClick={async () => { setError(''); try { setCheck(await studio('GET', '/audit/integrity')); } catch (e) { setError(explainError(e)); } }}>Verify integrity</Button>}>
+    <Page title="Logs" subtitle="A clear history of rule changes, reviews, and publishing activity."
+      actions={<Button variant="outline" onClick={async () => { setError(''); try { setCheck(await studio('GET', '/audit/integrity')); } catch (e) { setError(explainError(e)); } }}>Verify records</Button>}>
       <ErrorNote message={error || list.error} />
       {check && (
         <Panel tone={check.ledger.ok && check.audit.ok ? 'ok' : 'danger'} title="Integrity">
@@ -114,13 +124,24 @@ export function Activity() {
           {!check.ledger.ok && check.ledger.scorecards.filter((s: any) => !s.ok).map((s: any) => <p key={s.scorecardId} className="text-sm text-red-800">{s.scorecardId}: {s.failures.length} problem(s)</p>)}
         </Panel>
       )}
-      <Panel>
-        {list.loading ? <Loading /> : (
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Recent Studio activity</caption>
-            <thead><tr className="text-xs uppercase text-zinc-500"><th scope="col">#</th><th scope="col">When</th><th scope="col">Who</th><th scope="col">Action</th><th scope="col">Target</th></tr></thead>
-            <tbody>{(list.data?.events ?? []).map((e: any) => <tr key={e.seq} className="border-t border-zinc-100"><td>{e.seq}</td><td>{fmtDate(e.at)}</td><td>{e.actor}</td><td>{e.action}</td><td className="font-mono text-xs">{e.target ?? ''}</td></tr>)}</tbody>
-          </table>
+      <Panel title="Recent activity">
+        {list.loading ? <Loading /> : (list.data?.events ?? []).length === 0 ? (
+          <p className="text-sm text-zinc-500">No Studio activity recorded yet.</p>
+        ) : (
+          <ol className="divide-y divide-zinc-100">
+            {(list.data?.events ?? []).map((e: any) => (
+              <li key={e.seq} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-600" aria-label={`Event ${e.seq}`}>{e.seq}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <strong className="text-sm text-zinc-900">{actionLabel(e.action)}</strong>
+                    <time className="text-xs text-zinc-500">{fmtDate(e.at)}</time>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-600">{targetLabel(e.target)} <span className="mx-1 text-zinc-300">·</span> by {e.actor || 'System'}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
         )}
       </Panel>
     </Page>

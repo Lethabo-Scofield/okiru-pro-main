@@ -7,7 +7,7 @@ import { explainError, studio } from '@/lib/studioApi';
 import { Panel, Page, useStudio, Loading, ErrorNote, StatusBadge, fmtDate, short } from './kit';
 import { StepUpDialog } from './StepUpDialog';
 
-/** 14.5 Review and publish. */
+/** Approval queue for submitted rule changes. */
 export function Review() {
   const list = useStudio<any>('/changesets');
   const [selected, setSelected] = useState<any>(null);
@@ -34,12 +34,17 @@ export function Review() {
 
   const queue = (list.data?.changesets ?? []).filter((c: any) => ['submitted', 'approved'].includes(c.status));
   return (
-    <Page title="Review and publish" subtitle="Approvals are bound to the exact draft; authors cannot approve or publish their own changes.">
+    <Page title="Pending approvals" subtitle="Review submitted rule changes before they are published.">
       <ErrorNote message={error || list.error} />
       {done && <Panel tone="ok"><p role="status" className="text-sm">{done}</p></Panel>}
       <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
         <Panel title="Awaiting review">
-          {list.loading ? <Loading /> : queue.length === 0 ? <p className="text-sm text-zinc-500">Nothing is waiting.</p> : (
+          {list.loading ? <Loading /> : queue.length === 0 ? (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-zinc-800">Nothing needs your review.</p>
+              <p className="text-xs text-zinc-500">Submitted rule changes will appear here when they are ready for approval.</p>
+            </div>
+          ) : (
             <ul className="space-y-1">{queue.map((c: any) => (
               <li key={c.id}><button className={`w-full rounded border p-2 text-left text-sm ${selected?.id === c.id ? 'border-zinc-900' : 'border-zinc-200'} hover:bg-zinc-50`} onClick={() => pick(c)}>
                 <span className="font-medium">{c.title}</span><span className="block text-xs text-zinc-500">{c.scorecardId} · {c.items.length} change(s)</span><StatusBadge status={c.status} />

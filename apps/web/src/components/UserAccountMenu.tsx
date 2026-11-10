@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, ChevronDown, LogOut, Settings, Users } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Settings, Settings2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TokenBalancePill } from "@/components/TokenBalancePill";
 
@@ -125,6 +125,15 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
         >
           <Users />
           Team &amp; workspace
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            navigate("/studio");
+          }}
+          data-testid="menu-rules-studio"
+        >
+          <Settings2 />
+          Rules Studio
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
