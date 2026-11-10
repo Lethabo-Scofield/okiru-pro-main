@@ -7,27 +7,32 @@ import { Review, Versions } from './ReviewAndVersions';
 import { ChangeRequests, Rulings, Notes, Activity, Notifications } from './Lists';
 
 const NAV: Array<[string, string]> = [
-  ['/studio', 'Overview'], ['/studio/review', 'Review and publish'], ['/studio/versions', 'Versions and backups'],
-  ['/studio/change-requests', 'Change requests'], ['/studio/rulings', 'Rulings'], ['/studio/notes', 'Notes'],
-  ['/studio/activity', 'Activity and audit'], ['/studio/notifications', 'Notifications'],
+  ['/studio', 'Rules'], ['/studio/review', 'Pending approvals'], ['/studio/change-requests', 'Developer requests'],
+  ['/studio/versions', 'Versions and rollback'], ['/studio/activity', 'Logs'],
 ];
 
 function Shell({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
   return (
-    <div className="min-h-screen bg-white text-zinc-900">
+    <div className="studio-light min-h-screen bg-white text-zinc-900">
+      <style>{`
+        .studio-light { color-scheme: light; }
+        body:has(.studio-light), #root:has(.studio-light) { background-color: #ffffff !important; color: #18181b !important; }
+        .studio-light, .studio-light main, .studio-light section { background-color: #ffffff !important; color: #18181b; }
+        .studio-light input, .studio-light textarea, .studio-light select { background-color: #ffffff !important; color: #18181b !important; border-color: #d4d4d8 !important; }
+      `}</style>
       <a href="#studio-main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:bg-white focus:p-2">Skip to content</a>
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:flex-row">
         <nav aria-label="Rules Studio" className="md:w-56 md:shrink-0">
-          <p className="mb-3 text-sm font-semibold">Okiru Rules Studio</p>
+          <p className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Okiru Rules Studio</p>
           <ul className="space-y-1">
             {NAV.map(([href, label]) => (
               <li key={href}><Link href={href} aria-current={loc === href ? 'page' : undefined}
                 style={loc === href ? { backgroundColor: '#18181b', color: '#ffffff' } : undefined}
-                className={`block rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${loc === href ? '' : 'text-zinc-700 hover:bg-zinc-100'}`}>{label}</Link></li>
+                className={`block rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${loc === href ? '' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}>{label}</Link></li>
             ))}
           </ul>
-          <Link href="/hub" className="mt-4 block text-xs text-zinc-500 underline">Back to Okiru</Link>
+          <Link href="/hub" className="mt-4 block text-xs text-zinc-500 underline dark:text-zinc-400">Back to Okiru</Link>
         </nav>
         <main id="studio-main" className="min-w-0 flex-1">{children}</main>
       </div>
