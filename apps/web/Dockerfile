@@ -1,4 +1,4 @@
-﻿FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -42,7 +42,7 @@ WORKDIR /app/apps/web
 ENV VITE_API_URL=
 RUN pnpm run build
 
-FROM node:20-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++
