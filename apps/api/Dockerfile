@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /build
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev
@@ -28,7 +28,7 @@ RUN pnpm --filter @okiru/types build \
 ENV CI=true
 RUN pnpm install --no-frozen-lockfile --prod
 
-FROM node:20-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ pkgconfig pixman-dev cairo-dev pango-dev libjpeg-turbo-dev giflib-dev \
